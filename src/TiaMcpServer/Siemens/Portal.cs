@@ -1282,9 +1282,16 @@ namespace TiaMcpServer.Siemens
 
 
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Console.WriteLine($"Error exporting blocks as documents: {ex.Message}");
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export failed", null, ex);
+
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["blockPath"] = blockPath;
+                pex.Data["exportPath"] = exportPath;
+
+                _logger?.LogError(pex, "ExportAsDocuments failed for {SoftwarePath} {BlockPath} -> {ExportPath}", softwarePath, blockPath, exportPath);
+                throw pex;
             }
             return success;
         }
