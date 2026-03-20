@@ -1154,6 +1154,259 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
+        [McpServerTool(Name = "DeleteBlock"), Description("Delete a block from the plc software")]
+        public static ResponseDeleteResult DeleteBlock(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("blockPath: full path to the block in the project structure, e.g. 'Group/Subgroup/Name'")] string blockPath)
+        {
+            try
+            {
+                Portal.DeleteBlock(softwarePath, blockPath);
+
+                return new ResponseDeleteResult
+                {
+                    Success = true,
+                    Name = blockPath.Contains("/") ? blockPath.Substring(blockPath.LastIndexOf("/") + 1) : blockPath,
+                    Path = blockPath,
+                    Message = $"Block '{blockPath}' deleted from '{softwarePath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException($"Block '{blockPath}' not found in '{softwarePath}'. {pex.Message}", McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    default:
+                        throw new McpException($"Failed to delete block '{blockPath}' in '{softwarePath}': {pex.Message}", pex, McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting block '{blockPath}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "CopyBlock"), Description("Copy a block to another group in the plc software")]
+        public static ResponseCopyBlock CopyBlock(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("sourceBlockPath: full path to the source block, e.g. 'Group/Subgroup/Name'")] string sourceBlockPath,
+            [Description("targetGroupPath: path to the target group where the block will be copied, e.g. 'Group/Subgroup'")] string targetGroupPath)
+        {
+            try
+            {
+                var block = Portal.CopyBlock(softwarePath, sourceBlockPath, targetGroupPath);
+
+                if (block != null)
+                {
+                    return new ResponseCopyBlock
+                    {
+                        Message = $"Block '{sourceBlockPath}' copied to '{targetGroupPath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+
+                throw new McpException($"Failed copying block '{sourceBlockPath}' to '{targetGroupPath}'", McpErrorCode.InternalError);
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException($"{pex.Message}", McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    default:
+                        throw new McpException($"Failed to copy block '{sourceBlockPath}' to '{targetGroupPath}': {pex.Message}", pex, McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error copying block '{sourceBlockPath}' to '{targetGroupPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "MoveBlock"), Description("Move a block to another group in the plc software")]
+        public static ResponseMoveBlock MoveBlock(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("sourceBlockPath: full path to the source block, e.g. 'Group/Subgroup/Name'")] string sourceBlockPath,
+            [Description("targetGroupPath: path to the target group where the block will be moved, e.g. 'Group/Subgroup'")] string targetGroupPath)
+        {
+            try
+            {
+                Portal.MoveBlock(softwarePath, sourceBlockPath, targetGroupPath);
+
+                return new ResponseMoveBlock
+                {
+                    Message = $"Block '{sourceBlockPath}' moved to '{targetGroupPath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException($"{pex.Message}", McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    default:
+                        throw new McpException($"Failed to move block '{sourceBlockPath}' to '{targetGroupPath}': {pex.Message}", pex, McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error moving block '{sourceBlockPath}' to '{targetGroupPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "CreateBlockGroup"), Description("Create a new block group/folder in the plc software")]
+        public static ResponseCreateBlockGroup CreateBlockGroup(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("parentGroupPath: path to the parent group where the new group will be created, use empty string for root")] string parentGroupPath,
+            [Description("groupName: name of the new block group to create")] string groupName)
+        {
+            try
+            {
+                var group = Portal.CreateBlockGroup(softwarePath, parentGroupPath, groupName);
+
+                if (group != null)
+                {
+                    var path = string.IsNullOrEmpty(parentGroupPath) ? groupName : $"{parentGroupPath}/{groupName}";
+
+                    return new ResponseCreateBlockGroup
+                    {
+                        Name = groupName,
+                        Path = path,
+                        Message = $"Block group '{groupName}' created in '{parentGroupPath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+
+                throw new McpException($"Failed creating block group '{groupName}' in '{parentGroupPath}'", McpErrorCode.InternalError);
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException($"{pex.Message}", McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    default:
+                        throw new McpException($"Failed to create block group '{groupName}': {pex.Message}", pex, McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating block group '{groupName}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteBlockGroup"), Description("Delete an empty block group from the plc software")]
+        public static ResponseDeleteResult DeleteBlockGroup(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("groupPath: path to the block group to delete, e.g. 'Group/Subgroup'")] string groupPath)
+        {
+            try
+            {
+                Portal.DeleteBlockGroup(softwarePath, groupPath);
+
+                return new ResponseDeleteResult
+                {
+                    Success = true,
+                    Name = groupPath.Contains("/") ? groupPath.Substring(groupPath.LastIndexOf("/") + 1) : groupPath,
+                    Path = groupPath,
+                    Message = $"Block group '{groupPath}' deleted from '{softwarePath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException($"{pex.Message}", McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    default:
+                        throw new McpException($"Failed to delete block group '{groupPath}': {pex.Message}", pex, McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting block group '{groupPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetBlockGroup"), Description("Get block group info with contents summary from the plc software")]
+        public static ResponseBlockGroupInfo GetBlockGroup(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("groupPath: path to the block group, use empty string for root group")] string groupPath = "")
+        {
+            try
+            {
+                var (name, path, blockCount, subGroupCount) = Portal.GetBlockGroupInfo(softwarePath, groupPath);
+
+                return new ResponseBlockGroupInfo
+                {
+                    Name = name,
+                    Path = path,
+                    BlockCount = blockCount,
+                    SubGroupCount = subGroupCount,
+                    Message = $"Block group info retrieved for '{groupPath}' in '{softwarePath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException($"{pex.Message}", McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    default:
+                        throw new McpException($"Failed to get block group info for '{groupPath}': {pex.Message}", pex, McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error getting block group info for '{groupPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
         #endregion
 
         #region types
@@ -1524,6 +1777,178 @@ namespace TiaMcpServer.ModelContextProtocol
                 
                 Logger?.LogError(ex, $"Failed exporting types '{regexName}' from '{softwarePath}' to {exportPath}");
                 throw new McpException($"Unexpected error exporting types '{regexName}' from '{softwarePath}' to {exportPath}: {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteType"), Description("Delete a PLC type from the plc software")]
+        public static ResponseDeleteResult DeleteType(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("typePath: full path to the type in the project structure, e.g. 'Group/Subgroup/Name'")] string typePath)
+        {
+            try
+            {
+                Portal.DeleteType(softwarePath, typePath);
+
+                return new ResponseDeleteResult
+                {
+                    Success = true,
+                    Name = typePath.Contains("/") ? typePath.Substring(typePath.LastIndexOf("/") + 1) : typePath,
+                    Path = typePath,
+                    Message = $"Type '{typePath}' deleted from '{softwarePath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException($"Type '{typePath}' not found in '{softwarePath}'. {pex.Message}", McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    default:
+                        throw new McpException($"Failed to delete type '{typePath}' in '{softwarePath}': {pex.Message}", pex, McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting type '{typePath}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "CreateTypeGroup"), Description("Create a new type group/folder in the plc software")]
+        public static ResponseCreateTypeGroup CreateTypeGroup(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("parentGroupPath: path to the parent group where the new group will be created, use empty string for root")] string parentGroupPath,
+            [Description("groupName: name of the new type group to create")] string groupName)
+        {
+            try
+            {
+                var group = Portal.CreateTypeGroup(softwarePath, parentGroupPath, groupName);
+
+                if (group != null)
+                {
+                    var path = string.IsNullOrEmpty(parentGroupPath) ? groupName : $"{parentGroupPath}/{groupName}";
+
+                    return new ResponseCreateTypeGroup
+                    {
+                        Name = groupName,
+                        Path = path,
+                        Message = $"Type group '{groupName}' created in '{parentGroupPath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+
+                throw new McpException($"Failed creating type group '{groupName}' in '{parentGroupPath}'", McpErrorCode.InternalError);
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException($"{pex.Message}", McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    default:
+                        throw new McpException($"Failed to create type group '{groupName}': {pex.Message}", pex, McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating type group '{groupName}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteTypeGroup"), Description("Delete an empty type group from the plc software")]
+        public static ResponseDeleteResult DeleteTypeGroup(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("groupPath: path to the type group to delete, e.g. 'Group/Subgroup'")] string groupPath)
+        {
+            try
+            {
+                Portal.DeleteTypeGroup(softwarePath, groupPath);
+
+                return new ResponseDeleteResult
+                {
+                    Success = true,
+                    Name = groupPath.Contains("/") ? groupPath.Substring(groupPath.LastIndexOf("/") + 1) : groupPath,
+                    Path = groupPath,
+                    Message = $"Type group '{groupPath}' deleted from '{softwarePath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException($"{pex.Message}", McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    default:
+                        throw new McpException($"Failed to delete type group '{groupPath}': {pex.Message}", pex, McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting type group '{groupPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetTypeGroup"), Description("Get type group info with contents summary from the plc software")]
+        public static ResponseTypeGroupInfo GetTypeGroup(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("groupPath: path to the type group, use empty string for root group")] string groupPath = "")
+        {
+            try
+            {
+                var (name, path, typeCount, subGroupCount) = Portal.GetTypeGroupInfo(softwarePath, groupPath);
+
+                return new ResponseTypeGroupInfo
+                {
+                    Name = name,
+                    Path = path,
+                    TypeCount = typeCount,
+                    SubGroupCount = subGroupCount,
+                    Message = $"Type group info retrieved for '{groupPath}' in '{softwarePath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException($"{pex.Message}", McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    default:
+                        throw new McpException($"Failed to get type group info for '{groupPath}': {pex.Message}", pex, McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error getting type group info for '{groupPath}': {ex.Message}", ex, McpErrorCode.InternalError);
             }
         }
 
