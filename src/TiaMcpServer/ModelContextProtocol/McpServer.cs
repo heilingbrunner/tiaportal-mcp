@@ -561,6 +561,43 @@ namespace TiaMcpServer.ModelContextProtocol
 
                     var attributes = Helper.GetAttributeList(software);
 
+                    // Enhanced: include technology object count, safety status, and external source count
+                    int technologyObjectCount = 0;
+                    try
+                    {
+                        var techObjects = Portal.GetTechnologyObjects(softwarePath);
+                        technologyObjectCount = techObjects.Count;
+                    }
+                    catch
+                    {
+                        // Technology objects may not be available
+                    }
+
+                    bool isSafetyEnabled = false;
+                    try
+                    {
+                        var safetyInfo = Portal.GetSafetyInfo(softwarePath);
+                        isSafetyEnabled = safetyInfo.ContainsKey("IsSafetyEnabled") && safetyInfo["IsSafetyEnabled"] is bool s && s;
+                    }
+                    catch
+                    {
+                        // Safety info may not be available
+                    }
+
+                    int externalSourceCount = 0;
+                    try
+                    {
+                        var externalSources = software.ExternalSourceGroup?.ExternalSources;
+                        if (externalSources != null)
+                        {
+                            externalSourceCount = externalSources.Count;
+                        }
+                    }
+                    catch
+                    {
+                        // External sources may not be available
+                    }
+
                     return new ResponseSoftwareInfo
                     {
                         Message = $"Software info retrieved from '{softwarePath}'",
@@ -570,7 +607,10 @@ namespace TiaMcpServer.ModelContextProtocol
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
-                            ["success"] = true
+                            ["success"] = true,
+                            ["technologyObjectCount"] = technologyObjectCount,
+                            ["isSafetyEnabled"] = isSafetyEnabled,
+                            ["externalSourceCount"] = externalSourceCount
                         }
                     };
                 }
@@ -1999,6 +2039,339 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
             }
             return missing;
+        }
+
+        #endregion
+
+        #region technology objects
+
+        [McpServerTool(Name = "GetTechnologyObjects"), Description("Get a list of technology objects (motion axes, PID controllers, cams, etc.) from the plc software")]
+        public static ResponseTechnologyObjects GetTechnologyObjects(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the technology object. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetTechnologyObjects(softwarePath, regexName);
+
+                var responseList = new List<ResponseTechnologyObject>();
+                foreach (var techObject in list)
+                {
+                    if (techObject != null)
+                    {
+                        var attributes = Helper.GetAttributeList(techObject);
+
+                        responseList.Add(new ResponseTechnologyObject
+                        {
+                            Name = techObject.Name,
+                            TypeIdentifier = techObject.GetType().Name,
+                            Attributes = attributes
+                        });
+                    }
+                }
+
+                return new ResponseTechnologyObjects
+                {
+                    Message = $"Technology objects with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true,
+                        ["count"] = responseList.Count
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving technology objects with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetTechnologyObjectInfo"), Description("Get detailed info about a technology object from the plc software")]
+        public static ResponseTechnologyObject GetTechnologyObjectInfo(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("objectName: the name of the technology object")] string objectName)
+        {
+            try
+            {
+                var techObject = Portal.GetTechnologyObject(softwarePath, objectName);
+                if (techObject != null)
+                {
+                    var attributes = Helper.GetAttributeList(techObject);
+
+                    return new ResponseTechnologyObject
+                    {
+                        Message = $"Technology object '{objectName}' info retrieved from '{softwarePath}'",
+                        Name = techObject.Name,
+                        TypeIdentifier = techObject.GetType().Name,
+                        Attributes = attributes,
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+                else
+                {
+                    throw new McpException($"Technology object '{objectName}' not found in '{softwarePath}'", McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving technology object '{objectName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ExportTechnologyObject"), Description("Export a technology object from plc software to file")]
+        public static ResponseExportTechnologyObject ExportTechnologyObject(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("objectName: the name of the technology object to export")] string objectName,
+            [Description("exportPath: defines the directory path where to export the technology object")] string exportPath)
+        {
+            try
+            {
+                var techObject = Portal.ExportTechnologyObject(softwarePath, objectName, exportPath);
+                if (techObject != null)
+                {
+                    return new ResponseExportTechnologyObject
+                    {
+                        Message = $"Technology object '{objectName}' exported from '{softwarePath}' to '{exportPath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+                else
+                {
+                    throw new McpException($"Failed exporting technology object '{objectName}' from '{softwarePath}'", McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error exporting technology object '{objectName}' from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ImportTechnologyObject"), Description("Import a technology object from file into the plc software")]
+        public static ResponseImportTechnologyObject ImportTechnologyObject(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("importPath: defines the path of the xml file from where to import the technology object")] string importPath)
+        {
+            try
+            {
+                if (Portal.ImportTechnologyObject(softwarePath, importPath))
+                {
+                    return new ResponseImportTechnologyObject
+                    {
+                        Message = $"Technology object imported from '{importPath}' to '{softwarePath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+                else
+                {
+                    throw new McpException($"Failed importing technology object from '{importPath}' to '{softwarePath}'", McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error importing technology object from '{importPath}' to '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteTechnologyObject"), Description("Delete a technology object from the plc software")]
+        public static ResponseDeleteTechnologyObject DeleteTechnologyObject(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("objectName: the name of the technology object to delete")] string objectName)
+        {
+            try
+            {
+                if (Portal.DeleteTechnologyObject(softwarePath, objectName))
+                {
+                    return new ResponseDeleteTechnologyObject
+                    {
+                        Message = $"Technology object '{objectName}' deleted from '{softwarePath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+                else
+                {
+                    throw new McpException($"Failed deleting technology object '{objectName}' from '{softwarePath}'", McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting technology object '{objectName}' from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        #endregion
+
+        #region safety programming
+
+        [McpServerTool(Name = "GetSafetySettings"), Description("Get safety program settings (F-parameters, safety mode, runtime groups) from the plc software")]
+        public static ResponseSafetySettings GetSafetySettings(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath)
+        {
+            try
+            {
+                var settings = Portal.GetSafetySettings(softwarePath);
+
+                var fParameters = new Dictionary<string, object?>();
+                foreach (var kvp in settings)
+                {
+                    fParameters[kvp.Key] = kvp.Value;
+                }
+
+                return new ResponseSafetySettings
+                {
+                    Message = $"Safety settings retrieved from '{softwarePath}'",
+                    FParameters = fParameters,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving safety settings from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetSafetyInfo"), Description("Get safety status, signature, CRC, and safety block count from the plc software")]
+        public static ResponseSafetyInfo GetSafetyInfo(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath)
+        {
+            try
+            {
+                var info = Portal.GetSafetyInfo(softwarePath);
+
+                return new ResponseSafetyInfo
+                {
+                    Message = $"Safety info retrieved from '{softwarePath}'",
+                    IsSafetyEnabled = info.ContainsKey("IsSafetyEnabled") ? info["IsSafetyEnabled"] as bool? : false,
+                    SafetyBlockCount = info.ContainsKey("SafetyBlockCount") ? info["SafetyBlockCount"] as int? : 0,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving safety info from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "SetSafetyPassword"), Description("Set or login with the safety password for safety programming operations")]
+        public static ResponseSetSafetyPassword SetSafetyPassword(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("password: the safety password for accessing safety program")] string password)
+        {
+            try
+            {
+                if (Portal.SetSafetyPassword(softwarePath, password))
+                {
+                    return new ResponseSetSafetyPassword
+                    {
+                        Message = $"Safety password set/login successful for '{softwarePath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+                else
+                {
+                    throw new McpException($"Failed setting safety password for '{softwarePath}'", McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error setting safety password for '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetSafetyBlocks"), Description("Get only safety-relevant (F-) blocks from the plc software")]
+        public static ResponseSafetyBlocks GetSafetyBlocks(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetSafetyBlocks(softwarePath, regexName);
+
+                var responseList = new List<ResponseSafetyBlock>();
+                foreach (var block in list)
+                {
+                    if (block != null)
+                    {
+                        var attributes = Helper.GetAttributeList(block);
+
+                        string? fSignature = null;
+                        string? fCrc = null;
+
+                        try
+                        {
+                            fSignature = block.GetAttribute("FBlockSignature")?.ToString();
+                        }
+                        catch
+                        {
+                            // Attribute may not be available
+                        }
+
+                        try
+                        {
+                            fCrc = block.GetAttribute("FBlockCRC")?.ToString();
+                        }
+                        catch
+                        {
+                            // Attribute may not be available
+                        }
+
+                        responseList.Add(new ResponseSafetyBlock
+                        {
+                            Name = block.Name,
+                            Path = block.Parent is PlcBlockGroup parentGroup ? parentGroup.Name + "/" + block.Name : block.Name,
+                            IsSafety = true,
+                            FSignature = fSignature,
+                            FCRC = fCrc,
+                            Attributes = attributes
+                        });
+                    }
+                }
+
+                return new ResponseSafetyBlocks
+                {
+                    Message = $"Safety blocks with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true,
+                        ["count"] = responseList.Count
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving safety blocks with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
         }
 
         #endregion
