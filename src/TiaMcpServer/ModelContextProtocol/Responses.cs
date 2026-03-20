@@ -186,4 +186,112 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         public IEnumerable<ResponseBlockInfo>? Items { get; set; }
     }
+
+    #region HMI Responses
+
+    public class ResponseHmiTagTableInfo : ResponseAttributes
+    {
+        public string? Name { get; set; }
+        public int? TagCount { get; set; }
+    }
+
+    public class ResponseHmiTagTables : ResponseMessage
+    {
+        public IEnumerable<ResponseHmiTagTableInfo>? Items { get; set; }
+    }
+
+    public class ResponseHmiTagInfo : ResponseAttributes
+    {
+        public string? Name { get; set; }
+        public string? Connection { get; set; }
+        public string? PlcTag { get; set; }
+    }
+
+    public class ResponseHmiTags : ResponseMessage
+    {
+        public IEnumerable<ResponseHmiTagInfo>? Items { get; set; }
+    }
+
+    public class ResponseExportHmiTagTable : ResponseMessage
+    {
+    }
+
+    public class ResponseImportHmiTagTable : ResponseMessage
+    {
+    }
+
+    public class ResponseScreenInfo : ResponseAttributes
+    {
+        public string? Name { get; set; }
+        public string? ScreenType { get; set; }
+        public int? Width { get; set; }
+        public int? Height { get; set; }
+    }
+
+    public class ResponseScreens : ResponseMessage
+    {
+        public IEnumerable<ResponseScreenInfo>? Items { get; set; }
+    }
+
+    public class ResponseExportScreen : ResponseMessage
+    {
+    }
+
+    public class ResponseImportScreen : ResponseMessage
+    {
+    }
+
+    public class ResponseHmiConnectionInfo : ResponseAttributes
+    {
+        public string? Name { get; set; }
+        public string? Partner { get; set; }
+        public string? ConnectionType { get; set; }
+    }
+
+    public class ResponseHmiConnections : ResponseMessage
+    {
+        public IEnumerable<ResponseHmiConnectionInfo>? Items { get; set; }
+    }
+
+    public class ResponseCreateHmiConnection : ResponseMessage
+    {
+    }
+
+    public class ResponseAlarmInfo : ResponseAttributes
+    {
+        public string? Name { get; set; }
+        public string? AlarmClass { get; set; }
+        public string? TriggerTag { get; set; }
+        public string? AlarmText { get; set; }
+    }
+
+    public class ResponseDiscreteAlarms : ResponseMessage
+    {
+        public IEnumerable<ResponseAlarmInfo>? Items { get; set; }
+    }
+
+    public class ResponseAnalogAlarms : ResponseMessage
+    {
+        public IEnumerable<ResponseAlarmInfo>? Items { get; set; }
+    }
+
+    public class ResponseTextListInfo : ResponseAttributes
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseTextLists : ResponseMessage
+    {
+        public IEnumerable<ResponseTextListInfo>? Items { get; set; }
+    }
+
+    public class ResponseExportTextList : ResponseMessage
+    {
+    }
+
+    public class ResponseImportTextList : ResponseMessage
+    {
+    }
+
+    #endregion
 }

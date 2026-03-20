@@ -2700,6 +2700,830 @@ namespace TiaMcpServer.Siemens
 
         #endregion
 
+        #region HMI
+
+        public HmiTarget? GetHmiTarget(string softwarePath)
+        {
+            var container = GetSoftwareContainer(softwarePath);
+            return container?.Software as HmiTarget;
+        }
+
+        public HmiSoftware? GetHmiSoftware(string softwarePath)
+        {
+            var container = GetSoftwareContainer(softwarePath);
+            return container?.Software as HmiSoftware;
+        }
+
+        #region HMI Tags
+
+        public List<TagTable> GetHmiTagTables(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting HMI tag tables for path: {SoftwarePath}", softwarePath);
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<TagTable>();
+
+            try
+            {
+                var hmiTarget = GetHmiTarget(softwarePath);
+                if (hmiTarget != null)
+                {
+                    GetHmiTagTablesRecursive(hmiTarget.TagFolder, list, regexName);
+                    return list;
+                }
+
+                var hmiSoftware = GetHmiSoftware(softwarePath);
+                if (hmiSoftware != null)
+                {
+                    GetHmiTagTablesRecursive(hmiSoftware.TagFolder, list, regexName);
+                    return list;
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI tag tables", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetHmiTagTables failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+
+            return list;
+        }
+
+        private void GetHmiTagTablesRecursive(TagFolder folder, List<TagTable> list, string regexName)
+        {
+            foreach (var table in folder.TagTables)
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(table.Name, regexName, RegexOptions.IgnoreCase))
+                    {
+                        continue;
+                    }
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                list.Add(table);
+            }
+
+            foreach (var subfolder in folder.Folders)
+            {
+                GetHmiTagTablesRecursive(subfolder, list, regexName);
+            }
+        }
+
+        public List<Tag> GetHmiTags(string softwarePath, string tagTableName, string regexName = "")
+        {
+            _logger?.LogInformation("Getting HMI tags from table '{TagTableName}' for path: {SoftwarePath}", tagTableName, softwarePath);
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<Tag>();
+
+            try
+            {
+                var tables = GetHmiTagTables(softwarePath);
+                var table = tables.FirstOrDefault(t => string.Equals(t.Name, tagTableName, StringComparison.OrdinalIgnoreCase));
+
+                if (table == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"HMI tag table '{tagTableName}' not found",
+                        tables.Select(t => t.Name));
+                }
+
+                foreach (var tag in table.Tags)
+                {
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(tag.Name, regexName, RegexOptions.IgnoreCase))
+                        {
+                            continue;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        continue;
+                    }
+
+                    list.Add(tag);
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI tags", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                _logger?.LogError(pex, "GetHmiTags failed for {SoftwarePath} table {TagTableName}", softwarePath, tagTableName);
+                throw pex;
+            }
+
+            return list;
+        }
+
+        public void ExportHmiTagTable(string softwarePath, string tagTableName, string exportPath)
+        {
+            _logger?.LogInformation("Exporting HMI tag table '{TagTableName}' from {SoftwarePath}", tagTableName, softwarePath);
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var tables = GetHmiTagTables(softwarePath);
+                var table = tables.FirstOrDefault(t => string.Equals(t.Name, tagTableName, StringComparison.OrdinalIgnoreCase));
+
+                if (table == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"HMI tag table '{tagTableName}' not found",
+                        tables.Select(t => t.Name));
+                }
+
+                exportPath = Path.Combine(exportPath, $"{table.Name}.xml");
+
+                if (File.Exists(exportPath))
+                {
+                    File.Delete(exportPath);
+                }
+
+                table.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export of HMI tag table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                pex.Data["exportPath"] = exportPath;
+                _logger?.LogError(pex, "ExportHmiTagTable failed for {SoftwarePath} table {TagTableName} -> {ExportPath}", softwarePath, tagTableName, exportPath);
+                throw pex;
+            }
+        }
+
+        public void ImportHmiTagTable(string softwarePath, string importPath)
+        {
+            _logger?.LogInformation("Importing HMI tag table from {ImportPath} to {SoftwarePath}", importPath, softwarePath);
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var fileInfo = new FileInfo(importPath);
+                if (!fileInfo.Exists)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
+                }
+
+                var hmiTarget = GetHmiTarget(softwarePath);
+                if (hmiTarget != null)
+                {
+                    hmiTarget.TagFolder.TagTables.Import(fileInfo, ImportOptions.Override);
+                    return;
+                }
+
+                var hmiSoftware = GetHmiSoftware(softwarePath);
+                if (hmiSoftware != null)
+                {
+                    hmiSoftware.TagFolder.TagTables.Import(fileInfo, ImportOptions.Override);
+                    return;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, $"No HMI software found at path '{softwarePath}'");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import of HMI tag table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["importPath"] = importPath;
+                _logger?.LogError(pex, "ImportHmiTagTable failed for {SoftwarePath} from {ImportPath}", softwarePath, importPath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region HMI Screens
+
+        public List<Screen> GetScreens(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting HMI screens for path: {SoftwarePath}", softwarePath);
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<Screen>();
+
+            try
+            {
+                var hmiTarget = GetHmiTarget(softwarePath);
+                if (hmiTarget != null)
+                {
+                    GetScreensRecursive(hmiTarget.ScreenFolder, list, regexName);
+                    return list;
+                }
+
+                var hmiSoftware = GetHmiSoftware(softwarePath);
+                if (hmiSoftware != null)
+                {
+                    GetScreensRecursive(hmiSoftware.ScreenFolder, list, regexName);
+                    return list;
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI screens", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetScreens failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+
+            return list;
+        }
+
+        private void GetScreensRecursive(ScreenFolder folder, List<Screen> list, string regexName)
+        {
+            foreach (var screen in folder.Screens)
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(screen.Name, regexName, RegexOptions.IgnoreCase))
+                    {
+                        continue;
+                    }
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                list.Add(screen);
+            }
+
+            foreach (var subfolder in folder.Folders)
+            {
+                GetScreensRecursive(subfolder, list, regexName);
+            }
+        }
+
+        public Screen? GetScreenByName(string softwarePath, string screenName)
+        {
+            var screens = GetScreens(softwarePath);
+            return screens.FirstOrDefault(s => string.Equals(s.Name, screenName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public void ExportScreen(string softwarePath, string screenName, string exportPath)
+        {
+            _logger?.LogInformation("Exporting HMI screen '{ScreenName}' from {SoftwarePath}", screenName, softwarePath);
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var screen = GetScreenByName(softwarePath, screenName);
+
+                if (screen == null)
+                {
+                    var screens = GetScreens(softwarePath);
+                    throw new PortalException(PortalErrorCode.NotFound, $"HMI screen '{screenName}' not found",
+                        screens.Select(s => s.Name));
+                }
+
+                exportPath = Path.Combine(exportPath, $"{screen.Name}.xml");
+
+                if (File.Exists(exportPath))
+                {
+                    File.Delete(exportPath);
+                }
+
+                screen.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export of HMI screen failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["screenName"] = screenName;
+                pex.Data["exportPath"] = exportPath;
+                _logger?.LogError(pex, "ExportScreen failed for {SoftwarePath} screen {ScreenName} -> {ExportPath}", softwarePath, screenName, exportPath);
+                throw pex;
+            }
+        }
+
+        public void ImportScreen(string softwarePath, string importPath)
+        {
+            _logger?.LogInformation("Importing HMI screen from {ImportPath} to {SoftwarePath}", importPath, softwarePath);
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var fileInfo = new FileInfo(importPath);
+                if (!fileInfo.Exists)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
+                }
+
+                var hmiTarget = GetHmiTarget(softwarePath);
+                if (hmiTarget != null)
+                {
+                    hmiTarget.ScreenFolder.Screens.Import(fileInfo, ImportOptions.Override);
+                    return;
+                }
+
+                var hmiSoftware = GetHmiSoftware(softwarePath);
+                if (hmiSoftware != null)
+                {
+                    hmiSoftware.ScreenFolder.Screens.Import(fileInfo, ImportOptions.Override);
+                    return;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, $"No HMI software found at path '{softwarePath}'");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import of HMI screen failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["importPath"] = importPath;
+                _logger?.LogError(pex, "ImportScreen failed for {SoftwarePath} from {ImportPath}", softwarePath, importPath);
+                throw pex;
+            }
+        }
+
+        public Screen? GetScreenInfo(string softwarePath, string screenName)
+        {
+            _logger?.LogInformation("Getting HMI screen info for '{ScreenName}' from {SoftwarePath}", screenName, softwarePath);
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var screen = GetScreenByName(softwarePath, screenName);
+
+                if (screen == null)
+                {
+                    var screens = GetScreens(softwarePath);
+                    throw new PortalException(PortalErrorCode.NotFound, $"HMI screen '{screenName}' not found",
+                        screens.Select(s => s.Name));
+                }
+
+                return screen;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI screen info", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["screenName"] = screenName;
+                _logger?.LogError(pex, "GetScreenInfo failed for {SoftwarePath} screen {ScreenName}", softwarePath, screenName);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region HMI Connections
+
+        public List<Connection> GetHmiConnections(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting HMI connections for path: {SoftwarePath}", softwarePath);
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<Connection>();
+
+            try
+            {
+                var hmiTarget = GetHmiTarget(softwarePath);
+                if (hmiTarget != null)
+                {
+                    foreach (var connection in hmiTarget.Connections)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(connection.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(connection);
+                    }
+                    return list;
+                }
+
+                var hmiSoftware = GetHmiSoftware(softwarePath);
+                if (hmiSoftware != null)
+                {
+                    foreach (var connection in hmiSoftware.Connections)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(connection.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(connection);
+                    }
+                    return list;
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI connections", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetHmiConnections failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+
+            return list;
+        }
+
+        public void CreateHmiConnection(string softwarePath, string connectionName, string partnerDevicePath)
+        {
+            _logger?.LogInformation("Creating HMI connection '{ConnectionName}' to '{PartnerDevicePath}' for {SoftwarePath}",
+                connectionName, partnerDevicePath, softwarePath);
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var hmiTarget = GetHmiTarget(softwarePath);
+                if (hmiTarget != null)
+                {
+                    var partnerSoftwareContainer = GetSoftwareContainer(partnerDevicePath);
+                    if (partnerSoftwareContainer?.Software is PlcSoftware partnerPlc)
+                    {
+                        hmiTarget.Connections.Add(connectionName, partnerPlc);
+                        return;
+                    }
+
+                    throw new PortalException(PortalErrorCode.NotFound, $"Partner PLC software not found at path '{partnerDevicePath}'");
+                }
+
+                var hmiSoftware = GetHmiSoftware(softwarePath);
+                if (hmiSoftware != null)
+                {
+                    var partnerSoftwareContainer = GetSoftwareContainer(partnerDevicePath);
+                    if (partnerSoftwareContainer?.Software is PlcSoftware partnerPlc)
+                    {
+                        hmiSoftware.Connections.Add(connectionName, partnerPlc);
+                        return;
+                    }
+
+                    throw new PortalException(PortalErrorCode.NotFound, $"Partner PLC software not found at path '{partnerDevicePath}'");
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, $"No HMI software found at path '{softwarePath}'");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to create HMI connection", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["connectionName"] = connectionName;
+                pex.Data["partnerDevicePath"] = partnerDevicePath;
+                _logger?.LogError(pex, "CreateHmiConnection failed for {SoftwarePath} connection {ConnectionName} to {PartnerDevicePath}",
+                    softwarePath, connectionName, partnerDevicePath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region HMI Alarms
+
+        public List<DiscreteAlarm> GetDiscreteAlarms(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting discrete alarms for path: {SoftwarePath}", softwarePath);
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<DiscreteAlarm>();
+
+            try
+            {
+                var hmiTarget = GetHmiTarget(softwarePath);
+                if (hmiTarget != null)
+                {
+                    foreach (var alarm in hmiTarget.DiscreteAlarms)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(alarm.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(alarm);
+                    }
+                    return list;
+                }
+
+                var hmiSoftware = GetHmiSoftware(softwarePath);
+                if (hmiSoftware != null)
+                {
+                    foreach (var alarm in hmiSoftware.DiscreteAlarms)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(alarm.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(alarm);
+                    }
+                    return list;
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get discrete alarms", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetDiscreteAlarms failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+
+            return list;
+        }
+
+        public List<AnalogAlarm> GetAnalogAlarms(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting analog alarms for path: {SoftwarePath}", softwarePath);
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<AnalogAlarm>();
+
+            try
+            {
+                var hmiTarget = GetHmiTarget(softwarePath);
+                if (hmiTarget != null)
+                {
+                    foreach (var alarm in hmiTarget.AnalogAlarms)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(alarm.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(alarm);
+                    }
+                    return list;
+                }
+
+                var hmiSoftware = GetHmiSoftware(softwarePath);
+                if (hmiSoftware != null)
+                {
+                    foreach (var alarm in hmiSoftware.AnalogAlarms)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(alarm.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(alarm);
+                    }
+                    return list;
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get analog alarms", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetAnalogAlarms failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+
+            return list;
+        }
+
+        #endregion
+
+        #region HMI Text Lists
+
+        public List<TextList> GetTextLists(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting HMI text lists for path: {SoftwarePath}", softwarePath);
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<TextList>();
+
+            try
+            {
+                var hmiTarget = GetHmiTarget(softwarePath);
+                if (hmiTarget != null)
+                {
+                    foreach (var textList in hmiTarget.TextLists)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(textList.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(textList);
+                    }
+                    return list;
+                }
+
+                var hmiSoftware = GetHmiSoftware(softwarePath);
+                if (hmiSoftware != null)
+                {
+                    foreach (var textList in hmiSoftware.TextLists)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(textList.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        list.Add(textList);
+                    }
+                    return list;
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI text lists", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetTextLists failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+
+            return list;
+        }
+
+        public void ExportTextList(string softwarePath, string textListName, string exportPath)
+        {
+            _logger?.LogInformation("Exporting HMI text list '{TextListName}' from {SoftwarePath}", textListName, softwarePath);
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var textLists = GetTextLists(softwarePath);
+                var textList = textLists.FirstOrDefault(t => string.Equals(t.Name, textListName, StringComparison.OrdinalIgnoreCase));
+
+                if (textList == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"HMI text list '{textListName}' not found",
+                        textLists.Select(t => t.Name));
+                }
+
+                exportPath = Path.Combine(exportPath, $"{textList.Name}.xml");
+
+                if (File.Exists(exportPath))
+                {
+                    File.Delete(exportPath);
+                }
+
+                textList.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export of HMI text list failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["textListName"] = textListName;
+                pex.Data["exportPath"] = exportPath;
+                _logger?.LogError(pex, "ExportTextList failed for {SoftwarePath} text list {TextListName} -> {ExportPath}", softwarePath, textListName, exportPath);
+                throw pex;
+            }
+        }
+
+        public void ImportTextList(string softwarePath, string importPath)
+        {
+            _logger?.LogInformation("Importing HMI text list from {ImportPath} to {SoftwarePath}", importPath, softwarePath);
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var fileInfo = new FileInfo(importPath);
+                if (!fileInfo.Exists)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
+                }
+
+                var hmiTarget = GetHmiTarget(softwarePath);
+                if (hmiTarget != null)
+                {
+                    hmiTarget.TextLists.Import(fileInfo, ImportOptions.Override);
+                    return;
+                }
+
+                var hmiSoftware = GetHmiSoftware(softwarePath);
+                if (hmiSoftware != null)
+                {
+                    hmiSoftware.TextLists.Import(fileInfo, ImportOptions.Override);
+                    return;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, $"No HMI software found at path '{softwarePath}'");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import of HMI text list failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["importPath"] = importPath;
+                _logger?.LogError(pex, "ImportTextList failed for {SoftwarePath} from {ImportPath}", softwarePath, importPath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #endregion
+
     }
 
 
