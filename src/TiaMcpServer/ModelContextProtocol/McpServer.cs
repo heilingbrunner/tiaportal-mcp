@@ -547,6 +547,425 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #endregion
 
+        #region hardware and network configuration
+
+        [McpServerTool(Name = "CreateDevice"), Description("Create a new device (PLC, HMI, etc.) in the current project")]
+        public static ResponseCreateDevice CreateDevice(
+            [Description("typeIdentifier: the device type identifier, e.g. 'OrderNumber:6ES7 515-2AM02-0AB0/V2.0'")] string typeIdentifier,
+            [Description("name: the name for the device item")] string name,
+            [Description("deviceName: the name for the device")] string deviceName)
+        {
+            try
+            {
+                var device = Portal.CreateDevice(typeIdentifier, name, deviceName);
+
+                return new ResponseCreateDevice
+                {
+                    Message = $"Device '{deviceName}' created successfully",
+                    Name = device.Name,
+                    TypeIdentifier = typeIdentifier,
+                    DevicePath = device.Name,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed to create device '{deviceName}': {pex.Message}", pex, McpErrorCode.InvalidParams);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating device '{deviceName}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteDevice"), Description("Delete a device from the current project")]
+        public static ResponseDeleteDevice DeleteDevice(
+            [Description("devicePath: the path to the device to delete")] string devicePath)
+        {
+            try
+            {
+                Portal.DeleteDevice(devicePath);
+
+                return new ResponseDeleteDevice
+                {
+                    Message = $"Device at '{devicePath}' deleted successfully",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed to delete device at '{devicePath}': {pex.Message}", pex, McpErrorCode.InvalidParams);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting device at '{devicePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "CreateDeviceGroup"), Description("Create a device group for organizing devices in the project")]
+        public static ResponseCreateDeviceGroup CreateDeviceGroup(
+            [Description("groupName: the name for the new device group")] string groupName,
+            [Description("parentGroupPath: optional path to the parent group (e.g. 'Group1/SubGroup1')")] string parentGroupPath = "")
+        {
+            try
+            {
+                var group = Portal.CreateDeviceGroup(groupName, parentGroupPath);
+
+                return new ResponseCreateDeviceGroup
+                {
+                    Message = $"Device group '{groupName}' created successfully",
+                    Name = group.Name,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed to create device group '{groupName}': {pex.Message}", pex, McpErrorCode.InvalidParams);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating device group '{groupName}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetModules"), Description("Get all modules/submodules in a device item (rack)")]
+        public static ResponseModules GetModules(
+            [Description("deviceItemPath: the path to the device item (e.g. 'PLC_1/Rack_0')")] string deviceItemPath)
+        {
+            try
+            {
+                var modules = Portal.GetModules(deviceItemPath);
+                var responseList = new List<ResponseModule>();
+
+                foreach (var module in modules)
+                {
+                    var attributes = Helper.GetAttributeList(module);
+                    var typeIdentifier = "";
+                    var positionNumber = 0;
+
+                    try
+                    {
+                        typeIdentifier = module.GetAttribute("TypeIdentifier")?.ToString() ?? "";
+                    }
+                    catch { }
+
+                    try
+                    {
+                        positionNumber = (int)(module.GetAttribute("PositionNumber") ?? 0);
+                    }
+                    catch { }
+
+                    responseList.Add(new ResponseModule
+                    {
+                        Name = module.Name,
+                        TypeIdentifier = typeIdentifier,
+                        PositionNumber = positionNumber,
+                        Attributes = attributes
+                    });
+                }
+
+                return new ResponseModules
+                {
+                    Message = $"Modules retrieved for '{deviceItemPath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true,
+                        ["count"] = responseList.Count
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed to get modules for '{deviceItemPath}': {pex.Message}", pex, McpErrorCode.InvalidParams);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error getting modules for '{deviceItemPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetModuleInfo"), Description("Get detailed info about a specific module/device item")]
+        public static ResponseModuleInfo GetModuleInfo(
+            [Description("deviceItemPath: the path to the device item/module")] string deviceItemPath)
+        {
+            try
+            {
+                var deviceItem = Portal.GetModuleInfo(deviceItemPath);
+                var attributes = Helper.GetAttributeList(deviceItem);
+                var typeIdentifier = "";
+                var positionNumber = 0;
+
+                try
+                {
+                    typeIdentifier = deviceItem.GetAttribute("TypeIdentifier")?.ToString() ?? "";
+                }
+                catch { }
+
+                try
+                {
+                    positionNumber = (int)(deviceItem.GetAttribute("PositionNumber") ?? 0);
+                }
+                catch { }
+
+                return new ResponseModuleInfo
+                {
+                    Message = $"Module info retrieved for '{deviceItemPath}'",
+                    Name = deviceItem.Name,
+                    TypeIdentifier = typeIdentifier,
+                    PositionNumber = positionNumber,
+                    Attributes = attributes,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed to get module info for '{deviceItemPath}': {pex.Message}", pex, McpErrorCode.InvalidParams);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error getting module info for '{deviceItemPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetAddresses"), Description("Get I/O addresses of a module/device item")]
+        public static ResponseAddresses GetAddresses(
+            [Description("deviceItemPath: the path to the device item/module")] string deviceItemPath)
+        {
+            try
+            {
+                var addresses = Portal.GetAddresses(deviceItemPath);
+                var responseList = new List<ResponseAddress>();
+
+                foreach (var (startAddress, length, ioType) in addresses)
+                {
+                    responseList.Add(new ResponseAddress
+                    {
+                        StartAddress = startAddress,
+                        Length = length,
+                        IoType = ioType
+                    });
+                }
+
+                return new ResponseAddresses
+                {
+                    Message = $"Addresses retrieved for '{deviceItemPath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true,
+                        ["count"] = responseList.Count
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed to get addresses for '{deviceItemPath}': {pex.Message}", pex, McpErrorCode.InvalidParams);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error getting addresses for '{deviceItemPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetSubnets"), Description("Get all subnets in the current project")]
+        public static ResponseSubnets GetSubnets()
+        {
+            try
+            {
+                var subnets = Portal.GetSubnets();
+                var responseList = new List<ResponseSubnet>();
+
+                foreach (var subnet in subnets)
+                {
+                    var subnetType = "";
+
+                    try
+                    {
+                        subnetType = subnet.GetAttribute("Type")?.ToString() ?? "";
+                    }
+                    catch { }
+
+                    responseList.Add(new ResponseSubnet
+                    {
+                        Name = subnet.Name,
+                        SubnetType = subnetType,
+                        Id = subnet.ToString()
+                    });
+                }
+
+                return new ResponseSubnets
+                {
+                    Message = "Subnets retrieved",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true,
+                        ["count"] = responseList.Count
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed to get subnets: {pex.Message}", pex, McpErrorCode.InvalidParams);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error getting subnets: {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetNetworkInterfaces"), Description("Get network interfaces of a device")]
+        public static ResponseNetworkInterfaces GetNetworkInterfaces(
+            [Description("deviceItemPath: the path to the device item to inspect for network interfaces")] string deviceItemPath)
+        {
+            try
+            {
+                var interfaces = Portal.GetNetworkInterfaces(deviceItemPath);
+                var responseList = new List<ResponseNetworkInterface>();
+
+                foreach (var (name, interfaceType, ipAddress, subnetMask) in interfaces)
+                {
+                    responseList.Add(new ResponseNetworkInterface
+                    {
+                        Name = name,
+                        InterfaceType = interfaceType,
+                        IpAddress = ipAddress,
+                        SubnetMask = subnetMask
+                    });
+                }
+
+                return new ResponseNetworkInterfaces
+                {
+                    Message = $"Network interfaces retrieved for '{deviceItemPath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true,
+                        ["count"] = responseList.Count
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed to get network interfaces for '{deviceItemPath}': {pex.Message}", pex, McpErrorCode.InvalidParams);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error getting network interfaces for '{deviceItemPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "SetIpAddress"), Description("Set IP address configuration on a device network interface")]
+        public static ResponseSetIpAddress SetIpAddress(
+            [Description("deviceItemPath: the path to the device item with the network interface")] string deviceItemPath,
+            [Description("ipAddress: the IP address to set (e.g. '192.168.0.1')")] string ipAddress,
+            [Description("subnetMask: the subnet mask (e.g. '255.255.255.0')")] string subnetMask,
+            [Description("routerAddress: optional router/gateway address")] string routerAddress = "")
+        {
+            try
+            {
+                Portal.SetIpAddress(deviceItemPath, ipAddress, subnetMask, routerAddress);
+
+                return new ResponseSetIpAddress
+                {
+                    Message = $"IP address set to '{ipAddress}' on '{deviceItemPath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed to set IP address on '{deviceItemPath}': {pex.Message}", pex, McpErrorCode.InvalidParams);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error setting IP address on '{deviceItemPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ConnectToSubnet"), Description("Connect a device network interface to a subnet")]
+        public static ResponseConnectToSubnet ConnectToSubnet(
+            [Description("deviceItemPath: the path to the device item with the network interface")] string deviceItemPath,
+            [Description("subnetName: the name of the subnet to connect to")] string subnetName)
+        {
+            try
+            {
+                Portal.ConnectToSubnet(deviceItemPath, subnetName);
+
+                return new ResponseConnectToSubnet
+                {
+                    Message = $"Device '{deviceItemPath}' connected to subnet '{subnetName}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed to connect '{deviceItemPath}' to subnet '{subnetName}': {pex.Message}", pex, McpErrorCode.InvalidParams);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error connecting '{deviceItemPath}' to subnet '{subnetName}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ImportGsdFile"), Description("Import a GSD/GSDML file into the current project")]
+        public static ResponseImportGsdFile ImportGsdFile(
+            [Description("gsdFilePath: the full file path to the GSD/GSDML file to import")] string gsdFilePath)
+        {
+            try
+            {
+                Portal.ImportGsdFile(gsdFilePath);
+
+                return new ResponseImportGsdFile
+                {
+                    Message = $"GSD file '{gsdFilePath}' imported successfully",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException($"Failed to import GSD file '{gsdFilePath}': {pex.Message}", pex, McpErrorCode.InvalidParams);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error importing GSD file '{gsdFilePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        #endregion
+
         #region plc software
 
         [McpServerTool(Name = "GetSoftwareInfo"), Description("Get plc software info")]

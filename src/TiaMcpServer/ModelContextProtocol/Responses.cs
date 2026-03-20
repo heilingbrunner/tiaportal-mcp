@@ -186,4 +186,90 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         public IEnumerable<ResponseBlockInfo>? Items { get; set; }
     }
+
+    public class ResponseModule
+    {
+        public string? Name { get; set; }
+        public string? TypeIdentifier { get; set; }
+        public int? PositionNumber { get; set; }
+        public IEnumerable<Attribute>? Attributes { get; set; }
+    }
+
+    public class ResponseModules : ResponseMessage
+    {
+        public IEnumerable<ResponseModule>? Items { get; set; }
+    }
+
+    public class ResponseModuleInfo : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? TypeIdentifier { get; set; }
+        public int? PositionNumber { get; set; }
+        public IEnumerable<Attribute>? Attributes { get; set; }
+    }
+
+    public class ResponseSubnet
+    {
+        public string? Name { get; set; }
+        public string? SubnetType { get; set; }
+        public string? Id { get; set; }
+    }
+
+    public class ResponseSubnets : ResponseMessage
+    {
+        public IEnumerable<ResponseSubnet>? Items { get; set; }
+    }
+
+    public class ResponseNetworkInterface
+    {
+        public string? Name { get; set; }
+        public string? InterfaceType { get; set; }
+        public string? IpAddress { get; set; }
+        public string? SubnetMask { get; set; }
+    }
+
+    public class ResponseNetworkInterfaces : ResponseMessage
+    {
+        public IEnumerable<ResponseNetworkInterface>? Items { get; set; }
+    }
+
+    public class ResponseAddress
+    {
+        public int? StartAddress { get; set; }
+        public int? Length { get; set; }
+        public string? IoType { get; set; }
+    }
+
+    public class ResponseAddresses : ResponseMessage
+    {
+        public IEnumerable<ResponseAddress>? Items { get; set; }
+    }
+
+    public class ResponseCreateDevice : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? TypeIdentifier { get; set; }
+        public string? DevicePath { get; set; }
+    }
+
+    public class ResponseDeleteDevice : ResponseMessage
+    {
+    }
+
+    public class ResponseCreateDeviceGroup : ResponseMessage
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseSetIpAddress : ResponseMessage
+    {
+    }
+
+    public class ResponseConnectToSubnet : ResponseMessage
+    {
+    }
+
+    public class ResponseImportGsdFile : ResponseMessage
+    {
+    }
 }
