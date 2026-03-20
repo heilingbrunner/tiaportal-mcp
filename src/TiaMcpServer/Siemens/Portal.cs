@@ -16,6 +16,7 @@ using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Tags;
+using Siemens.Engineering.SW.TechnologyObjects;
 using Siemens.Engineering.SW.Types;
 using Siemens.Engineering.SW.WatchAndForceTables;
 using Siemens.Engineering.SW.ExternalSources;
@@ -4053,6 +4054,11 @@ namespace TiaMcpServer.Siemens
         public List<TagTable> GetHmiTagTables(string softwarePath, string regexName = "")
         {
             _logger?.LogInformation("Getting HMI tag tables for path: {SoftwarePath}", softwarePath);
+        #region technology objects
+
+        public List<TechnologicalObject> GetTechnologyObjects(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting technology objects...");
 
             if (IsProjectNull())
             {
@@ -4240,6 +4246,7 @@ namespace TiaMcpServer.Siemens
             {
                 return new List<(string, string, string)>();
             }
+            var list = new List<TechnologicalObject>();
 
             try
             {
@@ -4311,6 +4318,18 @@ namespace TiaMcpServer.Siemens
                 var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI tag tables", null, ex);
                 pex.Data["softwarePath"] = softwarePath;
                 _logger?.LogError(pex, "GetHmiTagTables failed for {SoftwarePath}", softwarePath);
+                    var toGroup = plcSoftware.TechnologicalObjectGroup;
+                    if (toGroup != null)
+                    {
+                        GetTechnologyObjectsRecursive(toGroup, list, regexName);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get technology objects", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetTechnologyObjects failed for {SoftwarePath}", softwarePath);
                 throw pex;
             }
 
@@ -4320,6 +4339,9 @@ namespace TiaMcpServer.Siemens
         public bool ImportExternalSource(string softwarePath, string groupPath, string importPath)
         {
             _logger?.LogInformation($"Importing external source from path: {importPath}");
+        public TechnologicalObject? GetTechnologyObject(string softwarePath, string objectName)
+        {
+            _logger?.LogInformation($"Getting technology object: {objectName}");
 
             try
             {
@@ -4612,6 +4634,25 @@ namespace TiaMcpServer.Siemens
                 pex.Data["blockPath1"] = blockPath1;
                 pex.Data["blockPath2"] = blockPath2;
                 _logger?.LogError(pex, "CompareBlocks failed for {BlockPath1} vs {BlockPath2}", blockPath1, blockPath2);
+                    var toGroup = plcSoftware.TechnologicalObjectGroup;
+                    if (toGroup != null)
+                    {
+                        var techObject = FindTechnologyObjectRecursive(toGroup, objectName);
+                        if (techObject != null)
+                        {
+                            return techObject;
+                        }
+                    }
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, $"Technology object '{objectName}' not found");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get technology object info", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["objectName"] = objectName;
+                _logger?.LogError(pex, "GetTechnologyObject failed for {SoftwarePath} {ObjectName}", softwarePath, objectName);
                 throw pex;
             }
         }
@@ -4702,6 +4743,9 @@ namespace TiaMcpServer.Siemens
         public void ExportHmiTagTable(string softwarePath, string tagTableName, string exportPath)
         {
             _logger?.LogInformation("Exporting HMI tag table '{TagTableName}' from {SoftwarePath}", tagTableName, softwarePath);
+        public TechnologicalObject? ExportTechnologyObject(string softwarePath, string objectName, string exportPath)
+        {
+            _logger?.LogInformation($"Exporting technology object: {objectName}");
 
             try
             {
@@ -4762,6 +4806,16 @@ namespace TiaMcpServer.Siemens
                 }
 
                 exportPath = Path.Combine(exportPath, $"{table.Name}.xml");
+                }
+
+                var techObject = GetTechnologyObject(softwarePath, objectName);
+
+                if (techObject == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Technology object '{objectName}' not found");
+                }
+
+                exportPath = Path.Combine(exportPath, $"{techObject.Name}.xml");
 
                 if (File.Exists(exportPath))
                 {
@@ -4777,6 +4831,17 @@ namespace TiaMcpServer.Siemens
                 pex.Data["tagTableName"] = tagTableName;
                 pex.Data["exportPath"] = exportPath;
                 _logger?.LogError(pex, "ExportHmiTagTable failed for {SoftwarePath} table {TagTableName} -> {ExportPath}", softwarePath, tagTableName, exportPath);
+                techObject.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
+
+                return techObject;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export technology object failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["objectName"] = objectName;
+                pex.Data["exportPath"] = exportPath;
+                _logger?.LogError(pex, "ExportTechnologyObject failed for {SoftwarePath} {ObjectName} -> {ExportPath}", softwarePath, objectName, exportPath);
                 throw pex;
             }
         }
@@ -4893,6 +4958,9 @@ namespace TiaMcpServer.Siemens
         public void ImportHmiTagTable(string softwarePath, string importPath)
         {
             _logger?.LogInformation("Importing HMI tag table from {ImportPath} to {SoftwarePath}", importPath, softwarePath);
+        public bool ImportTechnologyObject(string softwarePath, string importPath)
+        {
+            _logger?.LogInformation($"Importing technology object from path: {importPath}");
 
             try
             {
@@ -5244,6 +5312,31 @@ namespace TiaMcpServer.Siemens
                 pex.Data["softwarePath"] = softwarePath;
                 pex.Data["importPath"] = importPath;
                 _logger?.LogError(pex, "ImportScreen failed for {SoftwarePath} from {ImportPath}", softwarePath, importPath);
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var toGroup = plcSoftware.TechnologicalObjectGroup;
+                    if (toGroup != null)
+                    {
+                        var fileInfo = new FileInfo(importPath);
+                        if (!fileInfo.Exists)
+                        {
+                            throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
+                        }
+
+                        toGroup.TechnologicalObjects.Import(fileInfo, ImportOptions.Override);
+                        return true;
+                    }
+                }
+
+                throw new PortalException(PortalErrorCode.InvalidState, "Failed to access technology object group");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import technology object failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["importPath"] = importPath;
+                _logger?.LogError(pex, "ImportTechnologyObject failed for {SoftwarePath} from {ImportPath}", softwarePath, importPath);
                 throw pex;
             }
         }
@@ -5251,6 +5344,9 @@ namespace TiaMcpServer.Siemens
         public Screen? GetScreenInfo(string softwarePath, string screenName)
         {
             _logger?.LogInformation("Getting HMI screen info for '{ScreenName}' from {SoftwarePath}", screenName, softwarePath);
+        public bool DeleteTechnologyObject(string softwarePath, string objectName)
+        {
+            _logger?.LogInformation($"Deleting technology object: {objectName}");
 
             try
             {
@@ -5276,6 +5372,22 @@ namespace TiaMcpServer.Siemens
                 pex.Data["softwarePath"] = softwarePath;
                 pex.Data["screenName"] = screenName;
                 _logger?.LogError(pex, "GetScreenInfo failed for {SoftwarePath} screen {ScreenName}", softwarePath, screenName);
+                var techObject = GetTechnologyObject(softwarePath, objectName);
+
+                if (techObject == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Technology object '{objectName}' not found");
+                }
+
+                techObject.Delete();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Delete technology object failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["objectName"] = objectName;
+                _logger?.LogError(pex, "DeleteTechnologyObject failed for {SoftwarePath} {ObjectName}", softwarePath, objectName);
                 throw pex;
             }
         }
@@ -5581,6 +5693,53 @@ namespace TiaMcpServer.Siemens
             foreach (var subFolder in folder.Folders)
             {
                 found = FindMasterCopy(subFolder, name);
+        #region technology objects helpers
+
+        private void GetTechnologyObjectsRecursive(TechnologicalObjectGroup group, List<TechnologicalObject> list, string regexName)
+        {
+            bool isRegex = regexName.IndexOfAny(_regexChars) >= 0;
+
+            foreach (var techObject in group.TechnologicalObjects)
+            {
+                if (string.IsNullOrEmpty(regexName))
+                {
+                    list.Add(techObject);
+                }
+                else if (isRegex)
+                {
+                    if (Regex.IsMatch(techObject.Name, regexName))
+                    {
+                        list.Add(techObject);
+                    }
+                }
+                else
+                {
+                    if (techObject.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        list.Add(techObject);
+                    }
+                }
+            }
+
+            foreach (TechnologicalObjectGroup subgroup in group.Groups)
+            {
+                GetTechnologyObjectsRecursive(subgroup, list, regexName);
+            }
+        }
+
+        private TechnologicalObject? FindTechnologyObjectRecursive(TechnologicalObjectGroup group, string objectName)
+        {
+            foreach (var techObject in group.TechnologicalObjects)
+            {
+                if (techObject.Name.Equals(objectName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return techObject;
+                }
+            }
+
+            foreach (TechnologicalObjectGroup subgroup in group.Groups)
+            {
+                var found = FindTechnologyObjectRecursive(subgroup, objectName);
                 if (found != null)
                 {
                     return found;
@@ -5801,6 +5960,13 @@ namespace TiaMcpServer.Siemens
         public void ExportTextList(string softwarePath, string textListName, string exportPath)
         {
             _logger?.LogInformation("Exporting HMI text list '{TextListName}' from {SoftwarePath}", textListName, softwarePath);
+        #endregion
+
+        #region safety programming
+
+        public SafetyAdministration? GetSafetyAdministration(string softwarePath)
+        {
+            _logger?.LogInformation($"Getting safety administration for: {softwarePath}");
 
             try
             {
@@ -5834,6 +6000,22 @@ namespace TiaMcpServer.Siemens
                 pex.Data["textListName"] = textListName;
                 pex.Data["exportPath"] = exportPath;
                 _logger?.LogError(pex, "ExportTextList failed for {SoftwarePath} text list {TextListName} -> {ExportPath}", softwarePath, textListName, exportPath);
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                var deviceItem = softwareContainer?.Parent as DeviceItem;
+
+                if (deviceItem != null)
+                {
+                    var admin = deviceItem.GetService<SafetyAdministration>();
+                    return admin;
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get safety administration", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetSafetyAdministration failed for {SoftwarePath}", softwarePath);
                 throw pex;
             }
         }
@@ -5841,6 +6023,9 @@ namespace TiaMcpServer.Siemens
         public void ImportTextList(string softwarePath, string importPath)
         {
             _logger?.LogInformation("Importing HMI text list from {ImportPath} to {SoftwarePath}", importPath, softwarePath);
+        public Dictionary<string, object?> GetSafetySettings(string softwarePath)
+        {
+            _logger?.LogInformation($"Getting safety settings for: {softwarePath}");
 
             try
             {
@@ -5877,6 +6062,156 @@ namespace TiaMcpServer.Siemens
                 pex.Data["softwarePath"] = softwarePath;
                 pex.Data["importPath"] = importPath;
                 _logger?.LogError(pex, "ImportTextList failed for {SoftwarePath} from {ImportPath}", softwarePath, importPath);
+                var admin = GetSafetyAdministration(softwarePath);
+                var settings = new Dictionary<string, object?>();
+
+                if (admin != null)
+                {
+                    settings["IsLoggedOnToSafetyOfflineProgram"] = admin.IsLoggedOnToSafetyOfflineProgram;
+
+                    try
+                    {
+                        var runtimeGroups = admin.RuntimeGroups;
+                        if (runtimeGroups != null)
+                        {
+                            var groupList = new List<string>();
+                            foreach (var rg in runtimeGroups)
+                            {
+                                groupList.Add(rg.Name);
+                            }
+                            settings["RuntimeGroups"] = groupList;
+                        }
+                    }
+                    catch
+                    {
+                        // RuntimeGroups may not be available on all configurations
+                    }
+                }
+                else
+                {
+                    settings["SafetySupported"] = false;
+                }
+
+                return settings;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get safety settings", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetSafetySettings failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+        }
+
+        public Dictionary<string, object?> GetSafetyInfo(string softwarePath)
+        {
+            _logger?.LogInformation($"Getting safety info for: {softwarePath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var info = new Dictionary<string, object?>();
+                var admin = GetSafetyAdministration(softwarePath);
+
+                info["IsSafetyEnabled"] = admin != null;
+
+                if (admin != null)
+                {
+                    info["IsLoggedOnToSafetyOfflineProgram"] = admin.IsLoggedOnToSafetyOfflineProgram;
+                }
+
+                // Count safety-relevant blocks
+                var safetyBlocks = GetSafetyBlocks(softwarePath);
+                info["SafetyBlockCount"] = safetyBlocks.Count;
+
+                return info;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get safety info", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetSafetyInfo failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+        }
+
+        public bool SetSafetyPassword(string softwarePath, string password)
+        {
+            _logger?.LogInformation($"Setting safety password for: {softwarePath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var admin = GetSafetyAdministration(softwarePath);
+
+                if (admin == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Safety administration is not available for this PLC");
+                }
+
+                SecureString secString = new NetworkCredential("", password).SecurePassword;
+
+                if (!admin.IsLoggedOnToSafetyOfflineProgram)
+                {
+                    admin.LoginToSafetyOfflineProgram(secString);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to set safety password", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "SetSafetyPassword failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+        }
+
+        public List<PlcBlock> GetSafetyBlocks(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting safety blocks...");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var allBlocks = GetBlocks(softwarePath, regexName);
+                var safetyBlocks = new List<PlcBlock>();
+
+                foreach (var block in allBlocks)
+                {
+                    try
+                    {
+                        var isSafety = block.GetAttribute("SetpointSafety");
+                        if (isSafety is bool safety && safety)
+                        {
+                            safetyBlocks.Add(block);
+                        }
+                    }
+                    catch
+                    {
+                        // Attribute may not exist on non-safety blocks, skip
+                    }
+                }
+
+                return safetyBlocks;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get safety blocks", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetSafetyBlocks failed for {SoftwarePath}", softwarePath);
                 throw pex;
             }
         }

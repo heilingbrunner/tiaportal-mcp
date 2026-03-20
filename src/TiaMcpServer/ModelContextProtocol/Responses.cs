@@ -600,4 +600,59 @@ namespace TiaMcpServer.ModelContextProtocol
     }
 
     #endregion
+    public class ResponseTechnologyObject : ResponseAttributes
+    {
+        public string? Name { get; set; }
+        public string? TypeIdentifier { get; set; }
+    }
+
+    public class ResponseTechnologyObjects : ResponseMessage
+    {
+        public IEnumerable<ResponseTechnologyObject>? Items { get; set; }
+    }
+
+    public class ResponseExportTechnologyObject : ResponseMessage
+    {
+    }
+
+    public class ResponseImportTechnologyObject : ResponseMessage
+    {
+    }
+
+    public class ResponseDeleteTechnologyObject : ResponseMessage
+    {
+    }
+
+    public class ResponseSafetySettings : ResponseAttributes
+    {
+        public string? SafetyMode { get; set; }
+        public string? FMonitoringTime { get; set; }
+        public Dictionary<string, object?>? FParameters { get; set; }
+    }
+
+    public class ResponseSafetyInfo : ResponseMessage
+    {
+        public bool? IsSafetyEnabled { get; set; }
+        public string? SafetySignature { get; set; }
+        public string? CRC { get; set; }
+        public int? SafetyBlockCount { get; set; }
+    }
+
+    public class ResponseSafetyBlock : ResponseAttributes
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public string? FSignature { get; set; }
+        public string? FCRC { get; set; }
+        public bool? IsSafety { get; set; }
+    }
+
+    public class ResponseSafetyBlocks : ResponseMessage
+    {
+        public IEnumerable<ResponseSafetyBlock>? Items { get; set; }
+    }
+
+    public class ResponseSetSafetyPassword : ResponseMessage
+    {
+    }
 }
