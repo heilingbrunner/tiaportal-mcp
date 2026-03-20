@@ -293,5 +293,45 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         public string? Name { get; set; }
         public string? Path { get; set; }
+    public class ResponseExternalSourceInfo
+    {
+        public string? Name { get; set; }
+        public string? Extension { get; set; }
+    }
+
+    public class ResponseExternalSources : ResponseMessage
+    {
+        public IEnumerable<ResponseExternalSourceInfo>? Items { get; set; }
+    }
+
+    public class ResponseImportExternalSource : ResponseMessage
+    {
+    }
+
+    public class ResponseGenerateBlocksFromSource : ResponseMessage
+    {
+        public bool Success { get; set; }
+        public string? SourceName { get; set; }
+    }
+
+    public class ResponseDeleteExternalSource : ResponseMessage
+    {
+    }
+
+    public class ResponseExportExternalSource : ResponseMessage
+    {
+    }
+
+    public class ResponseCrossReferenceInfo
+    {
+        public string? SourceObject { get; set; }
+        public string? ReferencedObject { get; set; }
+        public string? ReferenceType { get; set; }
+        public string? Path { get; set; }
+    }
+
+    public class ResponseCrossReferences : ResponseMessage
+    {
+        public IEnumerable<ResponseCrossReferenceInfo>? Items { get; set; }
     }
 }

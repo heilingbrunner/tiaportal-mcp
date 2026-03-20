@@ -12,6 +12,9 @@ using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.Types;
 using Siemens.Engineering.SW.WatchAndForceTables;
+using Siemens.Engineering.SW.ExternalSources;
+using Siemens.Engineering.SW.Types;
+using Siemens.Engineering.CrossReference;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -3545,6 +3548,360 @@ namespace TiaMcpServer.Siemens
             }
 
             return anySuccess;
+        }
+
+        #endregion
+
+        #endregion
+
+        #region external sources
+
+        public List<PlcExternalSource> GetExternalSources(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting external sources...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<PlcExternalSource>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var sourceGroup = plcSoftware.ExternalSourceGroup;
+                    if (sourceGroup != null)
+                    {
+                        foreach (var source in sourceGroup.ExternalSources)
+                        {
+                            if (string.IsNullOrEmpty(regexName))
+                            {
+                                list.Add(source);
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    if (regexName.IndexOfAny(_regexChars) >= 0)
+                                    {
+                                        var regex = new Regex(regexName, RegexOptions.IgnoreCase);
+                                        if (regex.IsMatch(source.Name))
+                                        {
+                                            list.Add(source);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (source.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            list.Add(source);
+                                        }
+                                    }
+                                }
+                                catch (Exception)
+                                {
+                                    // Invalid regex, skip
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Error getting external sources
+            }
+
+            return list;
+        }
+
+        public bool ImportExternalSource(string softwarePath, string groupPath, string importPath)
+        {
+            _logger?.LogInformation($"Importing external source from path: {importPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var sourceGroup = plcSoftware.ExternalSourceGroup;
+                    if (sourceGroup == null)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, "External source group not found");
+                    }
+
+                    var fileInfo = new FileInfo(importPath);
+                    if (!fileInfo.Exists)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, $"File not found: {importPath}");
+                    }
+
+                    var name = Path.GetFileName(importPath);
+                    sourceGroup.ExternalSources.CreateFromFile(name, importPath);
+                    return true;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, "PLC software not found");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import external source failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["importPath"] = importPath;
+                _logger?.LogError(pex, "ImportExternalSource failed for {SoftwarePath} {ImportPath}", softwarePath, importPath);
+                throw pex;
+            }
+        }
+
+        public bool GenerateBlocksFromSource(string softwarePath, string sourceName)
+        {
+            _logger?.LogInformation($"Generating blocks from external source: {sourceName}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var sourceGroup = plcSoftware.ExternalSourceGroup;
+                    if (sourceGroup == null)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, "External source group not found");
+                    }
+
+                    var source = sourceGroup.ExternalSources
+                        .FirstOrDefault(s => s.Name.Equals(sourceName, StringComparison.OrdinalIgnoreCase));
+
+                    if (source == null)
+                    {
+                        var candidates = sourceGroup.ExternalSources
+                            .Select(s => s.Name)
+                            .ToList();
+                        throw new PortalException(PortalErrorCode.NotFound, $"External source '{sourceName}' not found", candidates);
+                    }
+
+                    source.GenerateBlocksFromSource();
+                    return true;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, "PLC software not found");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Generate blocks from source failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["sourceName"] = sourceName;
+                _logger?.LogError(pex, "GenerateBlocksFromSource failed for {SoftwarePath} {SourceName}", softwarePath, sourceName);
+                throw pex;
+            }
+        }
+
+        public bool DeleteExternalSource(string softwarePath, string sourceName)
+        {
+            _logger?.LogInformation($"Deleting external source: {sourceName}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var sourceGroup = plcSoftware.ExternalSourceGroup;
+                    if (sourceGroup == null)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, "External source group not found");
+                    }
+
+                    var source = sourceGroup.ExternalSources
+                        .FirstOrDefault(s => s.Name.Equals(sourceName, StringComparison.OrdinalIgnoreCase));
+
+                    if (source == null)
+                    {
+                        var candidates = sourceGroup.ExternalSources
+                            .Select(s => s.Name)
+                            .ToList();
+                        throw new PortalException(PortalErrorCode.NotFound, $"External source '{sourceName}' not found", candidates);
+                    }
+
+                    source.Delete();
+                    return true;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, "PLC software not found");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Delete external source failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["sourceName"] = sourceName;
+                _logger?.LogError(pex, "DeleteExternalSource failed for {SoftwarePath} {SourceName}", softwarePath, sourceName);
+                throw pex;
+            }
+        }
+
+        public bool ExportExternalSource(string softwarePath, string sourceName, string exportPath)
+        {
+            _logger?.LogInformation($"Exporting external source: {sourceName}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var sourceGroup = plcSoftware.ExternalSourceGroup;
+                    if (sourceGroup == null)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, "External source group not found");
+                    }
+
+                    var source = sourceGroup.ExternalSources
+                        .FirstOrDefault(s => s.Name.Equals(sourceName, StringComparison.OrdinalIgnoreCase));
+
+                    if (source == null)
+                    {
+                        var candidates = sourceGroup.ExternalSources
+                            .Select(s => s.Name)
+                            .ToList();
+                        throw new PortalException(PortalErrorCode.NotFound, $"External source '{sourceName}' not found", candidates);
+                    }
+
+                    var targetPath = Path.Combine(exportPath, source.Name);
+
+                    if (File.Exists(targetPath))
+                    {
+                        File.Delete(targetPath);
+                    }
+
+                    // Ensure directory exists
+                    var dir = Path.GetDirectoryName(targetPath);
+                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    {
+                        Directory.CreateDirectory(dir);
+                    }
+
+                    source.Export(new FileInfo(targetPath), ExportOptions.None);
+                    return true;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, "PLC software not found");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export external source failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["sourceName"] = sourceName;
+                pex.Data["exportPath"] = exportPath;
+                _logger?.LogError(pex, "ExportExternalSource failed for {SoftwarePath} {SourceName} -> {ExportPath}", softwarePath, sourceName, exportPath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region cross-references
+
+        public List<(string SourceObject, string ReferencedObject, string ReferenceType, string Path)> GetCrossReferences(string softwarePath, string objectPath)
+        {
+            _logger?.LogInformation($"Getting cross-references for: {objectPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var deviceItem = softwareContainer.Parent as DeviceItem;
+                    if (deviceItem == null)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, "Device item not found for the given software path");
+                    }
+
+                    var crossRefProvider = deviceItem.GetService<CrossReferenceProvider>();
+                    if (crossRefProvider == null)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidState, "Cross-reference provider is not available for this device");
+                    }
+
+                    // Try to find the object (block or type) by path
+                    IEngineeringObject? targetObject = null;
+
+                    // Try as block first
+                    var block = GetBlock(softwarePath, objectPath);
+                    if (block != null)
+                    {
+                        targetObject = block;
+                    }
+                    else
+                    {
+                        // Try as type
+                        var type = GetType(softwarePath, objectPath);
+                        if (type != null)
+                        {
+                            targetObject = type;
+                        }
+                    }
+
+                    if (targetObject == null)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, $"Object '{objectPath}' not found as block or type");
+                    }
+
+                    var result = new List<(string SourceObject, string ReferencedObject, string ReferenceType, string Path)>();
+
+                    var crossRefs = crossRefProvider.GetCrossReferences(targetObject);
+                    if (crossRefs != null)
+                    {
+                        foreach (var crossRef in crossRefs)
+                        {
+                            var sourceObj = crossRef.ReferenceA?.ToString() ?? "";
+                            var referencedObj = crossRef.ReferenceB?.ToString() ?? "";
+                            var refType = crossRef.ReferenceType?.ToString() ?? "";
+                            var refPath = crossRef.ReferenceB is IEngineeringObject engObj
+                                ? engObj.ToString() ?? ""
+                                : "";
+
+                            result.Add((sourceObj, referencedObj, refType, refPath));
+                        }
+                    }
+
+                    return result;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, "PLC software not found");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Get cross-references failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["objectPath"] = objectPath;
+                _logger?.LogError(pex, "GetCrossReferences failed for {SoftwarePath} {ObjectPath}", softwarePath, objectPath);
+                throw pex;
+            }
         }
 
         #endregion
