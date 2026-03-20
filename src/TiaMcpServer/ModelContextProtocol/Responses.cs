@@ -413,6 +413,88 @@ namespace TiaMcpServer.ModelContextProtocol
     }
 
     public class ResponseImportGsdFile : ResponseMessage
+    public class ResponseOnlineStatus : ResponseMessage
+    {
+        public bool IsOnline { get; set; }
+        public string? DevicePath { get; set; }
+        public string? Mode { get; set; }
+    }
+
+    public class ResponseDownloadResult : ResponseMessage
+    {
+        public bool Success { get; set; }
+        public IEnumerable<string>? Warnings { get; set; }
+        public IEnumerable<string>? Errors { get; set; }
+    }
+
+    public class ResponseCompareResult : ResponseMessage
+    {
+        public IEnumerable<ComparisonDifference>? Differences { get; set; }
+    }
+
+    public class ComparisonDifference
+    {
+        public string? ObjectPath { get; set; }
+        public string? ChangeType { get; set; }
+        public string? Details { get; set; }
+    }
+
+    public class ResponseLibrary : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public int MasterCopyCount { get; set; }
+        public int TypeCount { get; set; }
+    }
+
+    public class ResponseLibraries : ResponseMessage
+    {
+        public IEnumerable<ResponseLibrary>? Items { get; set; }
+    }
+
+    public class ResponseMasterCopy : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public string? TypeIdentifier { get; set; }
+    }
+
+    public class ResponseLibraryType : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Version { get; set; }
+        public IEnumerable<Attribute>? Attributes { get; set; }
+    }
+
+    public class ResponseLibraryContents : ResponseMessage
+    {
+        public IEnumerable<ResponseMasterCopy>? MasterCopies { get; set; }
+        public IEnumerable<ResponseLibraryType>? Types { get; set; }
+    }
+
+    public class ResponseCreateProject : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public bool Success { get; set; }
+    }
+
+    public class ResponseMultiuserInfo : ResponseMessage
+    {
+        public bool IsMultiuser { get; set; }
+        public string? ServerName { get; set; }
+        public IEnumerable<string>? Users { get; set; }
+    }
+
+    public class ResponseOpenGlobalLibrary : ResponseMessage
+    {
+    }
+
+    public class ResponseCopyToLibrary : ResponseMessage
+    {
+    }
+
+    public class ResponseCopyFromLibrary : ResponseMessage
     {
     }
 }

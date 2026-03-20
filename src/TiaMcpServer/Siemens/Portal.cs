@@ -1,11 +1,17 @@
 ﻿using Microsoft.Extensions.Logging;
 using Siemens.Engineering;
+using Siemens.Engineering.Compare;
 using Siemens.Engineering.Compiler;
+using Siemens.Engineering.Download;
 using Siemens.Engineering.Hmi;
 using Siemens.Engineering.HmiUnified;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
+using Siemens.Engineering.Library;
+using Siemens.Engineering.Library.MasterCopies;
+using Siemens.Engineering.Library.Types;
 using Siemens.Engineering.Multiuser;
+using Siemens.Engineering.Online;
 using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
@@ -4035,6 +4041,186 @@ namespace TiaMcpServer.Siemens
             }
 
             var list = new List<PlcExternalSource>();
+        #region online access
+
+        public bool GoOnline(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Going online for device item: {deviceItemPath}");
+
+            if (IsProjectNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
+                }
+
+                var onlineProvider = deviceItem.GetService<OnlineProvider>();
+                if (onlineProvider == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, $"OnlineProvider not available for device item: {deviceItemPath}");
+                }
+
+                onlineProvider.GoOnline();
+
+                return onlineProvider.State == OnlineState.Online;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidState, "GoOnline failed", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GoOnline failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public bool GoOffline(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Going offline for device item: {deviceItemPath}");
+
+            if (IsProjectNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
+                }
+
+                var onlineProvider = deviceItem.GetService<OnlineProvider>();
+                if (onlineProvider == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, $"OnlineProvider not available for device item: {deviceItemPath}");
+                }
+
+                onlineProvider.GoOffline();
+
+                return onlineProvider.State == OnlineState.Offline;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidState, "GoOffline failed", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GoOffline failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public DownloadResult? DownloadToDevice(string softwarePath, string deviceItemPath)
+        {
+            _logger?.LogInformation($"Downloading to device: {deviceItemPath}");
+
+            if (IsProjectNull())
+            {
+                return null;
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
+                }
+
+                var downloadProvider = deviceItem.GetService<DownloadProvider>();
+                if (downloadProvider == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, $"DownloadProvider not available for device item: {deviceItemPath}");
+                }
+
+                var downloadConfiguration = downloadProvider.Configuration;
+                var result = downloadProvider.Download(downloadConfiguration, PreDownload, PostDownload, DownloadOptions.Software);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Download to device failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "DownloadToDevice failed for {SoftwarePath} -> {DeviceItemPath}", softwarePath, deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public DownloadResult? UploadFromDevice(string softwarePath, string deviceItemPath)
+        {
+            _logger?.LogInformation($"Uploading from device: {deviceItemPath}");
+
+            if (IsProjectNull())
+            {
+                return null;
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
+                }
+
+                var downloadProvider = deviceItem.GetService<DownloadProvider>();
+                if (downloadProvider == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, $"DownloadProvider not available for device item: {deviceItemPath}");
+                }
+
+                var uploadConfiguration = downloadProvider.Configuration;
+                var result = downloadProvider.Upload(uploadConfiguration, PreDownload, PostDownload);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Upload from device failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "UploadFromDevice failed for {SoftwarePath} <- {DeviceItemPath}", softwarePath, deviceItemPath);
+                throw pex;
+            }
+        }
+
+        private static void PreDownload(DownloadConfiguration configuration)
+        {
+            // Accept all pre-download checks
+            foreach (var item in configuration.Items)
+            {
+                item.SetValue(true);
+            }
+        }
+
+        private static void PostDownload(DownloadConfiguration configuration)
+        {
+            // Accept all post-download checks
+            foreach (var item in configuration.Items)
+            {
+                item.SetValue(true);
+            }
+        }
+
+        #endregion
+
+        #region compare
+
+        public List<(string ObjectPath, string ChangeType, string Details)> CompareOfflineOnline(string softwarePath)
+        {
+            _logger?.LogInformation($"Comparing offline/online for software: {softwarePath}");
+
+            if (IsProjectNull())
+            {
+                return new List<(string, string, string)>();
+            }
 
             try
             {
@@ -4282,6 +4468,106 @@ namespace TiaMcpServer.Siemens
                 pex.Data["sourceName"] = sourceName;
                 pex.Data["exportPath"] = exportPath;
                 _logger?.LogError(pex, "ExportExternalSource failed for {SoftwarePath} {SourceName} -> {ExportPath}", softwarePath, sourceName, exportPath);
+                    var compileService = plcSoftware.GetService<ICompilable>();
+                    if (compileService != null)
+                    {
+                        // Compile first to ensure consistency
+                        compileService.Compile();
+                    }
+
+                    var compareProvider = plcSoftware.GetService<CompareProvider>();
+                    if (compareProvider == null)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidState, $"CompareProvider not available for software: {softwarePath}");
+                    }
+
+                    var differences = new List<(string ObjectPath, string ChangeType, string Details)>();
+                    var result = compareProvider.Compare();
+
+                    foreach (var diff in result)
+                    {
+                        differences.Add((
+                            diff.LeftObject?.ToString() ?? diff.RightObject?.ToString() ?? "Unknown",
+                            diff.DifferenceType.ToString(),
+                            diff.Description ?? string.Empty
+                        ));
+                    }
+
+                    return differences;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, $"PLC software not found at path: {softwarePath}");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Compare offline/online failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "CompareOfflineOnline failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+        }
+
+        public List<(string Property, string Value1, string Value2)> CompareBlocks(string softwarePath, string blockPath1, string blockPath2)
+        {
+            _logger?.LogInformation($"Comparing blocks: {blockPath1} vs {blockPath2}");
+
+            if (IsProjectNull())
+            {
+                return new List<(string, string, string)>();
+            }
+
+            try
+            {
+                var block1 = GetBlock(softwarePath, blockPath1);
+                var block2 = GetBlock(softwarePath, blockPath2);
+
+                if (block1 == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Block not found: {blockPath1}");
+                }
+                if (block2 == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Block not found: {blockPath2}");
+                }
+
+                var differences = new List<(string Property, string Value1, string Value2)>();
+
+                // Compare key attributes
+                var attributeNames = new[] { "Name", "Number", "ProgrammingLanguage", "MemoryLayout", "IsConsistent", "HeaderFamily", "HeaderVersion" };
+                foreach (var attrName in attributeNames)
+                {
+                    try
+                    {
+                        var val1 = block1.GetAttribute(attrName)?.ToString() ?? "";
+                        var val2 = block2.GetAttribute(attrName)?.ToString() ?? "";
+                        if (!val1.Equals(val2, StringComparison.Ordinal))
+                        {
+                            differences.Add((attrName, val1, val2));
+                        }
+                    }
+                    catch
+                    {
+                        // Attribute may not exist on all block types
+                    }
+                }
+
+                // Compare modification dates
+                var mod1 = block1.GetAttribute("ModifiedDate")?.ToString() ?? "";
+                var mod2 = block2.GetAttribute("ModifiedDate")?.ToString() ?? "";
+                if (!mod1.Equals(mod2, StringComparison.Ordinal))
+                {
+                    differences.Add(("ModifiedDate", mod1, mod2));
+                }
+
+                return differences;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Compare blocks failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["blockPath1"] = blockPath1;
+                pex.Data["blockPath2"] = blockPath2;
+                _logger?.LogError(pex, "CompareBlocks failed for {BlockPath1} vs {BlockPath2}", blockPath1, blockPath2);
                 throw pex;
             }
         }
@@ -4299,6 +4585,186 @@ namespace TiaMcpServer.Siemens
                 if (IsProjectNull())
                 {
                     throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+        #region library management
+
+        public (List<(string Name, string Path)> MasterCopies, List<(string Name, string Version)> Types) GetProjectLibrary(string regexName = "")
+        {
+            _logger?.LogInformation($"Getting project library contents with filter: {regexName}");
+
+            if (IsProjectNull())
+            {
+                return (new List<(string, string)>(), new List<(string, string)>());
+            }
+
+            try
+            {
+                var project = _project as Project;
+                if (project == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Project is not a local project (may be a session)");
+                }
+
+                var library = project.ProjectLibrary;
+                var masterCopies = new List<(string Name, string Path)>();
+                var types = new List<(string Name, string Version)>();
+
+                Regex? regex = null;
+                if (!string.IsNullOrEmpty(regexName))
+                {
+                    regex = new Regex(regexName, RegexOptions.IgnoreCase);
+                }
+
+                // Enumerate master copies
+                CollectMasterCopies(library.MasterCopyFolder, masterCopies, regex, "");
+
+                // Enumerate library types
+                CollectLibraryTypes(library.TypeFolder, types, regex, "");
+
+                return (masterCopies, types);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "GetProjectLibrary failed", null, ex);
+                pex.Data["regexName"] = regexName;
+                _logger?.LogError(pex, "GetProjectLibrary failed with filter {RegexName}", regexName);
+                throw pex;
+            }
+        }
+
+        public List<(string Name, string Path)> GetGlobalLibraries(string regexName = "")
+        {
+            _logger?.LogInformation($"Getting global libraries with filter: {regexName}");
+
+            if (IsPortalNull())
+            {
+                return new List<(string, string)>();
+            }
+
+            try
+            {
+                var libraries = new List<(string Name, string Path)>();
+
+                Regex? regex = null;
+                if (!string.IsNullOrEmpty(regexName))
+                {
+                    regex = new Regex(regexName, RegexOptions.IgnoreCase);
+                }
+
+                foreach (var library in _portal!.GlobalLibraries)
+                {
+                    if (regex == null || regex.IsMatch(library.Name))
+                    {
+                        libraries.Add((library.Name, library.Path?.FullName ?? ""));
+                    }
+                }
+
+                return libraries;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "GetGlobalLibraries failed", null, ex);
+                pex.Data["regexName"] = regexName;
+                _logger?.LogError(pex, "GetGlobalLibraries failed with filter {RegexName}", regexName);
+                throw pex;
+            }
+        }
+
+        public bool OpenGlobalLibrary(string libraryPath)
+        {
+            _logger?.LogInformation($"Opening global library: {libraryPath}");
+
+            if (IsPortalNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                var fileInfo = new FileInfo(libraryPath);
+                if (!fileInfo.Exists)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Library file not found: {libraryPath}");
+                }
+
+                _portal!.GlobalLibraries.Open(fileInfo, OpenMode.ReadWrite);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "OpenGlobalLibrary failed", null, ex);
+                pex.Data["libraryPath"] = libraryPath;
+                _logger?.LogError(pex, "OpenGlobalLibrary failed for {LibraryPath}", libraryPath);
+                throw pex;
+            }
+        }
+
+        public bool CopyToLibrary(string softwarePath, string blockPath, string libraryFolder = "")
+        {
+            _logger?.LogInformation($"Copying block to library: {blockPath}");
+
+            if (IsProjectNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                var project = _project as Project;
+                if (project == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Project is not a local project (may be a session)");
+                }
+
+                var block = GetBlock(softwarePath, blockPath);
+                if (block == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Block not found: {blockPath}");
+                }
+
+                var targetFolder = project.ProjectLibrary.MasterCopyFolder;
+
+                if (!string.IsNullOrEmpty(libraryFolder))
+                {
+                    targetFolder = GetOrCreateMasterCopyFolder(targetFolder, libraryFolder);
+                }
+
+                targetFolder.MasterCopies.Create(block);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "CopyToLibrary failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["blockPath"] = blockPath;
+                pex.Data["libraryFolder"] = libraryFolder;
+                _logger?.LogError(pex, "CopyToLibrary failed for {BlockPath}", blockPath);
+                throw pex;
+            }
+        }
+
+        public bool CopyFromLibrary(string softwarePath, string masterCopyName, string targetGroupPath)
+        {
+            _logger?.LogInformation($"Copying from library: {masterCopyName} to {targetGroupPath}");
+
+            if (IsProjectNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                var project = _project as Project;
+                if (project == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Project is not a local project (may be a session)");
+                }
+
+                var masterCopy = FindMasterCopy(project.ProjectLibrary.MasterCopyFolder, masterCopyName);
+                if (masterCopy == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Master copy not found: {masterCopyName}");
                 }
 
                 var softwareContainer = GetSoftwareContainer(softwarePath);
@@ -4369,11 +4835,273 @@ namespace TiaMcpServer.Siemens
                 pex.Data["softwarePath"] = softwarePath;
                 pex.Data["objectPath"] = objectPath;
                 _logger?.LogError(pex, "GetCrossReferences failed for {SoftwarePath} {ObjectPath}", softwarePath, objectPath);
+                    var targetGroup = GetPlcBlockGroupByPath(softwarePath, targetGroupPath);
+                    if (targetGroup == null)
+                    {
+                        targetGroup = plcSoftware.BlockGroup;
+                    }
+
+                    targetGroup.Blocks.CreateFrom(masterCopy);
+
+                    return true;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, $"PLC software not found at path: {softwarePath}");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "CopyFromLibrary failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["masterCopyName"] = masterCopyName;
+                pex.Data["targetGroupPath"] = targetGroupPath;
+                _logger?.LogError(pex, "CopyFromLibrary failed for {MasterCopyName}", masterCopyName);
+                throw pex;
+            }
+        }
+
+        public List<(string Name, string Version, string Path)> GetLibraryTypes(string libraryName = "")
+        {
+            _logger?.LogInformation($"Getting library types from: {libraryName}");
+
+            if (IsProjectNull())
+            {
+                return new List<(string, string, string)>();
+            }
+
+            try
+            {
+                var types = new List<(string Name, string Version, string Path)>();
+
+                if (string.IsNullOrEmpty(libraryName))
+                {
+                    // Get from project library
+                    var project = _project as Project;
+                    if (project == null)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidState, "Project is not a local project (may be a session)");
+                    }
+
+                    CollectLibraryTypeVersions(project.ProjectLibrary.TypeFolder, types, "");
+                }
+                else
+                {
+                    // Get from global library by name
+                    if (IsPortalNull())
+                    {
+                        return types;
+                    }
+
+                    var globalLib = _portal!.GlobalLibraries.FirstOrDefault(l => l.Name.Equals(libraryName, StringComparison.OrdinalIgnoreCase));
+                    if (globalLib == null)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, $"Global library not found: {libraryName}");
+                    }
+
+                    CollectLibraryTypeVersions(globalLib.TypeFolder, types, "");
+                }
+
+                return types;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "GetLibraryTypes failed", null, ex);
+                pex.Data["libraryName"] = libraryName;
+                _logger?.LogError(pex, "GetLibraryTypes failed for {LibraryName}", libraryName);
                 throw pex;
             }
         }
 
         #endregion
+
+        #region project creation
+
+        public bool CreateProject(string projectPath, string projectName)
+        {
+            _logger?.LogInformation($"Creating project: {projectName} at {projectPath}");
+
+            if (IsPortalNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                if (_project != null)
+                {
+                    (_project as Project)?.Close();
+                    _project = null;
+                }
+
+                if (_session != null)
+                {
+                    _session.Close();
+                    _session = null;
+                }
+
+                var directoryInfo = new DirectoryInfo(projectPath);
+                if (!directoryInfo.Exists)
+                {
+                    directoryInfo.Create();
+                }
+
+                _project = _portal!.Projects.Create(directoryInfo, projectName);
+
+                return _project != null;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "CreateProject failed", null, ex);
+                pex.Data["projectPath"] = projectPath;
+                pex.Data["projectName"] = projectName;
+                _logger?.LogError(pex, "CreateProject failed for {ProjectName} at {ProjectPath}", projectName, projectPath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region multi-user
+
+        public (bool IsMultiuser, string? ServerName, List<string> Users) GetMultiuserInfo()
+        {
+            _logger?.LogInformation("Getting multi-user info...");
+
+            if (IsProjectNull())
+            {
+                return (false, null, new List<string>());
+            }
+
+            try
+            {
+                var users = new List<string>();
+
+                if (_session != null)
+                {
+                    // Project is a multi-user session
+                    var serverSession = _session.ServerSession;
+                    var serverName = serverSession?.ServerProject?.Path?.FullName ?? "Unknown";
+
+                    if (serverSession?.ServerProject != null)
+                    {
+                        // Enumerate connected sessions
+                        foreach (var localSession in _portal!.LocalSessions)
+                        {
+                            users.Add(localSession.Name ?? "Unknown");
+                        }
+                    }
+
+                    return (true, serverName, users);
+                }
+
+                // Not a multi-user project
+                return (false, null, users);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "GetMultiuserInfo failed", null, ex);
+                _logger?.LogError(pex, "GetMultiuserInfo failed");
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region library helpers
+
+        private void CollectMasterCopies(MasterCopyFolder folder, List<(string Name, string Path)> list, Regex? regex, string path)
+        {
+            foreach (var masterCopy in folder.MasterCopies)
+            {
+                var fullPath = string.IsNullOrEmpty(path) ? masterCopy.Name : $"{path}/{masterCopy.Name}";
+                if (regex == null || regex.IsMatch(masterCopy.Name))
+                {
+                    list.Add((masterCopy.Name, fullPath));
+                }
+            }
+
+            foreach (var subFolder in folder.Folders)
+            {
+                var subPath = string.IsNullOrEmpty(path) ? subFolder.Name : $"{path}/{subFolder.Name}";
+                CollectMasterCopies(subFolder, list, regex, subPath);
+            }
+        }
+
+        private void CollectLibraryTypes(LibraryTypeFolder folder, List<(string Name, string Version)> list, Regex? regex, string path)
+        {
+            foreach (var libraryType in folder.Types)
+            {
+                if (regex == null || regex.IsMatch(libraryType.Name))
+                {
+                    var versions = libraryType.Versions;
+                    var latestVersion = versions.LastOrDefault();
+                    list.Add((libraryType.Name, latestVersion?.VersionNumber.ToString() ?? ""));
+                }
+            }
+
+            foreach (var subFolder in folder.Folders)
+            {
+                CollectLibraryTypes(subFolder, list, regex, $"{path}/{subFolder.Name}");
+            }
+        }
+
+        private void CollectLibraryTypeVersions(LibraryTypeFolder folder, List<(string Name, string Version, string Path)> list, string path)
+        {
+            foreach (var libraryType in folder.Types)
+            {
+                foreach (var version in libraryType.Versions)
+                {
+                    var fullPath = string.IsNullOrEmpty(path) ? libraryType.Name : $"{path}/{libraryType.Name}";
+                    list.Add((libraryType.Name, version.VersionNumber.ToString(), fullPath));
+                }
+            }
+
+            foreach (var subFolder in folder.Folders)
+            {
+                var subPath = string.IsNullOrEmpty(path) ? subFolder.Name : $"{path}/{subFolder.Name}";
+                CollectLibraryTypeVersions(subFolder, list, subPath);
+            }
+        }
+
+        private MasterCopyFolder GetOrCreateMasterCopyFolder(MasterCopyFolder root, string folderPath)
+        {
+            var segments = folderPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            var current = root;
+
+            foreach (var segment in segments)
+            {
+                var found = current.Folders.FirstOrDefault(f => f.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
+                if (found != null)
+                {
+                    current = found;
+                }
+                else
+                {
+                    current = current.Folders.Create(segment);
+                }
+            }
+
+            return current;
+        }
+
+        private MasterCopy? FindMasterCopy(MasterCopyFolder folder, string name)
+        {
+            var found = folder.MasterCopies.FirstOrDefault(mc => mc.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (found != null)
+            {
+                return found;
+            }
+
+            foreach (var subFolder in folder.Folders)
+            {
+                found = FindMasterCopy(subFolder, name);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
 
         #endregion
 
