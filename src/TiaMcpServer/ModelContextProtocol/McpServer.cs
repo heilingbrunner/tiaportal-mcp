@@ -4,6 +4,7 @@ using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Siemens.Engineering.Download;
+using Siemens.Engineering.Hmi;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Tags;
@@ -2854,6 +2855,13 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "GetTagTables"), Description("Get a list of PLC tag tables from plc software")]
         public static ResponseTagTables GetTagTables(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+        #region HMI Tools
+
+        #region HMI Tags
+
+        [McpServerTool(Name = "GetHmiTagTables"), Description("Get a list of HMI tag tables from the HMI software")]
+        public static ResponseHmiTagTables GetHmiTagTables(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
             [Description("regexName: defines the name or regular expression to find the tag table. Use empty string (default) to find all")] string regexName = "")
         {
             try
@@ -2903,6 +2911,23 @@ namespace TiaMcpServer.ModelContextProtocol
                 return new ResponseExternalSources
                 {
                     Message = $"External sources with regex '{regexName}' retrieved from '{softwarePath}'",
+                var tables = Portal.GetHmiTagTables(softwarePath, regexName);
+
+                var responseList = new List<ResponseHmiTagTableInfo>();
+                foreach (var table in tables)
+                {
+                    var attributes = Helper.GetAttributeList(table);
+                    responseList.Add(new ResponseHmiTagTableInfo
+                    {
+                        Name = table.Name,
+                        TagCount = table.Tags.Count,
+                        Attributes = attributes
+                    });
+                }
+
+                return new ResponseHmiTagTables
+                {
+                    Message = $"HMI tag tables with regex '{regexName}' retrieved from '{softwarePath}'",
                     Items = responseList,
                     Meta = new JsonObject
                     {
@@ -3632,6 +3657,14 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseTags GetTags(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("tagTableName: the name of the tag table")] string tagTableName,
+                throw new McpException($"Unexpected error retrieving HMI tag tables from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetHmiTags"), Description("Get a list of HMI tags from a tag table in the HMI software")]
+        public static ResponseHmiTags GetHmiTags(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("tagTableName: name of the HMI tag table")] string tagTableName,
             [Description("regexName: defines the name or regular expression to find the tag. Use empty string (default) to find all")] string regexName = "")
         {
             try
@@ -3830,6 +3863,41 @@ namespace TiaMcpServer.ModelContextProtocol
                         ["success"] = true,
                         ["count"] = responseList.Count
                         ["isMultiuser"] = isMultiuser
+                var tags = Portal.GetHmiTags(softwarePath, tagTableName, regexName);
+
+                var responseList = new List<ResponseHmiTagInfo>();
+                foreach (var tag in tags)
+                {
+                    var attributes = Helper.GetAttributeList(tag);
+                    var connection = "";
+                    var plcTag = "";
+                    try
+                    {
+                        connection = tag.Connection;
+                        plcTag = tag.PlcTag;
+                    }
+                    catch (Exception)
+                    {
+                        // Some tag properties may not be available
+                    }
+
+                    responseList.Add(new ResponseHmiTagInfo
+                    {
+                        Name = tag.Name,
+                        Connection = connection,
+                        PlcTag = plcTag,
+                        Attributes = attributes
+                    });
+                }
+
+                return new ResponseHmiTags
+                {
+                    Message = $"HMI tags with regex '{regexName}' retrieved from table '{tagTableName}' in '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
                     }
                 };
             }
@@ -3848,6 +3916,10 @@ namespace TiaMcpServer.ModelContextProtocol
                         }
 
                         throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                                msg += $" Available: {string.Join(", ", pex.Candidates.Take(10))}";
+                            }
+                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                        }
                     case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
                     case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
                         throw new McpException(pex.Message, McpErrorCode.InvalidParams);
@@ -3865,6 +3937,14 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseExportTagTable ExportTagTable(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("tagTableName: the name of the tag table to export")] string tagTableName,
+                throw new McpException($"Unexpected error retrieving HMI tags from table '{tagTableName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ExportHmiTagTable"), Description("Export an HMI tag table to file")]
+        public static ResponseExportHmiTagTable ExportHmiTagTable(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("tagTableName: name of the HMI tag table to export")] string tagTableName,
             [Description("exportPath: defines the directory path where to export the tag table")] string exportPath)
         {
             try
@@ -3884,6 +3964,17 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
 
                 throw new McpException($"Failed exporting tag table '{tagTableName}' to '{exportPath}'", McpErrorCode.InternalError);
+                Portal.ExportHmiTagTable(softwarePath, tagTableName, exportPath);
+
+                return new ResponseExportHmiTagTable
+                {
+                    Message = $"HMI tag table '{tagTableName}' exported from '{softwarePath}' to '{exportPath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
             }
             catch (TiaMcpServer.Siemens.PortalException pex)
             {
@@ -3909,6 +4000,19 @@ namespace TiaMcpServer.ModelContextProtocol
                             throw new McpException(msg, McpErrorCode.InternalError);
                         }
 
+                                msg += $" Available: {string.Join(", ", pex.Candidates.Take(10))}";
+                            }
+                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                        }
+                    case TiaMcpServer.Siemens.PortalErrorCode.ExportFailed:
+                        {
+                            var reason = pex.InnerException?.Message?.Trim();
+                            var msg = "Failed to export HMI tag table.";
+                            if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                            Logger?.LogError(pex, "MCP ExportHmiTagTable failed for {SoftwarePath} table {TagTableName} -> {ExportPath}",
+                                pex.Data?["softwarePath"], pex.Data?["tagTableName"], pex.Data?["exportPath"]);
+                            throw new McpException(msg, McpErrorCode.InternalError);
+                        }
                     case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
                     case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
                         throw new McpException(pex.Message, McpErrorCode.InvalidParams);
@@ -3945,6 +4049,28 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     throw new McpException($"Failed importing tag table from '{importPath}'", McpErrorCode.InternalError);
                 }
+                throw new McpException($"Unexpected error exporting HMI tag table '{tagTableName}' from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ImportHmiTagTable"), Description("Import an HMI tag table from file")]
+        public static ResponseImportHmiTagTable ImportHmiTagTable(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("importPath: defines the path of the XML file from where to import the tag table")] string importPath)
+        {
+            try
+            {
+                Portal.ImportHmiTagTable(softwarePath, importPath);
+
+                return new ResponseImportHmiTagTable
+                {
+                    Message = $"HMI tag table imported from '{importPath}' to '{softwarePath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
             }
             catch (TiaMcpServer.Siemens.PortalException pex)
             {
@@ -4016,6 +4142,9 @@ namespace TiaMcpServer.ModelContextProtocol
                         throw new McpException(pex.Message, McpErrorCode.InvalidParams);
                 }
 
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
                 throw new McpException(pex.Message, McpErrorCode.InternalError);
             }
             catch (Exception ex) when (ex is not McpException)
@@ -4071,6 +4200,7 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error deleting tag '{tagName}' from table '{tagTableName}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error importing HMI tag table from '{importPath}' to '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
             }
         }
 
@@ -4105,6 +4235,55 @@ namespace TiaMcpServer.ModelContextProtocol
                 return new ResponseWatchTables
                 {
                     Message = $"Watch tables with regex '{regexName}' retrieved from '{softwarePath}'",
+        #region HMI Screens
+
+        [McpServerTool(Name = "GetScreens"), Description("Get a list of HMI screens from the HMI software")]
+        public static ResponseScreens GetScreens(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the screen. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var screens = Portal.GetScreens(softwarePath, regexName);
+
+                var responseList = new List<ResponseScreenInfo>();
+                foreach (var screen in screens)
+                {
+                    var attributes = Helper.GetAttributeList(screen);
+                    int? width = null;
+                    int? height = null;
+                    string? screenType = null;
+                    try
+                    {
+                        width = (int)screen.GetAttribute("Width");
+                        height = (int)screen.GetAttribute("Height");
+                    }
+                    catch (Exception)
+                    {
+                        // Screen dimensions may not be available for all screen types
+                    }
+                    try
+                    {
+                        screenType = screen.GetType().Name;
+                    }
+                    catch (Exception)
+                    {
+                        // Fallback
+                    }
+
+                    responseList.Add(new ResponseScreenInfo
+                    {
+                        Name = screen.Name,
+                        ScreenType = screenType,
+                        Width = width,
+                        Height = height,
+                        Attributes = attributes
+                    });
+                }
+
+                return new ResponseScreens
+                {
+                    Message = $"HMI screens with regex '{regexName}' retrieved from '{softwarePath}'",
                     Items = responseList,
                     Meta = new JsonObject
                     {
@@ -4142,6 +4321,55 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
 
                 throw new McpException($"Failed exporting watch table '{watchTableName}' to '{exportPath}'", McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving HMI screens from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetScreenInfo"), Description("Get detailed info for a specific HMI screen")]
+        public static ResponseScreenInfo GetScreenInfo(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("screenName: name of the HMI screen")] string screenName)
+        {
+            try
+            {
+                var screen = Portal.GetScreenInfo(softwarePath, screenName);
+
+                if (screen == null)
+                {
+                    throw new McpException($"HMI screen '{screenName}' not found in '{softwarePath}'", McpErrorCode.InvalidParams);
+                }
+
+                var attributes = Helper.GetAttributeList(screen);
+                int? width = null;
+                int? height = null;
+                string? screenType = null;
+                try
+                {
+                    width = (int)screen.GetAttribute("Width");
+                    height = (int)screen.GetAttribute("Height");
+                }
+                catch (Exception)
+                {
+                    // Screen dimensions may not be available
+                }
+                try
+                {
+                    screenType = screen.GetType().Name;
+                }
+                catch (Exception)
+                {
+                    // Fallback
+                }
+
+                return new ResponseScreenInfo
+                {
+                    Name = screen.Name,
+                    ScreenType = screenType,
+                    Width = width,
+                    Height = height,
+                    Attributes = attributes,
+                    Message = $"HMI screen info for '{screenName}' retrieved from '{softwarePath}'"
+                };
             }
             catch (TiaMcpServer.Siemens.PortalException pex)
             {
@@ -4167,6 +4395,10 @@ namespace TiaMcpServer.ModelContextProtocol
                             throw new McpException(msg, McpErrorCode.InternalError);
                         }
 
+                                msg += $" Available: {string.Join(", ", pex.Candidates.Take(10))}";
+                            }
+                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                        }
                     case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
                     case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
                         throw new McpException(pex.Message, McpErrorCode.InvalidParams);
@@ -4203,6 +4435,82 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     throw new McpException($"Failed importing watch table from '{importPath}'", McpErrorCode.InternalError);
                 }
+                throw new McpException($"Unexpected error getting HMI screen info for '{screenName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ExportScreen"), Description("Export an HMI screen to file")]
+        public static ResponseExportScreen ExportScreen(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("screenName: name of the HMI screen to export")] string screenName,
+            [Description("exportPath: defines the directory path where to export the screen")] string exportPath)
+        {
+            try
+            {
+                Portal.ExportScreen(softwarePath, screenName, exportPath);
+
+                return new ResponseExportScreen
+                {
+                    Message = $"HMI screen '{screenName}' exported from '{softwarePath}' to '{exportPath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        {
+                            var msg = pex.Message;
+                            if (pex.Candidates != null)
+                            {
+                                msg += $" Available: {string.Join(", ", pex.Candidates.Take(10))}";
+                            }
+                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                        }
+                    case TiaMcpServer.Siemens.PortalErrorCode.ExportFailed:
+                        {
+                            var reason = pex.InnerException?.Message?.Trim();
+                            var msg = "Failed to export HMI screen.";
+                            if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                            Logger?.LogError(pex, "MCP ExportScreen failed for {SoftwarePath} screen {ScreenName} -> {ExportPath}",
+                                pex.Data?["softwarePath"], pex.Data?["screenName"], pex.Data?["exportPath"]);
+                            throw new McpException(msg, McpErrorCode.InternalError);
+                        }
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error exporting HMI screen '{screenName}' from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ImportScreen"), Description("Import an HMI screen from file")]
+        public static ResponseImportScreen ImportScreen(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("importPath: defines the path of the XML file from where to import the screen")] string importPath)
+        {
+            try
+            {
+                Portal.ImportScreen(softwarePath, importPath);
+
+                return new ResponseImportScreen
+                {
+                    Message = $"HMI screen imported from '{importPath}' to '{softwarePath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
             }
             catch (TiaMcpServer.Siemens.PortalException pex)
             {
@@ -4213,6 +4521,9 @@ namespace TiaMcpServer.ModelContextProtocol
                         throw new McpException(pex.Message, McpErrorCode.InvalidParams);
                 }
 
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
                 throw new McpException(pex.Message, McpErrorCode.InternalError);
             }
             catch (Exception ex) when (ex is not McpException)
@@ -4224,8 +4535,383 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error getting multi-user info: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error importing HMI screen from '{importPath}' to '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
             }
         }
+
+        #endregion
+
+        #region HMI Connections
+
+        [McpServerTool(Name = "GetHmiConnections"), Description("Get a list of HMI connections from the HMI software")]
+        public static ResponseHmiConnections GetHmiConnections(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the connection. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var connections = Portal.GetHmiConnections(softwarePath, regexName);
+
+                var responseList = new List<ResponseHmiConnectionInfo>();
+                foreach (var connection in connections)
+                {
+                    var attributes = Helper.GetAttributeList(connection);
+                    string? partner = null;
+                    string? connectionType = null;
+                    try
+                    {
+                        partner = connection.GetAttribute("Partner")?.ToString();
+                    }
+                    catch (Exception)
+                    {
+                        // Partner info may not be available
+                    }
+                    try
+                    {
+                        connectionType = connection.GetType().Name;
+                    }
+                    catch (Exception)
+                    {
+                        // Fallback
+                    }
+
+                    responseList.Add(new ResponseHmiConnectionInfo
+                    {
+                        Name = connection.Name,
+                        Partner = partner,
+                        ConnectionType = connectionType,
+                        Attributes = attributes
+                    });
+                }
+
+                return new ResponseHmiConnections
+                {
+                    Message = $"HMI connections with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving HMI connections from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "CreateHmiConnection"), Description("Create an HMI connection between HMI and PLC software")]
+        public static ResponseCreateHmiConnection CreateHmiConnection(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("connectionName: name for the new HMI connection")] string connectionName,
+            [Description("partnerDevicePath: defines the path in the project structure to the partner PLC software")] string partnerDevicePath)
+        {
+            try
+            {
+                Portal.CreateHmiConnection(softwarePath, connectionName, partnerDevicePath);
+
+                return new ResponseCreateHmiConnection
+                {
+                    Message = $"HMI connection '{connectionName}' created between '{softwarePath}' and '{partnerDevicePath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating HMI connection '{connectionName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        #endregion
+
+        #region HMI Alarms
+
+        [McpServerTool(Name = "GetDiscreteAlarms"), Description("Get a list of discrete alarms from the HMI software")]
+        public static ResponseDiscreteAlarms GetDiscreteAlarms(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the alarm. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var alarms = Portal.GetDiscreteAlarms(softwarePath, regexName);
+
+                var responseList = new List<ResponseAlarmInfo>();
+                foreach (var alarm in alarms)
+                {
+                    var attributes = Helper.GetAttributeList(alarm);
+                    string? alarmClass = null;
+                    string? triggerTag = null;
+                    string? alarmText = null;
+                    try
+                    {
+                        alarmClass = alarm.GetAttribute("AlarmClass")?.ToString();
+                    }
+                    catch (Exception)
+                    {
+                        // Attribute may not exist
+                    }
+                    try
+                    {
+                        triggerTag = alarm.GetAttribute("TriggerTag")?.ToString();
+                    }
+                    catch (Exception)
+                    {
+                        // Attribute may not exist
+                    }
+                    try
+                    {
+                        alarmText = alarm.GetAttribute("AlarmText")?.ToString();
+                    }
+                    catch (Exception)
+                    {
+                        // Attribute may not exist
+                    }
+
+                    responseList.Add(new ResponseAlarmInfo
+                    {
+                        Name = alarm.Name,
+                        AlarmClass = alarmClass,
+                        TriggerTag = triggerTag,
+                        AlarmText = alarmText,
+                        Attributes = attributes
+                    });
+                }
+
+                return new ResponseDiscreteAlarms
+                {
+                    Message = $"Discrete alarms with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving discrete alarms from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetAnalogAlarms"), Description("Get a list of analog alarms from the HMI software")]
+        public static ResponseAnalogAlarms GetAnalogAlarms(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the alarm. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var alarms = Portal.GetAnalogAlarms(softwarePath, regexName);
+
+                var responseList = new List<ResponseAlarmInfo>();
+                foreach (var alarm in alarms)
+                {
+                    var attributes = Helper.GetAttributeList(alarm);
+                    string? alarmClass = null;
+                    string? triggerTag = null;
+                    string? alarmText = null;
+                    try
+                    {
+                        alarmClass = alarm.GetAttribute("AlarmClass")?.ToString();
+                    }
+                    catch (Exception)
+                    {
+                        // Attribute may not exist
+                    }
+                    try
+                    {
+                        triggerTag = alarm.GetAttribute("TriggerTag")?.ToString();
+                    }
+                    catch (Exception)
+                    {
+                        // Attribute may not exist
+                    }
+                    try
+                    {
+                        alarmText = alarm.GetAttribute("AlarmText")?.ToString();
+                    }
+                    catch (Exception)
+                    {
+                        // Attribute may not exist
+                    }
+
+                    responseList.Add(new ResponseAlarmInfo
+                    {
+                        Name = alarm.Name,
+                        AlarmClass = alarmClass,
+                        TriggerTag = triggerTag,
+                        AlarmText = alarmText,
+                        Attributes = attributes
+                    });
+                }
+
+                return new ResponseAnalogAlarms
+                {
+                    Message = $"Analog alarms with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving analog alarms from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        #endregion
+
+        #region HMI Text Lists
+
+        [McpServerTool(Name = "GetTextLists"), Description("Get a list of HMI text lists from the HMI software")]
+        public static ResponseTextLists GetTextLists(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the text list. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var textLists = Portal.GetTextLists(softwarePath, regexName);
+
+                var responseList = new List<ResponseTextListInfo>();
+                foreach (var textList in textLists)
+                {
+                    var attributes = Helper.GetAttributeList(textList);
+                    responseList.Add(new ResponseTextListInfo
+                    {
+                        Name = textList.Name,
+                        Attributes = attributes
+                    });
+                }
+
+                return new ResponseTextLists
+                {
+                    Message = $"HMI text lists with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving HMI text lists from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ExportTextList"), Description("Export an HMI text list to file")]
+        public static ResponseExportTextList ExportTextList(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("textListName: name of the HMI text list to export")] string textListName,
+            [Description("exportPath: defines the directory path where to export the text list")] string exportPath)
+        {
+            try
+            {
+                Portal.ExportTextList(softwarePath, textListName, exportPath);
+
+                return new ResponseExportTextList
+                {
+                    Message = $"HMI text list '{textListName}' exported from '{softwarePath}' to '{exportPath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        {
+                            var msg = pex.Message;
+                            if (pex.Candidates != null)
+                            {
+                                msg += $" Available: {string.Join(", ", pex.Candidates.Take(10))}";
+                            }
+                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                        }
+                    case TiaMcpServer.Siemens.PortalErrorCode.ExportFailed:
+                        {
+                            var reason = pex.InnerException?.Message?.Trim();
+                            var msg = "Failed to export HMI text list.";
+                            if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                            Logger?.LogError(pex, "MCP ExportTextList failed for {SoftwarePath} text list {TextListName} -> {ExportPath}",
+                                pex.Data?["softwarePath"], pex.Data?["textListName"], pex.Data?["exportPath"]);
+                            throw new McpException(msg, McpErrorCode.InternalError);
+                        }
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error exporting HMI text list '{textListName}' from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ImportTextList"), Description("Import an HMI text list from file")]
+        public static ResponseImportTextList ImportTextList(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("importPath: defines the path of the XML file from where to import the text list")] string importPath)
+        {
+            try
+            {
+                Portal.ImportTextList(softwarePath, importPath);
+
+                return new ResponseImportTextList
+                {
+                    Message = $"HMI text list imported from '{importPath}' to '{softwarePath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error importing HMI text list from '{importPath}' to '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        #endregion
 
         #endregion
     }
