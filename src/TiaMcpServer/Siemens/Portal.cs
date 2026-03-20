@@ -9,7 +9,9 @@ using Siemens.Engineering.Multiuser;
 using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.Types;
+using Siemens.Engineering.SW.WatchAndForceTables;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -1705,6 +1707,488 @@ namespace TiaMcpServer.Siemens
             }
 
             return imported;
+        }
+
+        #endregion
+
+        #region tag tables
+
+        public List<PlcTagTable> GetTagTables(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting tag tables...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<PlcTagTable>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var tagTables = plcSoftware.TagTableGroup?.TagTables;
+
+                    if (tagTables != null)
+                    {
+                        bool isRegex = !string.IsNullOrEmpty(regexName) && regexName.Any(c => _regexChars.Contains(c));
+
+                        foreach (PlcTagTable table in tagTables)
+                        {
+                            if (string.IsNullOrEmpty(regexName))
+                            {
+                                list.Add(table);
+                            }
+                            else if (isRegex)
+                            {
+                                if (Regex.IsMatch(table.Name, regexName, RegexOptions.IgnoreCase))
+                                {
+                                    list.Add(table);
+                                }
+                            }
+                            else
+                            {
+                                if (table.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    list.Add(table);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting tag tables");
+            }
+
+            return list;
+        }
+
+        public PlcTagTable? GetTagTable(string softwarePath, string tagTableName)
+        {
+            _logger?.LogInformation($"Getting tag table: {tagTableName}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var tagTables = plcSoftware.TagTableGroup?.TagTables;
+
+                    if (tagTables != null)
+                    {
+                        foreach (PlcTagTable table in tagTables)
+                        {
+                            if (table.Name.Equals(tagTableName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return table;
+                            }
+                        }
+                    }
+                }
+
+                var candidates = GetTagTables(softwarePath).Select(t => t.Name).ToList();
+                throw new PortalException(PortalErrorCode.NotFound, $"Tag table '{tagTableName}' not found", candidates);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get tag table", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                _logger?.LogError(pex, "GetTagTable failed for {SoftwarePath} {TagTableName}", softwarePath, tagTableName);
+                throw pex;
+            }
+        }
+
+        public List<PlcTag> GetTags(string softwarePath, string tagTableName, string regexName = "")
+        {
+            _logger?.LogInformation($"Getting tags from table: {tagTableName}");
+
+            var list = new List<PlcTag>();
+
+            try
+            {
+                var table = GetTagTable(softwarePath, tagTableName);
+
+                if (table != null)
+                {
+                    bool isRegex = !string.IsNullOrEmpty(regexName) && regexName.Any(c => _regexChars.Contains(c));
+
+                    foreach (PlcTag tag in table.Tags)
+                    {
+                        if (string.IsNullOrEmpty(regexName))
+                        {
+                            list.Add(tag);
+                        }
+                        else if (isRegex)
+                        {
+                            if (Regex.IsMatch(tag.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                list.Add(tag);
+                            }
+                        }
+                        else
+                        {
+                            if (tag.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                list.Add(tag);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get tags", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                _logger?.LogError(pex, "GetTags failed for {SoftwarePath} {TagTableName}", softwarePath, tagTableName);
+                throw pex;
+            }
+
+            return list;
+        }
+
+        public PlcTagTable? ExportTagTable(string softwarePath, string tagTableName, string exportPath)
+        {
+            _logger?.LogInformation($"Exporting tag table: {tagTableName}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var table = GetTagTable(softwarePath, tagTableName);
+
+                if (table == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Tag table '{tagTableName}' not found");
+                }
+
+                exportPath = Path.Combine(exportPath, $"{table.Name}.xml");
+
+                if (File.Exists(exportPath))
+                {
+                    File.Delete(exportPath);
+                }
+
+                table.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
+
+                return table;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export tag table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                pex.Data["exportPath"] = exportPath;
+                _logger?.LogError(pex, "ExportTagTable failed for {SoftwarePath} {TagTableName} -> {ExportPath}", softwarePath, tagTableName, exportPath);
+                throw pex;
+            }
+        }
+
+        public bool ImportTagTable(string softwarePath, string importPath)
+        {
+            _logger?.LogInformation($"Importing tag table from path: {importPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var tagTableGroup = plcSoftware.TagTableGroup;
+
+                    if (tagTableGroup != null)
+                    {
+                        var fileInfo = new FileInfo(importPath);
+                        if (fileInfo.Exists)
+                        {
+                            var imported = tagTableGroup.TagTables.Import(fileInfo, ImportOptions.Override);
+                            if (imported != null && imported.Count > 0)
+                            {
+                                return true;
+                            }
+                        }
+                        else
+                        {
+                            throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
+                        }
+                    }
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import tag table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["importPath"] = importPath;
+                _logger?.LogError(pex, "ImportTagTable failed for {SoftwarePath} {ImportPath}", softwarePath, importPath);
+                throw pex;
+            }
+        }
+
+        public PlcTag? CreateTag(string softwarePath, string tagTableName, string tagName, string dataType, string logicalAddress, string comment = "")
+        {
+            _logger?.LogInformation($"Creating tag '{tagName}' in table '{tagTableName}'");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var table = GetTagTable(softwarePath, tagTableName);
+
+                if (table == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Tag table '{tagTableName}' not found");
+                }
+
+                var tag = table.Tags.Create(tagName, dataType, logicalAddress);
+
+                if (tag != null && !string.IsNullOrEmpty(comment))
+                {
+                    tag.Comment.Items[0].Text = comment;
+                }
+
+                return tag;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Create tag failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                pex.Data["tagName"] = tagName;
+                _logger?.LogError(pex, "CreateTag failed for {SoftwarePath} {TagTableName} {TagName}", softwarePath, tagTableName, tagName);
+                throw pex;
+            }
+        }
+
+        public bool DeleteTag(string softwarePath, string tagTableName, string tagName)
+        {
+            _logger?.LogInformation($"Deleting tag '{tagName}' from table '{tagTableName}'");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var table = GetTagTable(softwarePath, tagTableName);
+
+                if (table == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Tag table '{tagTableName}' not found");
+                }
+
+                foreach (PlcTag tag in table.Tags)
+                {
+                    if (tag.Name.Equals(tagName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        tag.Delete();
+                        return true;
+                    }
+                }
+
+                var candidates = table.Tags.Cast<PlcTag>().Select(t => t.Name).ToList();
+                throw new PortalException(PortalErrorCode.NotFound, $"Tag '{tagName}' not found in table '{tagTableName}'", candidates);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Delete tag failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                pex.Data["tagName"] = tagName;
+                _logger?.LogError(pex, "DeleteTag failed for {SoftwarePath} {TagTableName} {TagName}", softwarePath, tagTableName, tagName);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region watch/force tables
+
+        public List<PlcWatchTable> GetWatchTables(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting watch tables...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<PlcWatchTable>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var watchTableGroup = plcSoftware.WatchAndForceTableGroup;
+
+                    if (watchTableGroup != null)
+                    {
+                        bool isRegex = !string.IsNullOrEmpty(regexName) && regexName.Any(c => _regexChars.Contains(c));
+
+                        foreach (PlcWatchTable table in watchTableGroup.WatchTables)
+                        {
+                            if (string.IsNullOrEmpty(regexName))
+                            {
+                                list.Add(table);
+                            }
+                            else if (isRegex)
+                            {
+                                if (Regex.IsMatch(table.Name, regexName, RegexOptions.IgnoreCase))
+                                {
+                                    list.Add(table);
+                                }
+                            }
+                            else
+                            {
+                                if (table.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    list.Add(table);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting watch tables");
+            }
+
+            return list;
+        }
+
+        public PlcWatchTable? ExportWatchTable(string softwarePath, string watchTableName, string exportPath)
+        {
+            _logger?.LogInformation($"Exporting watch table: {watchTableName}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var watchTableGroup = plcSoftware.WatchAndForceTableGroup;
+
+                    if (watchTableGroup != null)
+                    {
+                        PlcWatchTable? foundTable = null;
+
+                        foreach (PlcWatchTable table in watchTableGroup.WatchTables)
+                        {
+                            if (table.Name.Equals(watchTableName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                foundTable = table;
+                                break;
+                            }
+                        }
+
+                        if (foundTable == null)
+                        {
+                            var candidates = new List<string>();
+                            foreach (PlcWatchTable t in watchTableGroup.WatchTables)
+                            {
+                                candidates.Add(t.Name);
+                            }
+                            throw new PortalException(PortalErrorCode.NotFound, $"Watch table '{watchTableName}' not found", candidates);
+                        }
+
+                        exportPath = Path.Combine(exportPath, $"{foundTable.Name}.xml");
+
+                        if (File.Exists(exportPath))
+                        {
+                            File.Delete(exportPath);
+                        }
+
+                        foundTable.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
+
+                        return foundTable;
+                    }
+                }
+
+                throw new PortalException(PortalErrorCode.InvalidState, "Could not access watch table group");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export watch table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["watchTableName"] = watchTableName;
+                pex.Data["exportPath"] = exportPath;
+                _logger?.LogError(pex, "ExportWatchTable failed for {SoftwarePath} {WatchTableName} -> {ExportPath}", softwarePath, watchTableName, exportPath);
+                throw pex;
+            }
+        }
+
+        public bool ImportWatchTable(string softwarePath, string importPath)
+        {
+            _logger?.LogInformation($"Importing watch table from path: {importPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var watchTableGroup = plcSoftware.WatchAndForceTableGroup;
+
+                    if (watchTableGroup != null)
+                    {
+                        var fileInfo = new FileInfo(importPath);
+                        if (fileInfo.Exists)
+                        {
+                            var imported = watchTableGroup.WatchTables.Import(fileInfo, ImportOptions.Override);
+                            if (imported != null && imported.Count > 0)
+                            {
+                                return true;
+                            }
+                        }
+                        else
+                        {
+                            throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
+                        }
+                    }
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import watch table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["importPath"] = importPath;
+                _logger?.LogError(pex, "ImportWatchTable failed for {SoftwarePath} {ImportPath}", softwarePath, importPath);
+                throw pex;
+            }
         }
 
         #endregion

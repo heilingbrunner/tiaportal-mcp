@@ -5,6 +5,7 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.Tags;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -1999,6 +2000,542 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
             }
             return missing;
+        }
+
+        #endregion
+
+        #region tag tables
+
+        [McpServerTool(Name = "GetTagTables"), Description("Get a list of PLC tag tables from plc software")]
+        public static ResponseTagTables GetTagTables(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the tag table. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetTagTables(softwarePath, regexName);
+
+                var responseList = new List<ResponseTagTableInfo>();
+                foreach (var table in list)
+                {
+                    if (table != null)
+                    {
+                        var attributes = Helper.GetAttributeList(table);
+
+                        responseList.Add(new ResponseTagTableInfo
+                        {
+                            Name = table.Name,
+                            TagCount = table.Tags.Count,
+                            Attributes = attributes
+                        });
+                    }
+                }
+
+                return new ResponseTagTables
+                {
+                    Message = $"Tag tables with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving tag tables with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetTagTable"), Description("Get a single PLC tag table with all its tags")]
+        public static ResponseTagTable GetTagTable(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("tagTableName: the name of the tag table")] string tagTableName)
+        {
+            try
+            {
+                var table = Portal.GetTagTable(softwarePath, tagTableName);
+
+                if (table != null)
+                {
+                    var tags = new List<ResponseTagInfo>();
+                    foreach (PlcTag tag in table.Tags)
+                    {
+                        tags.Add(new ResponseTagInfo
+                        {
+                            Name = tag.Name,
+                            DataTypeName = tag.DataTypeName,
+                            LogicalAddress = tag.LogicalAddress,
+                            Comment = tag.Comment?.Items?.Count > 0 ? tag.Comment.Items[0].Text : ""
+                        });
+                    }
+
+                    return new ResponseTagTable
+                    {
+                        Message = $"Tag table '{tagTableName}' retrieved from '{softwarePath}'",
+                        Name = table.Name,
+                        Tags = tags,
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true,
+                            ["tagCount"] = tags.Count
+                        }
+                    };
+                }
+
+                throw new McpException($"Tag table '{tagTableName}' not found in '{softwarePath}'", McpErrorCode.InvalidParams);
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        {
+                            var msg = pex.Message;
+                            if (pex.Candidates != null)
+                            {
+                                msg += $" Available: {string.Join(", ", pex.Candidates)}";
+                            }
+                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving tag table '{tagTableName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetTags"), Description("Get tags from a PLC tag table, optionally filtered by name or regex")]
+        public static ResponseTags GetTags(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("tagTableName: the name of the tag table")] string tagTableName,
+            [Description("regexName: defines the name or regular expression to find the tag. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetTags(softwarePath, tagTableName, regexName);
+
+                var responseList = new List<ResponseTagInfo>();
+                foreach (var tag in list)
+                {
+                    if (tag != null)
+                    {
+                        responseList.Add(new ResponseTagInfo
+                        {
+                            Name = tag.Name,
+                            DataTypeName = tag.DataTypeName,
+                            LogicalAddress = tag.LogicalAddress,
+                            Comment = tag.Comment?.Items?.Count > 0 ? tag.Comment.Items[0].Text : ""
+                        });
+                    }
+                }
+
+                return new ResponseTags
+                {
+                    Message = $"Tags with regex '{regexName}' retrieved from table '{tagTableName}' in '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true,
+                        ["count"] = responseList.Count
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        {
+                            var msg = pex.Message;
+                            if (pex.Candidates != null)
+                            {
+                                msg += $" Available: {string.Join(", ", pex.Candidates)}";
+                            }
+                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving tags from table '{tagTableName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ExportTagTable"), Description("Export a PLC tag table from plc software to XML file")]
+        public static ResponseExportTagTable ExportTagTable(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("tagTableName: the name of the tag table to export")] string tagTableName,
+            [Description("exportPath: defines the directory path where to export the tag table")] string exportPath)
+        {
+            try
+            {
+                var table = Portal.ExportTagTable(softwarePath, tagTableName, exportPath);
+                if (table != null)
+                {
+                    return new ResponseExportTagTable
+                    {
+                        Message = $"Tag table '{tagTableName}' exported to '{exportPath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+
+                throw new McpException($"Failed exporting tag table '{tagTableName}' to '{exportPath}'", McpErrorCode.InternalError);
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        {
+                            var msg = pex.Message;
+                            if (pex.Candidates != null)
+                            {
+                                msg += $" Available: {string.Join(", ", pex.Candidates)}";
+                            }
+                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.ExportFailed:
+                        {
+                            var reason = pex.InnerException?.Message?.Trim();
+                            var msg = "Failed to export tag table.";
+                            if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                            Logger?.LogError(pex, "MCP ExportTagTable failed for {SoftwarePath} {TagTableName} -> {ExportPath}",
+                                pex.Data?["softwarePath"], pex.Data?["tagTableName"], pex.Data?["exportPath"]);
+                            throw new McpException(msg, McpErrorCode.InternalError);
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error exporting tag table '{tagTableName}' to '{exportPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ImportTagTable"), Description("Import a PLC tag table from XML file to plc software")]
+        public static ResponseImportTagTable ImportTagTable(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("importPath: defines the path of the xml file from where to import the tag table")] string importPath)
+        {
+            try
+            {
+                if (Portal.ImportTagTable(softwarePath, importPath))
+                {
+                    return new ResponseImportTagTable
+                    {
+                        Message = $"Tag table imported from '{importPath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+                else
+                {
+                    throw new McpException($"Failed importing tag table from '{importPath}'", McpErrorCode.InternalError);
+                }
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error importing tag table from '{importPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "CreateTag"), Description("Create a new PLC tag in a tag table")]
+        public static ResponseCreateTag CreateTag(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("tagTableName: the name of the tag table where to create the tag")] string tagTableName,
+            [Description("tagName: the name of the new tag")] string tagName,
+            [Description("dataType: the data type of the tag, e.g. 'Bool', 'Int', 'Real'")] string dataType,
+            [Description("logicalAddress: the logical address of the tag, e.g. '%I0.0', '%Q0.0', '%M0.0'")] string logicalAddress,
+            [Description("comment: optional comment for the tag")] string comment = "")
+        {
+            try
+            {
+                var tag = Portal.CreateTag(softwarePath, tagTableName, tagName, dataType, logicalAddress, comment);
+                if (tag != null)
+                {
+                    return new ResponseCreateTag
+                    {
+                        Message = $"Tag '{tagName}' created in table '{tagTableName}'",
+                        Tag = new ResponseTagInfo
+                        {
+                            Name = tag.Name,
+                            DataTypeName = tag.DataTypeName,
+                            LogicalAddress = tag.LogicalAddress,
+                            Comment = comment
+                        },
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+
+                throw new McpException($"Failed creating tag '{tagName}' in table '{tagTableName}'", McpErrorCode.InternalError);
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        {
+                            var msg = pex.Message;
+                            if (pex.Candidates != null)
+                            {
+                                msg += $" Available: {string.Join(", ", pex.Candidates)}";
+                            }
+                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error creating tag '{tagName}' in table '{tagTableName}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "DeleteTag"), Description("Delete a PLC tag from a tag table")]
+        public static ResponseDeleteTag DeleteTag(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("tagTableName: the name of the tag table containing the tag")] string tagTableName,
+            [Description("tagName: the name of the tag to delete")] string tagName)
+        {
+            try
+            {
+                if (Portal.DeleteTag(softwarePath, tagTableName, tagName))
+                {
+                    return new ResponseDeleteTag
+                    {
+                        Message = $"Tag '{tagName}' deleted from table '{tagTableName}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+
+                throw new McpException($"Failed deleting tag '{tagName}' from table '{tagTableName}'", McpErrorCode.InternalError);
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        {
+                            var msg = pex.Message;
+                            if (pex.Candidates != null)
+                            {
+                                msg += $" Available: {string.Join(", ", pex.Candidates)}";
+                            }
+                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error deleting tag '{tagName}' from table '{tagTableName}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        #endregion
+
+        #region watch/force tables
+
+        [McpServerTool(Name = "GetWatchTables"), Description("Get a list of watch and force tables from plc software")]
+        public static ResponseWatchTables GetWatchTables(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the watch table. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetWatchTables(softwarePath, regexName);
+
+                var responseList = new List<ResponseWatchTableInfo>();
+                foreach (var table in list)
+                {
+                    if (table != null)
+                    {
+                        var attributes = Helper.GetAttributeList(table);
+
+                        responseList.Add(new ResponseWatchTableInfo
+                        {
+                            Name = table.Name,
+                            Attributes = attributes
+                        });
+                    }
+                }
+
+                return new ResponseWatchTables
+                {
+                    Message = $"Watch tables with regex '{regexName}' retrieved from '{softwarePath}'",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving watch tables with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ExportWatchTable"), Description("Export a watch table from plc software to XML file")]
+        public static ResponseExportWatchTable ExportWatchTable(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("watchTableName: the name of the watch table to export")] string watchTableName,
+            [Description("exportPath: defines the directory path where to export the watch table")] string exportPath)
+        {
+            try
+            {
+                var table = Portal.ExportWatchTable(softwarePath, watchTableName, exportPath);
+                if (table != null)
+                {
+                    return new ResponseExportWatchTable
+                    {
+                        Message = $"Watch table '{watchTableName}' exported to '{exportPath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+
+                throw new McpException($"Failed exporting watch table '{watchTableName}' to '{exportPath}'", McpErrorCode.InternalError);
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        {
+                            var msg = pex.Message;
+                            if (pex.Candidates != null)
+                            {
+                                msg += $" Available: {string.Join(", ", pex.Candidates)}";
+                            }
+                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.ExportFailed:
+                        {
+                            var reason = pex.InnerException?.Message?.Trim();
+                            var msg = "Failed to export watch table.";
+                            if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+                            Logger?.LogError(pex, "MCP ExportWatchTable failed for {SoftwarePath} {WatchTableName} -> {ExportPath}",
+                                pex.Data?["softwarePath"], pex.Data?["watchTableName"], pex.Data?["exportPath"]);
+                            throw new McpException(msg, McpErrorCode.InternalError);
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error exporting watch table '{watchTableName}' to '{exportPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ImportWatchTable"), Description("Import a watch table from XML file to plc software")]
+        public static ResponseImportWatchTable ImportWatchTable(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("importPath: defines the path of the xml file from where to import the watch table")] string importPath)
+        {
+            try
+            {
+                if (Portal.ImportWatchTable(softwarePath, importPath))
+                {
+                    return new ResponseImportWatchTable
+                    {
+                        Message = $"Watch table imported from '{importPath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+                else
+                {
+                    throw new McpException($"Failed importing watch table from '{importPath}'", McpErrorCode.InternalError);
+                }
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error importing watch table from '{importPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
         }
 
         #endregion
