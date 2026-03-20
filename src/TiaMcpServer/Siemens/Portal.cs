@@ -600,6 +600,475 @@ namespace TiaMcpServer.Siemens
 
         }
 
+        public Device CreateDevice(string typeIdentifier, string name, string deviceName)
+        {
+            _logger?.LogInformation($"Creating device: {name} ({typeIdentifier})...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var device = (_project as Project)?.Devices.CreateWithItem(typeIdentifier, name, deviceName);
+
+                if (device == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"Failed to create device '{deviceName}' with type '{typeIdentifier}'");
+                }
+
+                return device;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to create device '{deviceName}'", null, ex);
+                pex.Data["typeIdentifier"] = typeIdentifier;
+                pex.Data["name"] = name;
+                pex.Data["deviceName"] = deviceName;
+                _logger?.LogError(pex, "CreateDevice failed for {DeviceName} ({TypeIdentifier})", deviceName, typeIdentifier);
+                throw pex;
+            }
+        }
+
+        public void DeleteDevice(string devicePath)
+        {
+            _logger?.LogInformation($"Deleting device: {devicePath}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var device = GetDeviceByPath(devicePath);
+
+                if (device == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device not found at path '{devicePath}'");
+                }
+
+                device.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to delete device at '{devicePath}'", null, ex);
+                pex.Data["devicePath"] = devicePath;
+                _logger?.LogError(pex, "DeleteDevice failed for {DevicePath}", devicePath);
+                throw pex;
+            }
+        }
+
+        public DeviceUserGroup CreateDeviceGroup(string groupName, string parentGroupPath = "")
+        {
+            _logger?.LogInformation($"Creating device group: {groupName}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                DeviceUserGroupComposition? groups = (_project as Project)?.DeviceGroups;
+
+                if (groups == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Cannot access device groups");
+                }
+
+                if (!string.IsNullOrEmpty(parentGroupPath))
+                {
+                    var pathSegments = parentGroupPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    DeviceUserGroup? currentGroup = null;
+
+                    foreach (var segment in pathSegments)
+                    {
+                        currentGroup = (currentGroup?.Groups ?? groups)
+                            .FirstOrDefault(g => g.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
+
+                        if (currentGroup == null)
+                        {
+                            throw new PortalException(PortalErrorCode.NotFound, $"Parent group path '{parentGroupPath}' not found");
+                        }
+                    }
+
+                    return currentGroup!.Groups.Create(groupName);
+                }
+
+                return groups.Create(groupName);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to create device group '{groupName}'", null, ex);
+                pex.Data["groupName"] = groupName;
+                pex.Data["parentGroupPath"] = parentGroupPath;
+                _logger?.LogError(pex, "CreateDeviceGroup failed for {GroupName}", groupName);
+                throw pex;
+            }
+        }
+
+        public List<DeviceItem> GetModules(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Getting modules for device item: {deviceItemPath}...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                var modules = new List<DeviceItem>();
+
+                foreach (DeviceItem subItem in deviceItem.DeviceItems)
+                {
+                    modules.Add(subItem);
+                }
+
+                return modules;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get modules for '{deviceItemPath}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GetModules failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public DeviceItem GetModuleInfo(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Getting module info for: {deviceItemPath}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                return deviceItem;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get module info for '{deviceItemPath}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GetModuleInfo failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public List<(int StartAddress, int Length, string IoType)> GetAddresses(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Getting addresses for: {deviceItemPath}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                var addresses = new List<(int StartAddress, int Length, string IoType)>();
+
+                foreach (var address in deviceItem.Addresses)
+                {
+                    var startAddress = address.StartAddress;
+                    var length = address.Length;
+                    var ioType = address.IoType.ToString();
+                    addresses.Add((startAddress, length, ioType));
+                }
+
+                return addresses;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get addresses for '{deviceItemPath}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GetAddresses failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public List<Subnet> GetSubnets()
+        {
+            _logger?.LogInformation("Getting subnets...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            try
+            {
+                var subnets = new List<Subnet>();
+                var project = _project as Project;
+
+                if (project?.Subnets != null)
+                {
+                    foreach (Subnet subnet in project.Subnets)
+                    {
+                        subnets.Add(subnet);
+                    }
+                }
+
+                return subnets;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, "Failed to get subnets", null, ex);
+                _logger?.LogError(pex, "GetSubnets failed");
+                throw pex;
+            }
+        }
+
+        public List<(string Name, string InterfaceType, string IpAddress, string SubnetMask)> GetNetworkInterfaces(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Getting network interfaces for: {deviceItemPath}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                var interfaces = new List<(string Name, string InterfaceType, string IpAddress, string SubnetMask)>();
+
+                CollectNetworkInterfaces(deviceItem, interfaces);
+
+                return interfaces;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get network interfaces for '{deviceItemPath}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GetNetworkInterfaces failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public void SetIpAddress(string deviceItemPath, string ipAddress, string subnetMask, string routerAddress = "")
+        {
+            _logger?.LogInformation($"Setting IP address for: {deviceItemPath} to {ipAddress}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                var networkInterface = FindNetworkInterface(deviceItem);
+
+                if (networkInterface == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"No network interface found on device item '{deviceItemPath}'");
+                }
+
+                var nodes = networkInterface.Nodes;
+                foreach (Node node in nodes)
+                {
+                    node.SetAttribute("Address", ipAddress);
+                    node.SetAttribute("SubnetMask", subnetMask);
+
+                    if (!string.IsNullOrEmpty(routerAddress))
+                    {
+                        node.SetAttribute("RouterAddress", routerAddress);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to set IP address for '{deviceItemPath}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                pex.Data["ipAddress"] = ipAddress;
+                pex.Data["subnetMask"] = subnetMask;
+                _logger?.LogError(pex, "SetIpAddress failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public void ConnectToSubnet(string deviceItemPath, string subnetName)
+        {
+            _logger?.LogInformation($"Connecting {deviceItemPath} to subnet {subnetName}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                var project = _project as Project;
+                var subnet = project?.Subnets?.FirstOrDefault(s => s.Name.Equals(subnetName, StringComparison.OrdinalIgnoreCase));
+
+                if (subnet == null)
+                {
+                    var availableSubnets = project?.Subnets?.Select(s => s.Name) ?? Enumerable.Empty<string>();
+                    throw new PortalException(PortalErrorCode.NotFound, $"Subnet '{subnetName}' not found", availableSubnets);
+                }
+
+                var networkInterface = FindNetworkInterface(deviceItem);
+
+                if (networkInterface == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"No network interface found on device item '{deviceItemPath}'");
+                }
+
+                var nodes = networkInterface.Nodes;
+                foreach (Node node in nodes)
+                {
+                    node.ConnectToSubnet(subnet);
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to connect '{deviceItemPath}' to subnet '{subnetName}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                pex.Data["subnetName"] = subnetName;
+                _logger?.LogError(pex, "ConnectToSubnet failed for {DeviceItemPath} -> {SubnetName}", deviceItemPath, subnetName);
+                throw pex;
+            }
+        }
+
+        public void ImportGsdFile(string gsdFilePath)
+        {
+            _logger?.LogInformation($"Importing GSD file: {gsdFilePath}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                if (!File.Exists(gsdFilePath))
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"GSD file not found at '{gsdFilePath}'");
+                }
+
+                var project = _project as Project;
+
+                if (project == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Project must be a local project to import GSD files");
+                }
+
+                project.InstallGsdFile(new FileInfo(gsdFilePath));
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to import GSD file '{gsdFilePath}'", null, ex);
+                pex.Data["gsdFilePath"] = gsdFilePath;
+                _logger?.LogError(pex, "ImportGsdFile failed for {GsdFilePath}", gsdFilePath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region hardware and network helpers
+
+        private void CollectNetworkInterfaces(DeviceItem deviceItem, List<(string Name, string InterfaceType, string IpAddress, string SubnetMask)> interfaces)
+        {
+            var networkInterface = deviceItem.GetService<NetworkInterface>();
+
+            if (networkInterface != null)
+            {
+                var ipAddress = "";
+                var subnetMask = "";
+                var interfaceType = networkInterface.InterfaceType.ToString();
+
+                foreach (Node node in networkInterface.Nodes)
+                {
+                    try
+                    {
+                        ipAddress = node.GetAttribute("Address")?.ToString() ?? "";
+                        subnetMask = node.GetAttribute("SubnetMask")?.ToString() ?? "";
+                    }
+                    catch
+                    {
+                        // Some nodes may not have IP attributes
+                    }
+                }
+
+                interfaces.Add((deviceItem.Name, interfaceType, ipAddress, subnetMask));
+            }
+
+            foreach (DeviceItem subItem in deviceItem.DeviceItems)
+            {
+                CollectNetworkInterfaces(subItem, interfaces);
+            }
+        }
+
+        private NetworkInterface? FindNetworkInterface(DeviceItem deviceItem)
+        {
+            var networkInterface = deviceItem.GetService<NetworkInterface>();
+
+            if (networkInterface != null)
+            {
+                return networkInterface;
+            }
+
+            foreach (DeviceItem subItem in deviceItem.DeviceItems)
+            {
+                networkInterface = FindNetworkInterface(subItem);
+                if (networkInterface != null)
+                {
+                    return networkInterface;
+                }
+            }
+
+            return null;
+        }
+
+        #endregion
+
         #endregion
 
         #region software
