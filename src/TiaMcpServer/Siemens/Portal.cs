@@ -1707,6 +1707,373 @@ namespace TiaMcpServer.Siemens
             return imported;
         }
 
+        #region block crud
+
+        public void DeleteBlock(string softwarePath, string blockPath)
+        {
+            _logger?.LogInformation($"Deleting block by path: {blockPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var block = GetBlock(softwarePath, blockPath);
+
+                if (block == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Block '{blockPath}' not found");
+                }
+
+                block.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to delete block '{blockPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["blockPath"] = blockPath;
+                _logger?.LogError(pex, "DeleteBlock failed for {SoftwarePath} {BlockPath}", softwarePath, blockPath);
+                throw pex;
+            }
+        }
+
+        public PlcBlock? CopyBlock(string softwarePath, string sourceBlockPath, string targetGroupPath)
+        {
+            _logger?.LogInformation($"Copying block from '{sourceBlockPath}' to group '{targetGroupPath}'");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var block = GetBlock(softwarePath, sourceBlockPath);
+
+                if (block == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Source block '{sourceBlockPath}' not found");
+                }
+
+                var targetGroup = GetPlcBlockGroupByPath(softwarePath, targetGroupPath);
+
+                if (targetGroup == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Target group '{targetGroupPath}' not found");
+                }
+
+                var copiedBlock = targetGroup.Blocks.CopyFrom(block);
+                return copiedBlock;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to copy block '{sourceBlockPath}' to '{targetGroupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["sourceBlockPath"] = sourceBlockPath;
+                pex.Data["targetGroupPath"] = targetGroupPath;
+                _logger?.LogError(pex, "CopyBlock failed for {SoftwarePath} {SourceBlockPath} -> {TargetGroupPath}", softwarePath, sourceBlockPath, targetGroupPath);
+                throw pex;
+            }
+        }
+
+        public void MoveBlock(string softwarePath, string sourceBlockPath, string targetGroupPath)
+        {
+            _logger?.LogInformation($"Moving block from '{sourceBlockPath}' to group '{targetGroupPath}'");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var block = GetBlock(softwarePath, sourceBlockPath);
+
+                if (block == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Source block '{sourceBlockPath}' not found");
+                }
+
+                var targetGroup = GetPlcBlockGroupByPath(softwarePath, targetGroupPath);
+
+                if (targetGroup == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Target group '{targetGroupPath}' not found");
+                }
+
+                // Copy to target, then delete original
+                targetGroup.Blocks.CopyFrom(block);
+                block.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to move block '{sourceBlockPath}' to '{targetGroupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["sourceBlockPath"] = sourceBlockPath;
+                pex.Data["targetGroupPath"] = targetGroupPath;
+                _logger?.LogError(pex, "MoveBlock failed for {SoftwarePath} {SourceBlockPath} -> {TargetGroupPath}", softwarePath, sourceBlockPath, targetGroupPath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region type crud
+
+        public void DeleteType(string softwarePath, string typePath)
+        {
+            _logger?.LogInformation($"Deleting type by path: {typePath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var type = GetType(softwarePath, typePath);
+
+                if (type == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Type '{typePath}' not found");
+                }
+
+                type.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to delete type '{typePath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["typePath"] = typePath;
+                _logger?.LogError(pex, "DeleteType failed for {SoftwarePath} {TypePath}", softwarePath, typePath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region block group management
+
+        public PlcBlockGroup? CreateBlockGroup(string softwarePath, string parentGroupPath, string groupName)
+        {
+            _logger?.LogInformation($"Creating block group '{groupName}' in '{parentGroupPath}'");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                if (string.IsNullOrWhiteSpace(groupName))
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, "Group name cannot be empty");
+                }
+
+                var parentGroup = GetPlcBlockGroupByPath(softwarePath, parentGroupPath);
+
+                if (parentGroup == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Parent group '{parentGroupPath}' not found");
+                }
+
+                var newGroup = parentGroup.Groups.Create(groupName);
+                return newGroup;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to create block group '{groupName}' in '{parentGroupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["parentGroupPath"] = parentGroupPath;
+                pex.Data["groupName"] = groupName;
+                _logger?.LogError(pex, "CreateBlockGroup failed for {SoftwarePath} {ParentGroupPath}/{GroupName}", softwarePath, parentGroupPath, groupName);
+                throw pex;
+            }
+        }
+
+        public void DeleteBlockGroup(string softwarePath, string groupPath)
+        {
+            _logger?.LogInformation($"Deleting block group at path: {groupPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                if (string.IsNullOrWhiteSpace(groupPath))
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, "Group path cannot be empty; the root block group cannot be deleted");
+                }
+
+                var group = GetPlcBlockGroupByPath(softwarePath, groupPath);
+
+                if (group == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Block group '{groupPath}' not found");
+                }
+
+                group.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to delete block group '{groupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["groupPath"] = groupPath;
+                _logger?.LogError(pex, "DeleteBlockGroup failed for {SoftwarePath} {GroupPath}", softwarePath, groupPath);
+                throw pex;
+            }
+        }
+
+        public (string Name, string Path, int BlockCount, int SubGroupCount) GetBlockGroupInfo(string softwarePath, string groupPath)
+        {
+            _logger?.LogInformation($"Getting block group info at path: {groupPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var group = GetPlcBlockGroupByPath(softwarePath, groupPath);
+
+                if (group == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Block group '{groupPath}' not found");
+                }
+
+                var blockCount = group.Blocks.Count;
+                var subGroupCount = group.Groups.Count;
+                var path = GetPlcBlockGroupPath(group);
+
+                return (group.Name, path, blockCount, subGroupCount);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get block group info for '{groupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["groupPath"] = groupPath;
+                _logger?.LogError(pex, "GetBlockGroupInfo failed for {SoftwarePath} {GroupPath}", softwarePath, groupPath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region type group management
+
+        public PlcTypeGroup? CreateTypeGroup(string softwarePath, string parentGroupPath, string groupName)
+        {
+            _logger?.LogInformation($"Creating type group '{groupName}' in '{parentGroupPath}'");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                if (string.IsNullOrWhiteSpace(groupName))
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, "Group name cannot be empty");
+                }
+
+                var parentGroup = GetPlcTypeGroupByPath(softwarePath, parentGroupPath);
+
+                if (parentGroup == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Parent type group '{parentGroupPath}' not found");
+                }
+
+                var newGroup = parentGroup.Groups.Create(groupName);
+                return newGroup;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to create type group '{groupName}' in '{parentGroupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["parentGroupPath"] = parentGroupPath;
+                pex.Data["groupName"] = groupName;
+                _logger?.LogError(pex, "CreateTypeGroup failed for {SoftwarePath} {ParentGroupPath}/{GroupName}", softwarePath, parentGroupPath, groupName);
+                throw pex;
+            }
+        }
+
+        public void DeleteTypeGroup(string softwarePath, string groupPath)
+        {
+            _logger?.LogInformation($"Deleting type group at path: {groupPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                if (string.IsNullOrWhiteSpace(groupPath))
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, "Group path cannot be empty; the root type group cannot be deleted");
+                }
+
+                var group = GetPlcTypeGroupByPath(softwarePath, groupPath);
+
+                if (group == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Type group '{groupPath}' not found");
+                }
+
+                group.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to delete type group '{groupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["groupPath"] = groupPath;
+                _logger?.LogError(pex, "DeleteTypeGroup failed for {SoftwarePath} {GroupPath}", softwarePath, groupPath);
+                throw pex;
+            }
+        }
+
+        public (string Name, string Path, int TypeCount, int SubGroupCount) GetTypeGroupInfo(string softwarePath, string groupPath)
+        {
+            _logger?.LogInformation($"Getting type group info at path: {groupPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var group = GetPlcTypeGroupByPath(softwarePath, groupPath);
+
+                if (group == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Type group '{groupPath}' not found");
+                }
+
+                var typeCount = group.Types.Count;
+                var subGroupCount = group.Groups.Count;
+                var path = GetPlcTypeGroupPath(group);
+
+                return (group.Name, path, typeCount, subGroupCount);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get type group info for '{groupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["groupPath"] = groupPath;
+                _logger?.LogError(pex, "GetTypeGroupInfo failed for {SoftwarePath} {GroupPath}", softwarePath, groupPath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
         #endregion
 
         #region private helper

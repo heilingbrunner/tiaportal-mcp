@@ -186,4 +186,47 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         public IEnumerable<ResponseBlockInfo>? Items { get; set; }
     }
+
+    public class ResponseDeleteResult : ResponseMessage
+    {
+        public bool Success { get; set; }
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+    }
+
+    public class ResponseCopyBlock : ResponseMessage
+    {
+    }
+
+    public class ResponseMoveBlock : ResponseMessage
+    {
+    }
+
+    public class ResponseBlockGroupInfo : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public int BlockCount { get; set; }
+        public int SubGroupCount { get; set; }
+    }
+
+    public class ResponseCreateBlockGroup : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+    }
+
+    public class ResponseTypeGroupInfo : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public int TypeCount { get; set; }
+        public int SubGroupCount { get; set; }
+    }
+
+    public class ResponseCreateTypeGroup : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+    }
 }
