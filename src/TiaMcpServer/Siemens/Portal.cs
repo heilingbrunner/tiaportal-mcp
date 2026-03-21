@@ -1102,7 +1102,7 @@ namespace TiaMcpServer.Siemens
 
             if (IsProjectNull())
             {
-                return null; // "Error, no project";
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open");
             }
 
             var softwareContainer = GetSoftwareContainer(softwarePath);
@@ -1121,9 +1121,9 @@ namespace TiaMcpServer.Siemens
                         {
                             admin.LoginToSafetyOfflineProgram(secString);
                         }
-                        catch (Exception)
+                        catch (Exception ex)
                         {
-                            return null; // "Error, login to safety offline program failed";
+                            throw new PortalException(PortalErrorCode.InvalidState, "Failed to login to safety offline program", null, ex);
                         }
                     }
                 }
@@ -1134,18 +1134,49 @@ namespace TiaMcpServer.Siemens
                 try
                 {
                     ICompilable compileService = plcSoftware.GetService<ICompilable>();
-
                     CompilerResult result = compileService.Compile();
-
+                    _logger?.LogInformation($"Compile result: {result.State}, messages: {result.Messages.Count()}");
                     return result;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    return null; // "Error, compiling failed";
+                    throw new PortalException(PortalErrorCode.ExportFailed, $"Compilation failed: {ex.Message}", null, ex);
                 }
             }
 
-            return null; // "Error";
+            throw new PortalException(PortalErrorCode.NotFound, $"No PLC software found at path: {softwarePath}");
+        }
+
+        /// <summary>
+        /// Recursively collects all compile messages including sub-messages with full depth
+        /// </summary>
+        public static void CollectCompileMessages(IEnumerable<CompilerResultMessage> messages, List<string> output, int depth = 0)
+        {
+            foreach (var msg in messages)
+            {
+                var indent = new string(' ', depth * 2);
+                var state = msg.State.ToString();
+                var path = "";
+                var description = "";
+
+                try { path = msg.Path ?? ""; } catch { }
+                try { description = msg.Description ?? ""; } catch { }
+
+                if (!string.IsNullOrEmpty(description) || !string.IsNullOrEmpty(path))
+                {
+                    output.Add($"{indent}[{state}] {path}: {description}");
+                }
+
+                // Recurse into sub-messages for detailed errors
+                try
+                {
+                    if (msg.Messages != null && msg.Messages.Any())
+                    {
+                        CollectCompileMessages(msg.Messages, output, depth + 1);
+                    }
+                }
+                catch { }
+            }
         }
 
         #endregion
@@ -4190,14 +4221,14 @@ namespace TiaMcpServer.Siemens
             }
         }
 
-        public object? DownloadToDevice(string softwarePath, string deviceItemPath)
+        public string DownloadToDevice(string deviceItemPath)
         {
-            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+            throw new PortalException(PortalErrorCode.InvalidState, "Download requires TIA Portal UI. Use Online -> Download in TIA Portal directly.");
         }
 
-        public object? UploadFromDevice(string softwarePath, string deviceItemPath)
+        public string UploadFromDevice(string deviceItemPath)
         {
-            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+            throw new PortalException(PortalErrorCode.InvalidState, "Upload requires TIA Portal UI. Use Online -> Upload in TIA Portal directly.");
         }
 
         #endregion

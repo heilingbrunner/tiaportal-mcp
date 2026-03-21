@@ -1045,7 +1045,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "CompileSoftware"), Description("Compile the plc software")]
+        [McpServerTool(Name = "CompileSoftware"), Description("Compile the plc software. Returns detailed error messages with paths and descriptions.")]
         public static ResponseCompileSoftware CompileSoftware(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("password: the password to access adminsitration, default: no password")] string password = "")
@@ -1053,22 +1053,57 @@ namespace TiaMcpServer.ModelContextProtocol
             try
             {
                 var result = Portal.CompileSoftware(softwarePath, password);
-                if (result != null && !result.State.ToString().Equals("Error"))
+                if (result == null)
                 {
-                    return new ResponseCompileSoftware
-                    {
-                        Message = $"Software '{softwarePath}' compiled with {result}",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
+                    throw new McpException($"Failed compiling software '{softwarePath}': result was null", McpErrorCode.InternalError);
+                }
+
+                // Recursively collect ALL compile messages including sub-messages
+                var allMessages = new List<string>();
+                Portal.CollectCompileMessages(result.Messages, allMessages);
+
+                // Count errors and warnings from all collected messages
+                int errorCount = allMessages.Count(m => m.Contains("[Error]"));
+                int warningCount = allMessages.Count(m => m.Contains("[Warning]"));
+                int infoCount = allMessages.Count(m => m.Contains("[Information]"));
+
+                var success = result.State.ToString() != "Error";
+
+                // Build detailed output
+                var sb = new System.Text.StringBuilder();
+                if (success)
+                {
+                    sb.AppendLine($"COMPILE SUCCESS: '{softwarePath}' ({errorCount} errors, {warningCount} warnings, {infoCount} info)");
                 }
                 else
                 {
-                    throw new McpException($"Failed compiling software '{softwarePath}': {result}", McpErrorCode.InternalError);
+                    sb.AppendLine($"COMPILE FAILED: '{softwarePath}' ({errorCount} errors, {warningCount} warnings, {infoCount} info)");
                 }
+                sb.AppendLine("---");
+
+                foreach (var msg in allMessages)
+                {
+                    sb.AppendLine(msg);
+                }
+
+                return new ResponseCompileSoftware
+                {
+                    Message = sb.ToString(),
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = success,
+                        ["errorCount"] = errorCount,
+                        ["warningCount"] = warningCount,
+                        ["infoCount"] = infoCount,
+                        ["state"] = result.State.ToString(),
+                        ["totalMessages"] = allMessages.Count
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException($"Compile error: {pex.Message}", pex, McpErrorCode.InternalError);
             }
             catch (Exception ex) when (ex is not McpException)
             {
@@ -3806,15 +3841,23 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "DownloadToDevice"), Description("Download PLC program to a physical device")]
+        [McpServerTool(Name = "DownloadToDevice"), Description("Download PLC program to a physical device. Device must be reachable via configured connection.")]
         public static ResponseDownloadResult DownloadToDevice(
-            [Description("softwarePath: path in the project structure to the plc software")] string softwarePath,
-            [Description("deviceItemPath: path to the device item (e.g., 'PLC_1/PLC_1')")] string deviceItemPath)
+            [Description("deviceItemPath: path to the device item (e.g., 'S7-1200 station_1/PLC_1')")] string deviceItemPath)
         {
             try
             {
-                Portal.DownloadToDevice(softwarePath, deviceItemPath);
-                throw new McpException($"Failed downloading to device '{deviceItemPath}'", McpErrorCode.InternalError);
+                var result = Portal.DownloadToDevice(deviceItemPath);
+                return new ResponseDownloadResult
+                {
+                    Success = true,
+                    Message = result,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now.ToString("o"),
+                        ["success"] = true
+                    }
+                };
             }
             catch (TiaMcpServer.Siemens.PortalException pex)
             {
@@ -3836,13 +3879,21 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "UploadFromDevice"), Description("Upload PLC program from a physical device to the project")]
         public static ResponseDownloadResult UploadFromDevice(
-            [Description("softwarePath: path in the project structure to the plc software")] string softwarePath,
-            [Description("deviceItemPath: path to the device item (e.g., 'PLC_1/PLC_1')")] string deviceItemPath)
+            [Description("deviceItemPath: path to the device item (e.g., 'S7-1200 station_1/PLC_1')")] string deviceItemPath)
         {
             try
             {
-                Portal.UploadFromDevice(softwarePath, deviceItemPath);
-                throw new McpException($"Failed uploading from device '{deviceItemPath}'", McpErrorCode.InternalError);
+                var result = Portal.UploadFromDevice(deviceItemPath);
+                return new ResponseDownloadResult
+                {
+                    Success = true,
+                    Message = result,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now.ToString("o"),
+                        ["success"] = true
+                    }
+                };
             }
             catch (TiaMcpServer.Siemens.PortalException pex)
             {
