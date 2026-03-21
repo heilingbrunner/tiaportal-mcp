@@ -187,6 +187,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public IEnumerable<ResponseBlockInfo>? Items { get; set; }
     }
 
+
     public class ResponseTagTableInfo : ResponseAttributes
     {
         public string? Name { get; set; }
@@ -235,6 +236,111 @@ namespace TiaMcpServer.ModelContextProtocol
     }
 
     public class ResponseWatchTableInfo : ResponseAttributes
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseWatchTables : ResponseMessage
+    {
+        public IEnumerable<ResponseWatchTableInfo>? Items { get; set; }
+    }
+
+    public class ResponseExportWatchTable : ResponseMessage
+    {
+    }
+
+    public class ResponseImportWatchTable : ResponseMessage
+    {
+    }
+
+
+    public class ResponseDeleteResult : ResponseMessage
+    {
+        public bool Success { get; set; }
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+    }
+
+    public class ResponseCopyBlock : ResponseMessage
+    {
+    }
+
+    public class ResponseMoveBlock : ResponseMessage
+    {
+    }
+
+    public class ResponseBlockGroupInfo : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public int BlockCount { get; set; }
+        public int SubGroupCount { get; set; }
+    }
+
+    public class ResponseCreateBlockGroup : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+    }
+
+    public class ResponseTypeGroupInfo : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public int TypeCount { get; set; }
+        public int SubGroupCount { get; set; }
+    }
+
+    public class ResponseCreateTypeGroup : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+    }
+
+
+    public class ResponseExternalSourceInfo
+    {
+        public string? Name { get; set; }
+        public string? Extension { get; set; }
+    }
+
+    public class ResponseExternalSources : ResponseMessage
+    {
+        public IEnumerable<ResponseExternalSourceInfo>? Items { get; set; }
+    }
+
+    public class ResponseImportExternalSource : ResponseMessage
+    {
+    }
+
+    public class ResponseGenerateBlocksFromSource : ResponseMessage
+    {
+        public bool Success { get; set; }
+        public string? SourceName { get; set; }
+    }
+
+    public class ResponseDeleteExternalSource : ResponseMessage
+    {
+    }
+
+    public class ResponseExportExternalSource : ResponseMessage
+    {
+    }
+
+    public class ResponseCrossReferenceInfo
+    {
+        public string? SourceObject { get; set; }
+        public string? ReferencedObject { get; set; }
+        public string? ReferenceType { get; set; }
+        public string? Path { get; set; }
+    }
+
+    public class ResponseCrossReferences : ResponseMessage
+    {
+        public IEnumerable<ResponseCrossReferenceInfo>? Items { get; set; }
+    }
+
+
     public class ResponseModule
     {
         public string? Name { get; set; }
@@ -305,6 +411,109 @@ namespace TiaMcpServer.ModelContextProtocol
     }
 
     public class ResponseCreateDeviceGroup : ResponseMessage
+    {
+        public string? Name { get; set; }
+    }
+
+    public class ResponseSetIpAddress : ResponseMessage
+    {
+    }
+
+    public class ResponseConnectToSubnet : ResponseMessage
+    {
+    }
+
+    public class ResponseImportGsdFile : ResponseMessage
+    {
+    }
+
+
+    public class ResponseOnlineStatus : ResponseMessage
+    {
+        public bool IsOnline { get; set; }
+        public string? DevicePath { get; set; }
+        public string? Mode { get; set; }
+    }
+
+    public class ResponseDownloadResult : ResponseMessage
+    {
+        public bool Success { get; set; }
+        public IEnumerable<string>? Warnings { get; set; }
+        public IEnumerable<string>? Errors { get; set; }
+    }
+
+    public class ResponseCompareResult : ResponseMessage
+    {
+        public IEnumerable<ComparisonDifference>? Differences { get; set; }
+    }
+
+    public class ComparisonDifference
+    {
+        public string? ObjectPath { get; set; }
+        public string? ChangeType { get; set; }
+        public string? Details { get; set; }
+    }
+
+    public class ResponseLibrary : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public int MasterCopyCount { get; set; }
+        public int TypeCount { get; set; }
+    }
+
+    public class ResponseLibraries : ResponseMessage
+    {
+        public IEnumerable<ResponseLibrary>? Items { get; set; }
+    }
+
+    public class ResponseMasterCopy : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public string? TypeIdentifier { get; set; }
+    }
+
+    public class ResponseLibraryType : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Version { get; set; }
+        public IEnumerable<Attribute>? Attributes { get; set; }
+    }
+
+    public class ResponseLibraryContents : ResponseMessage
+    {
+        public IEnumerable<ResponseMasterCopy>? MasterCopies { get; set; }
+        public IEnumerable<ResponseLibraryType>? Types { get; set; }
+    }
+
+    public class ResponseCreateProject : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+        public bool Success { get; set; }
+    }
+
+    public class ResponseMultiuserInfo : ResponseMessage
+    {
+        public bool IsMultiuser { get; set; }
+        public string? ServerName { get; set; }
+        public IEnumerable<string>? Users { get; set; }
+    }
+
+    public class ResponseOpenGlobalLibrary : ResponseMessage
+    {
+    }
+
+    public class ResponseCopyToLibrary : ResponseMessage
+    {
+    }
+
+    public class ResponseCopyFromLibrary : ResponseMessage
+    {
+    }
+
+
     #region HMI Responses
 
     public class ResponseHmiTagTableInfo : ResponseAttributes
@@ -398,194 +607,6 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? Name { get; set; }
     }
 
-    public class ResponseWatchTables : ResponseMessage
-    {
-        public IEnumerable<ResponseWatchTableInfo>? Items { get; set; }
-    }
-
-    public class ResponseExportWatchTable : ResponseMessage
-    {
-    }
-
-    public class ResponseImportWatchTable : ResponseMessage
-    {
-    }
-
-    public class ResponseDeleteResult : ResponseMessage
-    {
-        public bool Success { get; set; }
-        public string? Name { get; set; }
-        public string? Path { get; set; }
-    }
-
-    public class ResponseCopyBlock : ResponseMessage
-    {
-    }
-
-    public class ResponseMoveBlock : ResponseMessage
-    {
-    }
-
-    public class ResponseBlockGroupInfo : ResponseMessage
-    {
-        public string? Name { get; set; }
-        public string? Path { get; set; }
-        public int BlockCount { get; set; }
-        public int SubGroupCount { get; set; }
-    }
-
-    public class ResponseCreateBlockGroup : ResponseMessage
-    {
-        public string? Name { get; set; }
-        public string? Path { get; set; }
-    }
-
-    public class ResponseTypeGroupInfo : ResponseMessage
-    {
-        public string? Name { get; set; }
-        public string? Path { get; set; }
-        public int TypeCount { get; set; }
-        public int SubGroupCount { get; set; }
-    }
-
-    public class ResponseCreateTypeGroup : ResponseMessage
-    {
-        public string? Name { get; set; }
-        public string? Path { get; set; }
-    public class ResponseExternalSourceInfo
-    {
-        public string? Name { get; set; }
-        public string? Extension { get; set; }
-    }
-
-    public class ResponseExternalSources : ResponseMessage
-    {
-        public IEnumerable<ResponseExternalSourceInfo>? Items { get; set; }
-    }
-
-    public class ResponseImportExternalSource : ResponseMessage
-    {
-    }
-
-    public class ResponseGenerateBlocksFromSource : ResponseMessage
-    {
-        public bool Success { get; set; }
-        public string? SourceName { get; set; }
-    }
-
-    public class ResponseDeleteExternalSource : ResponseMessage
-    {
-    }
-
-    public class ResponseExportExternalSource : ResponseMessage
-    {
-    }
-
-    public class ResponseCrossReferenceInfo
-    {
-        public string? SourceObject { get; set; }
-        public string? ReferencedObject { get; set; }
-        public string? ReferenceType { get; set; }
-        public string? Path { get; set; }
-    }
-
-    public class ResponseCrossReferences : ResponseMessage
-    {
-        public IEnumerable<ResponseCrossReferenceInfo>? Items { get; set; }
-    }
-    public class ResponseSetIpAddress : ResponseMessage
-    {
-    }
-
-    public class ResponseConnectToSubnet : ResponseMessage
-    {
-    }
-
-    public class ResponseImportGsdFile : ResponseMessage
-    public class ResponseOnlineStatus : ResponseMessage
-    {
-        public bool IsOnline { get; set; }
-        public string? DevicePath { get; set; }
-        public string? Mode { get; set; }
-    }
-
-    public class ResponseDownloadResult : ResponseMessage
-    {
-        public bool Success { get; set; }
-        public IEnumerable<string>? Warnings { get; set; }
-        public IEnumerable<string>? Errors { get; set; }
-    }
-
-    public class ResponseCompareResult : ResponseMessage
-    {
-        public IEnumerable<ComparisonDifference>? Differences { get; set; }
-    }
-
-    public class ComparisonDifference
-    {
-        public string? ObjectPath { get; set; }
-        public string? ChangeType { get; set; }
-        public string? Details { get; set; }
-    }
-
-    public class ResponseLibrary : ResponseMessage
-    {
-        public string? Name { get; set; }
-        public string? Path { get; set; }
-        public int MasterCopyCount { get; set; }
-        public int TypeCount { get; set; }
-    }
-
-    public class ResponseLibraries : ResponseMessage
-    {
-        public IEnumerable<ResponseLibrary>? Items { get; set; }
-    }
-
-    public class ResponseMasterCopy : ResponseMessage
-    {
-        public string? Name { get; set; }
-        public string? Path { get; set; }
-        public string? TypeIdentifier { get; set; }
-    }
-
-    public class ResponseLibraryType : ResponseMessage
-    {
-        public string? Name { get; set; }
-        public string? Version { get; set; }
-        public IEnumerable<Attribute>? Attributes { get; set; }
-    }
-
-    public class ResponseLibraryContents : ResponseMessage
-    {
-        public IEnumerable<ResponseMasterCopy>? MasterCopies { get; set; }
-        public IEnumerable<ResponseLibraryType>? Types { get; set; }
-    }
-
-    public class ResponseCreateProject : ResponseMessage
-    {
-        public string? Name { get; set; }
-        public string? Path { get; set; }
-        public bool Success { get; set; }
-    }
-
-    public class ResponseMultiuserInfo : ResponseMessage
-    {
-        public bool IsMultiuser { get; set; }
-        public string? ServerName { get; set; }
-        public IEnumerable<string>? Users { get; set; }
-    }
-
-    public class ResponseOpenGlobalLibrary : ResponseMessage
-    {
-    }
-
-    public class ResponseCopyToLibrary : ResponseMessage
-    {
-    }
-
-    public class ResponseCopyFromLibrary : ResponseMessage
-    {
-    }
     public class ResponseTextLists : ResponseMessage
     {
         public IEnumerable<ResponseTextListInfo>? Items { get; set; }
@@ -600,6 +621,8 @@ namespace TiaMcpServer.ModelContextProtocol
     }
 
     #endregion
+
+
     public class ResponseTechnologyObject : ResponseAttributes
     {
         public string? Name { get; set; }
@@ -655,4 +678,5 @@ namespace TiaMcpServer.ModelContextProtocol
     public class ResponseSetSafetyPassword : ResponseMessage
     {
     }
+
 }

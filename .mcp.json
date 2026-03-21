@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "tiaportal-mcp": {
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "C:\\Users\\heman\\Documents\\GitHub\\hjLabs.in-tiaportal-mcp\\src\\TiaMcpServer\\TiaMcpServer.csproj",
+        "--",
+        "--tia-major-version",
+        "20",
+        "--logging",
+        "1"
+      ]
+    }
+  }
+}

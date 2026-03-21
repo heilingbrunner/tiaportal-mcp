@@ -1,27 +1,25 @@
 ﻿using Microsoft.Extensions.Logging;
 using Siemens.Engineering;
-using Siemens.Engineering.Compare;
 using Siemens.Engineering.Compiler;
+using Siemens.Engineering.Compare;
 using Siemens.Engineering.Download;
+using Siemens.Engineering.Library;
+using Siemens.Engineering.Library.MasterCopies;
+using Siemens.Engineering.Library.Types;
+using Siemens.Engineering.Online;
 using Siemens.Engineering.Hmi;
 using Siemens.Engineering.HmiUnified;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
-using Siemens.Engineering.Library;
-using Siemens.Engineering.Library.MasterCopies;
-using Siemens.Engineering.Library.Types;
 using Siemens.Engineering.Multiuser;
-using Siemens.Engineering.Online;
 using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
-using Siemens.Engineering.SW.Tags;
-using Siemens.Engineering.SW.TechnologyObjects;
-using Siemens.Engineering.SW.Types;
-using Siemens.Engineering.SW.WatchAndForceTables;
 using Siemens.Engineering.SW.ExternalSources;
+using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.Types;
 using Siemens.Engineering.CrossReference;
+using Siemens.Engineering.SW.WatchAndForceTables;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -174,9 +172,10 @@ namespace TiaMcpServer.Siemens
 
                 return true;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return false;
+                _logger?.LogError(ex, "ConnectPortal failed: {Message}", ex.Message);
+                throw new PortalException(PortalErrorCode.InvalidState, $"Connect failed: {ex.GetType().Name}: {ex.Message}", null, ex);
             }
         }
 
@@ -1006,7 +1005,7 @@ namespace TiaMcpServer.Siemens
                     throw new PortalException(PortalErrorCode.InvalidState, "Project must be a local project to import GSD files");
                 }
 
-                project.InstallGsdFile(new FileInfo(gsdFilePath));
+                throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
             }
             catch (Exception ex)
             {
@@ -1073,8 +1072,6 @@ namespace TiaMcpServer.Siemens
 
             return null;
         }
-
-        #endregion
 
         #endregion
 
@@ -2222,81 +2219,12 @@ namespace TiaMcpServer.Siemens
 
         public PlcBlock? CopyBlock(string softwarePath, string sourceBlockPath, string targetGroupPath)
         {
-            _logger?.LogInformation($"Copying block from '{sourceBlockPath}' to group '{targetGroupPath}'");
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                var block = GetBlock(softwarePath, sourceBlockPath);
-
-                if (block == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Source block '{sourceBlockPath}' not found");
-                }
-
-                var targetGroup = GetPlcBlockGroupByPath(softwarePath, targetGroupPath);
-
-                if (targetGroup == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Target group '{targetGroupPath}' not found");
-                }
-
-                var copiedBlock = targetGroup.Blocks.CopyFrom(block);
-                return copiedBlock;
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to copy block '{sourceBlockPath}' to '{targetGroupPath}'", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["sourceBlockPath"] = sourceBlockPath;
-                pex.Data["targetGroupPath"] = targetGroupPath;
-                _logger?.LogError(pex, "CopyBlock failed for {SoftwarePath} {SourceBlockPath} -> {TargetGroupPath}", softwarePath, sourceBlockPath, targetGroupPath);
-                throw pex;
-            }
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
         }
 
         public void MoveBlock(string softwarePath, string sourceBlockPath, string targetGroupPath)
         {
-            _logger?.LogInformation($"Moving block from '{sourceBlockPath}' to group '{targetGroupPath}'");
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                var block = GetBlock(softwarePath, sourceBlockPath);
-
-                if (block == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Source block '{sourceBlockPath}' not found");
-                }
-
-                var targetGroup = GetPlcBlockGroupByPath(softwarePath, targetGroupPath);
-
-                if (targetGroup == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Target group '{targetGroupPath}' not found");
-                }
-
-                // Copy to target, then delete original
-                targetGroup.Blocks.CopyFrom(block);
-                block.Delete();
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to move block '{sourceBlockPath}' to '{targetGroupPath}'", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["sourceBlockPath"] = sourceBlockPath;
-                pex.Data["targetGroupPath"] = targetGroupPath;
-                _logger?.LogError(pex, "MoveBlock failed for {SoftwarePath} {SourceBlockPath} -> {TargetGroupPath}", softwarePath, sourceBlockPath, targetGroupPath);
-                throw pex;
-            }
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
         }
 
         #endregion
@@ -2376,37 +2304,7 @@ namespace TiaMcpServer.Siemens
 
         public void DeleteBlockGroup(string softwarePath, string groupPath)
         {
-            _logger?.LogInformation($"Deleting block group at path: {groupPath}");
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                if (string.IsNullOrWhiteSpace(groupPath))
-                {
-                    throw new PortalException(PortalErrorCode.InvalidParams, "Group path cannot be empty; the root block group cannot be deleted");
-                }
-
-                var group = GetPlcBlockGroupByPath(softwarePath, groupPath);
-
-                if (group == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Block group '{groupPath}' not found");
-                }
-
-                group.Delete();
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to delete block group '{groupPath}'", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["groupPath"] = groupPath;
-                _logger?.LogError(pex, "DeleteBlockGroup failed for {SoftwarePath} {GroupPath}", softwarePath, groupPath);
-                throw pex;
-            }
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
         }
 
         public (string Name, string Path, int BlockCount, int SubGroupCount) GetBlockGroupInfo(string softwarePath, string groupPath)
@@ -2486,37 +2384,7 @@ namespace TiaMcpServer.Siemens
 
         public void DeleteTypeGroup(string softwarePath, string groupPath)
         {
-            _logger?.LogInformation($"Deleting type group at path: {groupPath}");
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                if (string.IsNullOrWhiteSpace(groupPath))
-                {
-                    throw new PortalException(PortalErrorCode.InvalidParams, "Group path cannot be empty; the root type group cannot be deleted");
-                }
-
-                var group = GetPlcTypeGroupByPath(softwarePath, groupPath);
-
-                if (group == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Type group '{groupPath}' not found");
-                }
-
-                group.Delete();
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to delete type group '{groupPath}'", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["groupPath"] = groupPath;
-                _logger?.LogError(pex, "DeleteTypeGroup failed for {SoftwarePath} {GroupPath}", softwarePath, groupPath);
-                throw pex;
-            }
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
         }
 
         public (string Name, string Path, int TypeCount, int SubGroupCount) GetTypeGroupInfo(string softwarePath, string groupPath)
@@ -4035,30 +3903,6 @@ namespace TiaMcpServer.Siemens
         public List<PlcExternalSource> GetExternalSources(string softwarePath, string regexName = "")
         {
             _logger?.LogInformation("Getting external sources...");
-        #region HMI
-
-        public HmiTarget? GetHmiTarget(string softwarePath)
-        {
-            var container = GetSoftwareContainer(softwarePath);
-            return container?.Software as HmiTarget;
-        }
-
-        public HmiSoftware? GetHmiSoftware(string softwarePath)
-        {
-            var container = GetSoftwareContainer(softwarePath);
-            return container?.Software as HmiSoftware;
-        }
-
-        #region HMI Tags
-
-        public List<TagTable> GetHmiTagTables(string softwarePath, string regexName = "")
-        {
-            _logger?.LogInformation("Getting HMI tag tables for path: {SoftwarePath}", softwarePath);
-        #region technology objects
-
-        public List<TechnologicalObject> GetTechnologyObjects(string softwarePath, string regexName = "")
-        {
-            _logger?.LogInformation("Getting technology objects...");
 
             if (IsProjectNull())
             {
@@ -4066,187 +3910,6 @@ namespace TiaMcpServer.Siemens
             }
 
             var list = new List<PlcExternalSource>();
-        #region online access
-
-        public bool GoOnline(string deviceItemPath)
-        {
-            _logger?.LogInformation($"Going online for device item: {deviceItemPath}");
-
-            if (IsProjectNull())
-            {
-                return false;
-            }
-
-            try
-            {
-                var deviceItem = GetDeviceItemByPath(deviceItemPath);
-                if (deviceItem == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
-                }
-
-                var onlineProvider = deviceItem.GetService<OnlineProvider>();
-                if (onlineProvider == null)
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, $"OnlineProvider not available for device item: {deviceItemPath}");
-                }
-
-                onlineProvider.GoOnline();
-
-                return onlineProvider.State == OnlineState.Online;
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidState, "GoOnline failed", null, ex);
-                pex.Data["deviceItemPath"] = deviceItemPath;
-                _logger?.LogError(pex, "GoOnline failed for {DeviceItemPath}", deviceItemPath);
-                throw pex;
-            }
-        }
-
-        public bool GoOffline(string deviceItemPath)
-        {
-            _logger?.LogInformation($"Going offline for device item: {deviceItemPath}");
-
-            if (IsProjectNull())
-            {
-                return false;
-            }
-
-            try
-            {
-                var deviceItem = GetDeviceItemByPath(deviceItemPath);
-                if (deviceItem == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
-                }
-
-                var onlineProvider = deviceItem.GetService<OnlineProvider>();
-                if (onlineProvider == null)
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, $"OnlineProvider not available for device item: {deviceItemPath}");
-                }
-
-                onlineProvider.GoOffline();
-
-                return onlineProvider.State == OnlineState.Offline;
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidState, "GoOffline failed", null, ex);
-                pex.Data["deviceItemPath"] = deviceItemPath;
-                _logger?.LogError(pex, "GoOffline failed for {DeviceItemPath}", deviceItemPath);
-                throw pex;
-            }
-        }
-
-        public DownloadResult? DownloadToDevice(string softwarePath, string deviceItemPath)
-        {
-            _logger?.LogInformation($"Downloading to device: {deviceItemPath}");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            try
-            {
-                var deviceItem = GetDeviceItemByPath(deviceItemPath);
-                if (deviceItem == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
-                }
-
-                var downloadProvider = deviceItem.GetService<DownloadProvider>();
-                if (downloadProvider == null)
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, $"DownloadProvider not available for device item: {deviceItemPath}");
-                }
-
-                var downloadConfiguration = downloadProvider.Configuration;
-                var result = downloadProvider.Download(downloadConfiguration, PreDownload, PostDownload, DownloadOptions.Software);
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Download to device failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["deviceItemPath"] = deviceItemPath;
-                _logger?.LogError(pex, "DownloadToDevice failed for {SoftwarePath} -> {DeviceItemPath}", softwarePath, deviceItemPath);
-                throw pex;
-            }
-        }
-
-        public DownloadResult? UploadFromDevice(string softwarePath, string deviceItemPath)
-        {
-            _logger?.LogInformation($"Uploading from device: {deviceItemPath}");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            try
-            {
-                var deviceItem = GetDeviceItemByPath(deviceItemPath);
-                if (deviceItem == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
-                }
-
-                var downloadProvider = deviceItem.GetService<DownloadProvider>();
-                if (downloadProvider == null)
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, $"DownloadProvider not available for device item: {deviceItemPath}");
-                }
-
-                var uploadConfiguration = downloadProvider.Configuration;
-                var result = downloadProvider.Upload(uploadConfiguration, PreDownload, PostDownload);
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Upload from device failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["deviceItemPath"] = deviceItemPath;
-                _logger?.LogError(pex, "UploadFromDevice failed for {SoftwarePath} <- {DeviceItemPath}", softwarePath, deviceItemPath);
-                throw pex;
-            }
-        }
-
-        private static void PreDownload(DownloadConfiguration configuration)
-        {
-            // Accept all pre-download checks
-            foreach (var item in configuration.Items)
-            {
-                item.SetValue(true);
-            }
-        }
-
-        private static void PostDownload(DownloadConfiguration configuration)
-        {
-            // Accept all post-download checks
-            foreach (var item in configuration.Items)
-            {
-                item.SetValue(true);
-            }
-        }
-
-        #endregion
-
-        #region compare
-
-        public List<(string ObjectPath, string ChangeType, string Details)> CompareOfflineOnline(string softwarePath)
-        {
-            _logger?.LogInformation($"Comparing offline/online for software: {softwarePath}");
-
-            if (IsProjectNull())
-            {
-                return new List<(string, string, string)>();
-            }
-            var list = new List<TechnologicalObject>();
 
             try
             {
@@ -4295,43 +3958,6 @@ namespace TiaMcpServer.Siemens
             {
                 // Error getting external sources
             }
-            var list = new List<TagTable>();
-
-            try
-            {
-                var hmiTarget = GetHmiTarget(softwarePath);
-                if (hmiTarget != null)
-                {
-                    GetHmiTagTablesRecursive(hmiTarget.TagFolder, list, regexName);
-                    return list;
-                }
-
-                var hmiSoftware = GetHmiSoftware(softwarePath);
-                if (hmiSoftware != null)
-                {
-                    GetHmiTagTablesRecursive(hmiSoftware.TagFolder, list, regexName);
-                    return list;
-                }
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI tag tables", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                _logger?.LogError(pex, "GetHmiTagTables failed for {SoftwarePath}", softwarePath);
-                    var toGroup = plcSoftware.TechnologicalObjectGroup;
-                    if (toGroup != null)
-                    {
-                        GetTechnologyObjectsRecursive(toGroup, list, regexName);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get technology objects", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                _logger?.LogError(pex, "GetTechnologyObjects failed for {SoftwarePath}", softwarePath);
-                throw pex;
-            }
 
             return list;
         }
@@ -4339,9 +3965,6 @@ namespace TiaMcpServer.Siemens
         public bool ImportExternalSource(string softwarePath, string groupPath, string importPath)
         {
             _logger?.LogInformation($"Importing external source from path: {importPath}");
-        public TechnologicalObject? GetTechnologyObject(string softwarePath, string objectName)
-        {
-            _logger?.LogInformation($"Getting technology object: {objectName}");
 
             try
             {
@@ -4478,99 +4101,112 @@ namespace TiaMcpServer.Siemens
 
         public bool ExportExternalSource(string softwarePath, string sourceName, string exportPath)
         {
-            _logger?.LogInformation($"Exporting external source: {sourceName}");
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region cross-references
+
+        public List<(string SourceObject, string ReferencedObject, string ReferenceType, string Path)> GetCrossReferences(string softwarePath, string objectPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+
+        #region online access
+
+        public bool GoOnline(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Going online for device item: {deviceItemPath}");
+
+            if (IsProjectNull())
+            {
+                return false;
+            }
 
             try
             {
-                if (IsProjectNull())
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+                if (deviceItem == null)
                 {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
                 }
 
-                var softwareContainer = GetSoftwareContainer(softwarePath);
-                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                var onlineProvider = deviceItem.GetService<OnlineProvider>();
+                if (onlineProvider == null)
                 {
-                    var sourceGroup = plcSoftware.ExternalSourceGroup;
-                    if (sourceGroup == null)
-                    {
-                        throw new PortalException(PortalErrorCode.NotFound, "External source group not found");
-                    }
-
-                    var source = sourceGroup.ExternalSources
-                        .FirstOrDefault(s => s.Name.Equals(sourceName, StringComparison.OrdinalIgnoreCase));
-
-                    if (source == null)
-                    {
-                        var candidates = sourceGroup.ExternalSources
-                            .Select(s => s.Name)
-                            .ToList();
-                        throw new PortalException(PortalErrorCode.NotFound, $"External source '{sourceName}' not found", candidates);
-                    }
-
-                    var targetPath = Path.Combine(exportPath, source.Name);
-
-                    if (File.Exists(targetPath))
-                    {
-                        File.Delete(targetPath);
-                    }
-
-                    // Ensure directory exists
-                    var dir = Path.GetDirectoryName(targetPath);
-                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                    {
-                        Directory.CreateDirectory(dir);
-                    }
-
-                    source.Export(new FileInfo(targetPath), ExportOptions.None);
-                    return true;
+                    throw new PortalException(PortalErrorCode.InvalidState, $"OnlineProvider not available for device item: {deviceItemPath}");
                 }
 
-                throw new PortalException(PortalErrorCode.NotFound, "PLC software not found");
+                onlineProvider.GoOnline();
+
+                return onlineProvider.State == OnlineState.Online;
             }
             catch (Exception ex)
             {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export external source failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["sourceName"] = sourceName;
-                pex.Data["exportPath"] = exportPath;
-                _logger?.LogError(pex, "ExportExternalSource failed for {SoftwarePath} {SourceName} -> {ExportPath}", softwarePath, sourceName, exportPath);
-                    var compileService = plcSoftware.GetService<ICompilable>();
-                    if (compileService != null)
-                    {
-                        // Compile first to ensure consistency
-                        compileService.Compile();
-                    }
-
-                    var compareProvider = plcSoftware.GetService<CompareProvider>();
-                    if (compareProvider == null)
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidState, $"CompareProvider not available for software: {softwarePath}");
-                    }
-
-                    var differences = new List<(string ObjectPath, string ChangeType, string Details)>();
-                    var result = compareProvider.Compare();
-
-                    foreach (var diff in result)
-                    {
-                        differences.Add((
-                            diff.LeftObject?.ToString() ?? diff.RightObject?.ToString() ?? "Unknown",
-                            diff.DifferenceType.ToString(),
-                            diff.Description ?? string.Empty
-                        ));
-                    }
-
-                    return differences;
-                }
-
-                throw new PortalException(PortalErrorCode.NotFound, $"PLC software not found at path: {softwarePath}");
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Compare offline/online failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                _logger?.LogError(pex, "CompareOfflineOnline failed for {SoftwarePath}", softwarePath);
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidState, "GoOnline failed", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GoOnline failed for {DeviceItemPath}", deviceItemPath);
                 throw pex;
             }
+        }
+
+        public bool GoOffline(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Going offline for device item: {deviceItemPath}");
+
+            if (IsProjectNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
+                }
+
+                var onlineProvider = deviceItem.GetService<OnlineProvider>();
+                if (onlineProvider == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, $"OnlineProvider not available for device item: {deviceItemPath}");
+                }
+
+                onlineProvider.GoOffline();
+
+                return onlineProvider.State == OnlineState.Offline;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidState, "GoOffline failed", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GoOffline failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public object? DownloadToDevice(string softwarePath, string deviceItemPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public object? UploadFromDevice(string softwarePath, string deviceItemPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region compare
+
+        public List<(string ObjectPath, string ChangeType, string Details)> CompareOfflineOnline(string softwarePath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
         }
 
         public List<(string Property, string Value1, string Value2)> CompareBlocks(string softwarePath, string blockPath1, string blockPath2)
@@ -4634,124 +4270,12 @@ namespace TiaMcpServer.Siemens
                 pex.Data["blockPath1"] = blockPath1;
                 pex.Data["blockPath2"] = blockPath2;
                 _logger?.LogError(pex, "CompareBlocks failed for {BlockPath1} vs {BlockPath2}", blockPath1, blockPath2);
-                    var toGroup = plcSoftware.TechnologicalObjectGroup;
-                    if (toGroup != null)
-                    {
-                        var techObject = FindTechnologyObjectRecursive(toGroup, objectName);
-                        if (techObject != null)
-                        {
-                            return techObject;
-                        }
-                    }
-                }
-
-                throw new PortalException(PortalErrorCode.NotFound, $"Technology object '{objectName}' not found");
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get technology object info", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["objectName"] = objectName;
-                _logger?.LogError(pex, "GetTechnologyObject failed for {SoftwarePath} {ObjectName}", softwarePath, objectName);
                 throw pex;
             }
         }
 
         #endregion
 
-        #region cross-references
-
-        public List<(string SourceObject, string ReferencedObject, string ReferenceType, string Path)> GetCrossReferences(string softwarePath, string objectPath)
-        {
-            _logger?.LogInformation($"Getting cross-references for: {objectPath}");
-        private void GetHmiTagTablesRecursive(TagFolder folder, List<TagTable> list, string regexName)
-        {
-            foreach (var table in folder.TagTables)
-            {
-                try
-                {
-                    if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(table.Name, regexName, RegexOptions.IgnoreCase))
-                    {
-                        continue;
-                    }
-                }
-                catch (Exception)
-                {
-                    continue;
-                }
-
-                list.Add(table);
-            }
-
-            foreach (var subfolder in folder.Folders)
-            {
-                GetHmiTagTablesRecursive(subfolder, list, regexName);
-            }
-        }
-
-        public List<Tag> GetHmiTags(string softwarePath, string tagTableName, string regexName = "")
-        {
-            _logger?.LogInformation("Getting HMI tags from table '{TagTableName}' for path: {SoftwarePath}", tagTableName, softwarePath);
-
-            if (IsProjectNull())
-            {
-                return [];
-            }
-
-            var list = new List<Tag>();
-
-            try
-            {
-                var tables = GetHmiTagTables(softwarePath);
-                var table = tables.FirstOrDefault(t => string.Equals(t.Name, tagTableName, StringComparison.OrdinalIgnoreCase));
-
-                if (table == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"HMI tag table '{tagTableName}' not found",
-                        tables.Select(t => t.Name));
-                }
-
-                foreach (var tag in table.Tags)
-                {
-                    try
-                    {
-                        if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(tag.Name, regexName, RegexOptions.IgnoreCase))
-                        {
-                            continue;
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        continue;
-                    }
-
-                    list.Add(tag);
-                }
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI tags", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["tagTableName"] = tagTableName;
-                _logger?.LogError(pex, "GetHmiTags failed for {SoftwarePath} table {TagTableName}", softwarePath, tagTableName);
-                throw pex;
-            }
-
-            return list;
-        }
-
-        public void ExportHmiTagTable(string softwarePath, string tagTableName, string exportPath)
-        {
-            _logger?.LogInformation("Exporting HMI tag table '{TagTableName}' from {SoftwarePath}", tagTableName, softwarePath);
-        public TechnologicalObject? ExportTechnologyObject(string softwarePath, string objectName, string exportPath)
-        {
-            _logger?.LogInformation($"Exporting technology object: {objectName}");
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
         #region library management
 
         public (List<(string Name, string Path)> MasterCopies, List<(string Name, string Version)> Types) GetProjectLibrary(string regexName = "")
@@ -4794,54 +4318,6 @@ namespace TiaMcpServer.Siemens
                 var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "GetProjectLibrary failed", null, ex);
                 pex.Data["regexName"] = regexName;
                 _logger?.LogError(pex, "GetProjectLibrary failed with filter {RegexName}", regexName);
-                }
-
-                var tables = GetHmiTagTables(softwarePath);
-                var table = tables.FirstOrDefault(t => string.Equals(t.Name, tagTableName, StringComparison.OrdinalIgnoreCase));
-
-                if (table == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"HMI tag table '{tagTableName}' not found",
-                        tables.Select(t => t.Name));
-                }
-
-                exportPath = Path.Combine(exportPath, $"{table.Name}.xml");
-                }
-
-                var techObject = GetTechnologyObject(softwarePath, objectName);
-
-                if (techObject == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Technology object '{objectName}' not found");
-                }
-
-                exportPath = Path.Combine(exportPath, $"{techObject.Name}.xml");
-
-                if (File.Exists(exportPath))
-                {
-                    File.Delete(exportPath);
-                }
-
-                table.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export of HMI tag table failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["tagTableName"] = tagTableName;
-                pex.Data["exportPath"] = exportPath;
-                _logger?.LogError(pex, "ExportHmiTagTable failed for {SoftwarePath} table {TagTableName} -> {ExportPath}", softwarePath, tagTableName, exportPath);
-                techObject.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
-
-                return techObject;
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export technology object failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["objectName"] = objectName;
-                pex.Data["exportPath"] = exportPath;
-                _logger?.LogError(pex, "ExportTechnologyObject failed for {SoftwarePath} {ObjectName} -> {ExportPath}", softwarePath, objectName, exportPath);
                 throw pex;
             }
         }
@@ -4916,89 +4392,7 @@ namespace TiaMcpServer.Siemens
 
         public bool CopyToLibrary(string softwarePath, string blockPath, string libraryFolder = "")
         {
-            _logger?.LogInformation($"Copying block to library: {blockPath}");
-
-            if (IsProjectNull())
-            {
-                return false;
-            }
-
-            try
-            {
-                var project = _project as Project;
-                if (project == null)
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "Project is not a local project (may be a session)");
-                }
-
-                var block = GetBlock(softwarePath, blockPath);
-                if (block == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Block not found: {blockPath}");
-                }
-
-                var targetFolder = project.ProjectLibrary.MasterCopyFolder;
-
-                if (!string.IsNullOrEmpty(libraryFolder))
-                {
-                    targetFolder = GetOrCreateMasterCopyFolder(targetFolder, libraryFolder);
-                }
-
-                targetFolder.MasterCopies.Create(block);
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "CopyToLibrary failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["blockPath"] = blockPath;
-                pex.Data["libraryFolder"] = libraryFolder;
-                _logger?.LogError(pex, "CopyToLibrary failed for {BlockPath}", blockPath);
-        public void ImportHmiTagTable(string softwarePath, string importPath)
-        {
-            _logger?.LogInformation("Importing HMI tag table from {ImportPath} to {SoftwarePath}", importPath, softwarePath);
-        public bool ImportTechnologyObject(string softwarePath, string importPath)
-        {
-            _logger?.LogInformation($"Importing technology object from path: {importPath}");
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                var fileInfo = new FileInfo(importPath);
-                if (!fileInfo.Exists)
-                {
-                    throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
-                }
-
-                var hmiTarget = GetHmiTarget(softwarePath);
-                if (hmiTarget != null)
-                {
-                    hmiTarget.TagFolder.TagTables.Import(fileInfo, ImportOptions.Override);
-                    return;
-                }
-
-                var hmiSoftware = GetHmiSoftware(softwarePath);
-                if (hmiSoftware != null)
-                {
-                    hmiSoftware.TagFolder.TagTables.Import(fileInfo, ImportOptions.Override);
-                    return;
-                }
-
-                throw new PortalException(PortalErrorCode.NotFound, $"No HMI software found at path '{softwarePath}'");
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import of HMI tag table failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["importPath"] = importPath;
-                _logger?.LogError(pex, "ImportHmiTagTable failed for {SoftwarePath} from {ImportPath}", softwarePath, importPath);
-                throw pex;
-            }
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
         }
 
         public bool CopyFromLibrary(string softwarePath, string masterCopyName, string targetGroupPath)
@@ -5027,71 +4421,6 @@ namespace TiaMcpServer.Siemens
                 var softwareContainer = GetSoftwareContainer(softwarePath);
                 if (softwareContainer?.Software is PlcSoftware plcSoftware)
                 {
-                    var deviceItem = softwareContainer.Parent as DeviceItem;
-                    if (deviceItem == null)
-                    {
-                        throw new PortalException(PortalErrorCode.NotFound, "Device item not found for the given software path");
-                    }
-
-                    var crossRefProvider = deviceItem.GetService<CrossReferenceProvider>();
-                    if (crossRefProvider == null)
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidState, "Cross-reference provider is not available for this device");
-                    }
-
-                    // Try to find the object (block or type) by path
-                    IEngineeringObject? targetObject = null;
-
-                    // Try as block first
-                    var block = GetBlock(softwarePath, objectPath);
-                    if (block != null)
-                    {
-                        targetObject = block;
-                    }
-                    else
-                    {
-                        // Try as type
-                        var type = GetType(softwarePath, objectPath);
-                        if (type != null)
-                        {
-                            targetObject = type;
-                        }
-                    }
-
-                    if (targetObject == null)
-                    {
-                        throw new PortalException(PortalErrorCode.NotFound, $"Object '{objectPath}' not found as block or type");
-                    }
-
-                    var result = new List<(string SourceObject, string ReferencedObject, string ReferenceType, string Path)>();
-
-                    var crossRefs = crossRefProvider.GetCrossReferences(targetObject);
-                    if (crossRefs != null)
-                    {
-                        foreach (var crossRef in crossRefs)
-                        {
-                            var sourceObj = crossRef.ReferenceA?.ToString() ?? "";
-                            var referencedObj = crossRef.ReferenceB?.ToString() ?? "";
-                            var refType = crossRef.ReferenceType?.ToString() ?? "";
-                            var refPath = crossRef.ReferenceB is IEngineeringObject engObj
-                                ? engObj.ToString() ?? ""
-                                : "";
-
-                            result.Add((sourceObj, referencedObj, refType, refPath));
-                        }
-                    }
-
-                    return result;
-                }
-
-                throw new PortalException(PortalErrorCode.NotFound, "PLC software not found");
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Get cross-references failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["objectPath"] = objectPath;
-                _logger?.LogError(pex, "GetCrossReferences failed for {SoftwarePath} {ObjectPath}", softwarePath, objectPath);
                     var targetGroup = GetPlcBlockGroupByPath(softwarePath, targetGroupPath);
                     if (targetGroup == null)
                     {
@@ -5112,115 +4441,6 @@ namespace TiaMcpServer.Siemens
                 pex.Data["masterCopyName"] = masterCopyName;
                 pex.Data["targetGroupPath"] = targetGroupPath;
                 _logger?.LogError(pex, "CopyFromLibrary failed for {MasterCopyName}", masterCopyName);
-        #endregion
-
-        #region HMI Screens
-
-        public List<Screen> GetScreens(string softwarePath, string regexName = "")
-        {
-            _logger?.LogInformation("Getting HMI screens for path: {SoftwarePath}", softwarePath);
-
-            if (IsProjectNull())
-            {
-                return [];
-            }
-
-            var list = new List<Screen>();
-
-            try
-            {
-                var hmiTarget = GetHmiTarget(softwarePath);
-                if (hmiTarget != null)
-                {
-                    GetScreensRecursive(hmiTarget.ScreenFolder, list, regexName);
-                    return list;
-                }
-
-                var hmiSoftware = GetHmiSoftware(softwarePath);
-                if (hmiSoftware != null)
-                {
-                    GetScreensRecursive(hmiSoftware.ScreenFolder, list, regexName);
-                    return list;
-                }
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI screens", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                _logger?.LogError(pex, "GetScreens failed for {SoftwarePath}", softwarePath);
-                throw pex;
-            }
-
-            return list;
-        }
-
-        private void GetScreensRecursive(ScreenFolder folder, List<Screen> list, string regexName)
-        {
-            foreach (var screen in folder.Screens)
-            {
-                try
-                {
-                    if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(screen.Name, regexName, RegexOptions.IgnoreCase))
-                    {
-                        continue;
-                    }
-                }
-                catch (Exception)
-                {
-                    continue;
-                }
-
-                list.Add(screen);
-            }
-
-            foreach (var subfolder in folder.Folders)
-            {
-                GetScreensRecursive(subfolder, list, regexName);
-            }
-        }
-
-        public Screen? GetScreenByName(string softwarePath, string screenName)
-        {
-            var screens = GetScreens(softwarePath);
-            return screens.FirstOrDefault(s => string.Equals(s.Name, screenName, StringComparison.OrdinalIgnoreCase));
-        }
-
-        public void ExportScreen(string softwarePath, string screenName, string exportPath)
-        {
-            _logger?.LogInformation("Exporting HMI screen '{ScreenName}' from {SoftwarePath}", screenName, softwarePath);
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                var screen = GetScreenByName(softwarePath, screenName);
-
-                if (screen == null)
-                {
-                    var screens = GetScreens(softwarePath);
-                    throw new PortalException(PortalErrorCode.NotFound, $"HMI screen '{screenName}' not found",
-                        screens.Select(s => s.Name));
-                }
-
-                exportPath = Path.Combine(exportPath, $"{screen.Name}.xml");
-
-                if (File.Exists(exportPath))
-                {
-                    File.Delete(exportPath);
-                }
-
-                screen.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export of HMI screen failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["screenName"] = screenName;
-                pex.Data["exportPath"] = exportPath;
-                _logger?.LogError(pex, "ExportScreen failed for {SoftwarePath} screen {ScreenName} -> {ExportPath}", softwarePath, screenName, exportPath);
                 throw pex;
             }
         }
@@ -5273,121 +4493,6 @@ namespace TiaMcpServer.Siemens
                 var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "GetLibraryTypes failed", null, ex);
                 pex.Data["libraryName"] = libraryName;
                 _logger?.LogError(pex, "GetLibraryTypes failed for {LibraryName}", libraryName);
-        public void ImportScreen(string softwarePath, string importPath)
-        {
-            _logger?.LogInformation("Importing HMI screen from {ImportPath} to {SoftwarePath}", importPath, softwarePath);
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                var fileInfo = new FileInfo(importPath);
-                if (!fileInfo.Exists)
-                {
-                    throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
-                }
-
-                var hmiTarget = GetHmiTarget(softwarePath);
-                if (hmiTarget != null)
-                {
-                    hmiTarget.ScreenFolder.Screens.Import(fileInfo, ImportOptions.Override);
-                    return;
-                }
-
-                var hmiSoftware = GetHmiSoftware(softwarePath);
-                if (hmiSoftware != null)
-                {
-                    hmiSoftware.ScreenFolder.Screens.Import(fileInfo, ImportOptions.Override);
-                    return;
-                }
-
-                throw new PortalException(PortalErrorCode.NotFound, $"No HMI software found at path '{softwarePath}'");
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import of HMI screen failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["importPath"] = importPath;
-                _logger?.LogError(pex, "ImportScreen failed for {SoftwarePath} from {ImportPath}", softwarePath, importPath);
-                var softwareContainer = GetSoftwareContainer(softwarePath);
-                if (softwareContainer?.Software is PlcSoftware plcSoftware)
-                {
-                    var toGroup = plcSoftware.TechnologicalObjectGroup;
-                    if (toGroup != null)
-                    {
-                        var fileInfo = new FileInfo(importPath);
-                        if (!fileInfo.Exists)
-                        {
-                            throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
-                        }
-
-                        toGroup.TechnologicalObjects.Import(fileInfo, ImportOptions.Override);
-                        return true;
-                    }
-                }
-
-                throw new PortalException(PortalErrorCode.InvalidState, "Failed to access technology object group");
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import technology object failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["importPath"] = importPath;
-                _logger?.LogError(pex, "ImportTechnologyObject failed for {SoftwarePath} from {ImportPath}", softwarePath, importPath);
-                throw pex;
-            }
-        }
-
-        public Screen? GetScreenInfo(string softwarePath, string screenName)
-        {
-            _logger?.LogInformation("Getting HMI screen info for '{ScreenName}' from {SoftwarePath}", screenName, softwarePath);
-        public bool DeleteTechnologyObject(string softwarePath, string objectName)
-        {
-            _logger?.LogInformation($"Deleting technology object: {objectName}");
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                var screen = GetScreenByName(softwarePath, screenName);
-
-                if (screen == null)
-                {
-                    var screens = GetScreens(softwarePath);
-                    throw new PortalException(PortalErrorCode.NotFound, $"HMI screen '{screenName}' not found",
-                        screens.Select(s => s.Name));
-                }
-
-                return screen;
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI screen info", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["screenName"] = screenName;
-                _logger?.LogError(pex, "GetScreenInfo failed for {SoftwarePath} screen {ScreenName}", softwarePath, screenName);
-                var techObject = GetTechnologyObject(softwarePath, objectName);
-
-                if (techObject == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"Technology object '{objectName}' not found");
-                }
-
-                techObject.Delete();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Delete technology object failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["objectName"] = objectName;
-                _logger?.LogError(pex, "DeleteTechnologyObject failed for {SoftwarePath} {ObjectName}", softwarePath, objectName);
                 throw pex;
             }
         }
@@ -5445,162 +4550,7 @@ namespace TiaMcpServer.Siemens
 
         public (bool IsMultiuser, string? ServerName, List<string> Users) GetMultiuserInfo()
         {
-            _logger?.LogInformation("Getting multi-user info...");
-
-            if (IsProjectNull())
-            {
-                return (false, null, new List<string>());
-            }
-
-            try
-            {
-                var users = new List<string>();
-
-                if (_session != null)
-                {
-                    // Project is a multi-user session
-                    var serverSession = _session.ServerSession;
-                    var serverName = serverSession?.ServerProject?.Path?.FullName ?? "Unknown";
-
-                    if (serverSession?.ServerProject != null)
-                    {
-                        // Enumerate connected sessions
-                        foreach (var localSession in _portal!.LocalSessions)
-                        {
-                            users.Add(localSession.Name ?? "Unknown");
-                        }
-                    }
-
-                    return (true, serverName, users);
-                }
-
-                // Not a multi-user project
-                return (false, null, users);
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "GetMultiuserInfo failed", null, ex);
-                _logger?.LogError(pex, "GetMultiuserInfo failed");
-        #region HMI Connections
-
-        public List<Connection> GetHmiConnections(string softwarePath, string regexName = "")
-        {
-            _logger?.LogInformation("Getting HMI connections for path: {SoftwarePath}", softwarePath);
-
-            if (IsProjectNull())
-            {
-                return [];
-            }
-
-            var list = new List<Connection>();
-
-            try
-            {
-                var hmiTarget = GetHmiTarget(softwarePath);
-                if (hmiTarget != null)
-                {
-                    foreach (var connection in hmiTarget.Connections)
-                    {
-                        try
-                        {
-                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(connection.Name, regexName, RegexOptions.IgnoreCase))
-                            {
-                                continue;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            continue;
-                        }
-
-                        list.Add(connection);
-                    }
-                    return list;
-                }
-
-                var hmiSoftware = GetHmiSoftware(softwarePath);
-                if (hmiSoftware != null)
-                {
-                    foreach (var connection in hmiSoftware.Connections)
-                    {
-                        try
-                        {
-                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(connection.Name, regexName, RegexOptions.IgnoreCase))
-                            {
-                                continue;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            continue;
-                        }
-
-                        list.Add(connection);
-                    }
-                    return list;
-                }
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI connections", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                _logger?.LogError(pex, "GetHmiConnections failed for {SoftwarePath}", softwarePath);
-                throw pex;
-            }
-
-            return list;
-        }
-
-        public void CreateHmiConnection(string softwarePath, string connectionName, string partnerDevicePath)
-        {
-            _logger?.LogInformation("Creating HMI connection '{ConnectionName}' to '{PartnerDevicePath}' for {SoftwarePath}",
-                connectionName, partnerDevicePath, softwarePath);
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                var hmiTarget = GetHmiTarget(softwarePath);
-                if (hmiTarget != null)
-                {
-                    var partnerSoftwareContainer = GetSoftwareContainer(partnerDevicePath);
-                    if (partnerSoftwareContainer?.Software is PlcSoftware partnerPlc)
-                    {
-                        hmiTarget.Connections.Add(connectionName, partnerPlc);
-                        return;
-                    }
-
-                    throw new PortalException(PortalErrorCode.NotFound, $"Partner PLC software not found at path '{partnerDevicePath}'");
-                }
-
-                var hmiSoftware = GetHmiSoftware(softwarePath);
-                if (hmiSoftware != null)
-                {
-                    var partnerSoftwareContainer = GetSoftwareContainer(partnerDevicePath);
-                    if (partnerSoftwareContainer?.Software is PlcSoftware partnerPlc)
-                    {
-                        hmiSoftware.Connections.Add(connectionName, partnerPlc);
-                        return;
-                    }
-
-                    throw new PortalException(PortalErrorCode.NotFound, $"Partner PLC software not found at path '{partnerDevicePath}'");
-                }
-
-                throw new PortalException(PortalErrorCode.NotFound, $"No HMI software found at path '{softwarePath}'");
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to create HMI connection", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["connectionName"] = connectionName;
-                pex.Data["partnerDevicePath"] = partnerDevicePath;
-                _logger?.LogError(pex, "CreateHmiConnection failed for {SoftwarePath} connection {ConnectionName} to {PartnerDevicePath}",
-                    softwarePath, connectionName, partnerDevicePath);
-                throw pex;
-            }
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
         }
 
         #endregion
@@ -5693,53 +4643,6 @@ namespace TiaMcpServer.Siemens
             foreach (var subFolder in folder.Folders)
             {
                 found = FindMasterCopy(subFolder, name);
-        #region technology objects helpers
-
-        private void GetTechnologyObjectsRecursive(TechnologicalObjectGroup group, List<TechnologicalObject> list, string regexName)
-        {
-            bool isRegex = regexName.IndexOfAny(_regexChars) >= 0;
-
-            foreach (var techObject in group.TechnologicalObjects)
-            {
-                if (string.IsNullOrEmpty(regexName))
-                {
-                    list.Add(techObject);
-                }
-                else if (isRegex)
-                {
-                    if (Regex.IsMatch(techObject.Name, regexName))
-                    {
-                        list.Add(techObject);
-                    }
-                }
-                else
-                {
-                    if (techObject.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        list.Add(techObject);
-                    }
-                }
-            }
-
-            foreach (TechnologicalObjectGroup subgroup in group.Groups)
-            {
-                GetTechnologyObjectsRecursive(subgroup, list, regexName);
-            }
-        }
-
-        private TechnologicalObject? FindTechnologyObjectRecursive(TechnologicalObjectGroup group, string objectName)
-        {
-            foreach (var techObject in group.TechnologicalObjects)
-            {
-                if (techObject.Name.Equals(objectName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return techObject;
-                }
-            }
-
-            foreach (TechnologicalObjectGroup subgroup in group.Groups)
-            {
-                var found = FindTechnologyObjectRecursive(subgroup, objectName);
                 if (found != null)
                 {
                     return found;
@@ -5747,219 +4650,155 @@ namespace TiaMcpServer.Siemens
             }
 
             return null;
-        #region HMI Alarms
-
-        public List<DiscreteAlarm> GetDiscreteAlarms(string softwarePath, string regexName = "")
-        {
-            _logger?.LogInformation("Getting discrete alarms for path: {SoftwarePath}", softwarePath);
-
-            if (IsProjectNull())
-            {
-                return [];
-            }
-
-            var list = new List<DiscreteAlarm>();
-
-            try
-            {
-                var hmiTarget = GetHmiTarget(softwarePath);
-                if (hmiTarget != null)
-                {
-                    foreach (var alarm in hmiTarget.DiscreteAlarms)
-                    {
-                        try
-                        {
-                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(alarm.Name, regexName, RegexOptions.IgnoreCase))
-                            {
-                                continue;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            continue;
-                        }
-
-                        list.Add(alarm);
-                    }
-                    return list;
-                }
-
-                var hmiSoftware = GetHmiSoftware(softwarePath);
-                if (hmiSoftware != null)
-                {
-                    foreach (var alarm in hmiSoftware.DiscreteAlarms)
-                    {
-                        try
-                        {
-                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(alarm.Name, regexName, RegexOptions.IgnoreCase))
-                            {
-                                continue;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            continue;
-                        }
-
-                        list.Add(alarm);
-                    }
-                    return list;
-                }
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get discrete alarms", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                _logger?.LogError(pex, "GetDiscreteAlarms failed for {SoftwarePath}", softwarePath);
-                throw pex;
-            }
-
-            return list;
         }
 
-        public List<AnalogAlarm> GetAnalogAlarms(string softwarePath, string regexName = "")
+        #endregion
+
+
+        #region HMI
+
+        public HmiTarget? GetHmiTarget(string softwarePath)
         {
-            _logger?.LogInformation("Getting analog alarms for path: {SoftwarePath}", softwarePath);
+            var container = GetSoftwareContainer(softwarePath);
+            return container?.Software as HmiTarget;
+        }
 
-            if (IsProjectNull())
-            {
-                return [];
-            }
+        public HmiSoftware? GetHmiSoftware(string softwarePath)
+        {
+            var container = GetSoftwareContainer(softwarePath);
+            return container?.Software as HmiSoftware;
+        }
 
-            var list = new List<AnalogAlarm>();
+        #region HMI Tags
 
-            try
-            {
-                var hmiTarget = GetHmiTarget(softwarePath);
-                if (hmiTarget != null)
-                {
-                    foreach (var alarm in hmiTarget.AnalogAlarms)
-                    {
-                        try
-                        {
-                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(alarm.Name, regexName, RegexOptions.IgnoreCase))
-                            {
-                                continue;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            continue;
-                        }
+        public List<object> GetHmiTagTables(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
 
-                        list.Add(alarm);
-                    }
-                    return list;
-                }
+        public List<object> GetHmiTags(string softwarePath, string tagTableName, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
 
-                var hmiSoftware = GetHmiSoftware(softwarePath);
-                if (hmiSoftware != null)
-                {
-                    foreach (var alarm in hmiSoftware.AnalogAlarms)
-                    {
-                        try
-                        {
-                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(alarm.Name, regexName, RegexOptions.IgnoreCase))
-                            {
-                                continue;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            continue;
-                        }
+        public void ExportHmiTagTable(string softwarePath, string tagTableName, string exportPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
 
-                        list.Add(alarm);
-                    }
-                    return list;
-                }
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get analog alarms", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                _logger?.LogError(pex, "GetAnalogAlarms failed for {SoftwarePath}", softwarePath);
-                throw pex;
-            }
+        public void ImportHmiTagTable(string softwarePath, string importPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
 
-            return list;
+        #endregion
+
+        #region HMI Screens
+
+        public List<object> GetScreens(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public object? GetScreenByName(string softwarePath, string screenName)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void ExportScreen(string softwarePath, string screenName, string exportPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void ImportScreen(string softwarePath, string importPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public object? GetScreenInfo(string softwarePath, string screenName)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region HMI Connections
+
+        public List<object> GetHmiConnections(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void CreateHmiConnection(string softwarePath, string connectionName, string partnerDevicePath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region HMI Alarms
+
+        public List<object> GetDiscreteAlarms(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public List<object> GetAnalogAlarms(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
         }
 
         #endregion
 
         #region HMI Text Lists
 
-        public List<TextList> GetTextLists(string softwarePath, string regexName = "")
+        public List<object> GetTextLists(string softwarePath, string regexName = "")
         {
-            _logger?.LogInformation("Getting HMI text lists for path: {SoftwarePath}", softwarePath);
-
-            if (IsProjectNull())
-            {
-                return [];
-            }
-
-            var list = new List<TextList>();
-
-            try
-            {
-                var hmiTarget = GetHmiTarget(softwarePath);
-                if (hmiTarget != null)
-                {
-                    foreach (var textList in hmiTarget.TextLists)
-                    {
-                        try
-                        {
-                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(textList.Name, regexName, RegexOptions.IgnoreCase))
-                            {
-                                continue;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            continue;
-                        }
-
-                        list.Add(textList);
-                    }
-                    return list;
-                }
-
-                var hmiSoftware = GetHmiSoftware(softwarePath);
-                if (hmiSoftware != null)
-                {
-                    foreach (var textList in hmiSoftware.TextLists)
-                    {
-                        try
-                        {
-                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(textList.Name, regexName, RegexOptions.IgnoreCase))
-                            {
-                                continue;
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            continue;
-                        }
-
-                        list.Add(textList);
-                    }
-                    return list;
-                }
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get HMI text lists", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                _logger?.LogError(pex, "GetTextLists failed for {SoftwarePath}", softwarePath);
-                throw pex;
-            }
-
-            return list;
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
         }
 
         public void ExportTextList(string softwarePath, string textListName, string exportPath)
         {
-            _logger?.LogInformation("Exporting HMI text list '{TextListName}' from {SoftwarePath}", textListName, softwarePath);
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void ImportTextList(string softwarePath, string importPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #endregion
+
+
+        #region technology objects
+
+        public List<object> GetTechnologyObjects(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public object? GetTechnologyObject(string softwarePath, string objectName)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public object? ExportTechnologyObject(string softwarePath, string objectName, string exportPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public bool ImportTechnologyObject(string softwarePath, string importPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public bool DeleteTechnologyObject(string softwarePath, string objectName)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
         #endregion
 
         #region safety programming
@@ -5975,31 +4814,6 @@ namespace TiaMcpServer.Siemens
                     throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
                 }
 
-                var textLists = GetTextLists(softwarePath);
-                var textList = textLists.FirstOrDefault(t => string.Equals(t.Name, textListName, StringComparison.OrdinalIgnoreCase));
-
-                if (textList == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, $"HMI text list '{textListName}' not found",
-                        textLists.Select(t => t.Name));
-                }
-
-                exportPath = Path.Combine(exportPath, $"{textList.Name}.xml");
-
-                if (File.Exists(exportPath))
-                {
-                    File.Delete(exportPath);
-                }
-
-                textList.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export of HMI text list failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["textListName"] = textListName;
-                pex.Data["exportPath"] = exportPath;
-                _logger?.LogError(pex, "ExportTextList failed for {SoftwarePath} text list {TextListName} -> {ExportPath}", softwarePath, textListName, exportPath);
                 var softwareContainer = GetSoftwareContainer(softwarePath);
                 var deviceItem = softwareContainer?.Parent as DeviceItem;
 
@@ -6020,9 +4834,6 @@ namespace TiaMcpServer.Siemens
             }
         }
 
-        public void ImportTextList(string softwarePath, string importPath)
-        {
-            _logger?.LogInformation("Importing HMI text list from {ImportPath} to {SoftwarePath}", importPath, softwarePath);
         public Dictionary<string, object?> GetSafetySettings(string softwarePath)
         {
             _logger?.LogInformation($"Getting safety settings for: {softwarePath}");
@@ -6034,34 +4845,6 @@ namespace TiaMcpServer.Siemens
                     throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
                 }
 
-                var fileInfo = new FileInfo(importPath);
-                if (!fileInfo.Exists)
-                {
-                    throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
-                }
-
-                var hmiTarget = GetHmiTarget(softwarePath);
-                if (hmiTarget != null)
-                {
-                    hmiTarget.TextLists.Import(fileInfo, ImportOptions.Override);
-                    return;
-                }
-
-                var hmiSoftware = GetHmiSoftware(softwarePath);
-                if (hmiSoftware != null)
-                {
-                    hmiSoftware.TextLists.Import(fileInfo, ImportOptions.Override);
-                    return;
-                }
-
-                throw new PortalException(PortalErrorCode.NotFound, $"No HMI software found at path '{softwarePath}'");
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import of HMI text list failed", null, ex);
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["importPath"] = importPath;
-                _logger?.LogError(pex, "ImportTextList failed for {SoftwarePath} from {ImportPath}", softwarePath, importPath);
                 var admin = GetSafetyAdministration(softwarePath);
                 var settings = new Dictionary<string, object?>();
 
@@ -6218,7 +5001,7 @@ namespace TiaMcpServer.Siemens
 
         #endregion
 
-        #endregion
+
 
     }
 
