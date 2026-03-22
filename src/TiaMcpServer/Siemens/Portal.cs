@@ -1,6 +1,12 @@
 ﻿using Microsoft.Extensions.Logging;
 using Siemens.Engineering;
 using Siemens.Engineering.Compiler;
+using Siemens.Engineering.Compare;
+using Siemens.Engineering.Download;
+using Siemens.Engineering.Library;
+using Siemens.Engineering.Library.MasterCopies;
+using Siemens.Engineering.Library.Types;
+using Siemens.Engineering.Online;
 using Siemens.Engineering.Hmi;
 using Siemens.Engineering.HmiUnified;
 using Siemens.Engineering.HW;
@@ -9,7 +15,11 @@ using Siemens.Engineering.Multiuser;
 using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.ExternalSources;
+using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.Types;
+using Siemens.Engineering.CrossReference;
+using Siemens.Engineering.SW.WatchAndForceTables;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -162,9 +172,10 @@ namespace TiaMcpServer.Siemens
 
                 return true;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return false;
+                _logger?.LogError(ex, "ConnectPortal failed: {Message}", ex.Message);
+                throw new PortalException(PortalErrorCode.InvalidState, $"Connect failed: {ex.GetType().Name}: {ex.Message}", null, ex);
             }
         }
 
@@ -595,6 +606,473 @@ namespace TiaMcpServer.Siemens
 
         }
 
+        public Device CreateDevice(string typeIdentifier, string name, string deviceName)
+        {
+            _logger?.LogInformation($"Creating device: {name} ({typeIdentifier})...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var device = (_project as Project)?.Devices.CreateWithItem(typeIdentifier, name, deviceName);
+
+                if (device == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, $"Failed to create device '{deviceName}' with type '{typeIdentifier}'");
+                }
+
+                return device;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to create device '{deviceName}'", null, ex);
+                pex.Data["typeIdentifier"] = typeIdentifier;
+                pex.Data["name"] = name;
+                pex.Data["deviceName"] = deviceName;
+                _logger?.LogError(pex, "CreateDevice failed for {DeviceName} ({TypeIdentifier})", deviceName, typeIdentifier);
+                throw pex;
+            }
+        }
+
+        public void DeleteDevice(string devicePath)
+        {
+            _logger?.LogInformation($"Deleting device: {devicePath}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var device = GetDeviceByPath(devicePath);
+
+                if (device == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device not found at path '{devicePath}'");
+                }
+
+                device.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to delete device at '{devicePath}'", null, ex);
+                pex.Data["devicePath"] = devicePath;
+                _logger?.LogError(pex, "DeleteDevice failed for {DevicePath}", devicePath);
+                throw pex;
+            }
+        }
+
+        public DeviceUserGroup CreateDeviceGroup(string groupName, string parentGroupPath = "")
+        {
+            _logger?.LogInformation($"Creating device group: {groupName}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                DeviceUserGroupComposition? groups = (_project as Project)?.DeviceGroups;
+
+                if (groups == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Cannot access device groups");
+                }
+
+                if (!string.IsNullOrEmpty(parentGroupPath))
+                {
+                    var pathSegments = parentGroupPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    DeviceUserGroup? currentGroup = null;
+
+                    foreach (var segment in pathSegments)
+                    {
+                        currentGroup = (currentGroup?.Groups ?? groups)
+                            .FirstOrDefault(g => g.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
+
+                        if (currentGroup == null)
+                        {
+                            throw new PortalException(PortalErrorCode.NotFound, $"Parent group path '{parentGroupPath}' not found");
+                        }
+                    }
+
+                    return currentGroup!.Groups.Create(groupName);
+                }
+
+                return groups.Create(groupName);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to create device group '{groupName}'", null, ex);
+                pex.Data["groupName"] = groupName;
+                pex.Data["parentGroupPath"] = parentGroupPath;
+                _logger?.LogError(pex, "CreateDeviceGroup failed for {GroupName}", groupName);
+                throw pex;
+            }
+        }
+
+        public List<DeviceItem> GetModules(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Getting modules for device item: {deviceItemPath}...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                var modules = new List<DeviceItem>();
+
+                foreach (DeviceItem subItem in deviceItem.DeviceItems)
+                {
+                    modules.Add(subItem);
+                }
+
+                return modules;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get modules for '{deviceItemPath}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GetModules failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public DeviceItem GetModuleInfo(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Getting module info for: {deviceItemPath}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                return deviceItem;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get module info for '{deviceItemPath}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GetModuleInfo failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public List<(int StartAddress, int Length, string IoType)> GetAddresses(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Getting addresses for: {deviceItemPath}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                var addresses = new List<(int StartAddress, int Length, string IoType)>();
+
+                foreach (var address in deviceItem.Addresses)
+                {
+                    var startAddress = address.StartAddress;
+                    var length = address.Length;
+                    var ioType = address.IoType.ToString();
+                    addresses.Add((startAddress, length, ioType));
+                }
+
+                return addresses;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get addresses for '{deviceItemPath}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GetAddresses failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public List<Subnet> GetSubnets()
+        {
+            _logger?.LogInformation("Getting subnets...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            try
+            {
+                var subnets = new List<Subnet>();
+                var project = _project as Project;
+
+                if (project?.Subnets != null)
+                {
+                    foreach (Subnet subnet in project.Subnets)
+                    {
+                        subnets.Add(subnet);
+                    }
+                }
+
+                return subnets;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, "Failed to get subnets", null, ex);
+                _logger?.LogError(pex, "GetSubnets failed");
+                throw pex;
+            }
+        }
+
+        public List<(string Name, string InterfaceType, string IpAddress, string SubnetMask)> GetNetworkInterfaces(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Getting network interfaces for: {deviceItemPath}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                var interfaces = new List<(string Name, string InterfaceType, string IpAddress, string SubnetMask)>();
+
+                CollectNetworkInterfaces(deviceItem, interfaces);
+
+                return interfaces;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get network interfaces for '{deviceItemPath}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GetNetworkInterfaces failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public void SetIpAddress(string deviceItemPath, string ipAddress, string subnetMask, string routerAddress = "")
+        {
+            _logger?.LogInformation($"Setting IP address for: {deviceItemPath} to {ipAddress}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                var networkInterface = FindNetworkInterface(deviceItem);
+
+                if (networkInterface == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"No network interface found on device item '{deviceItemPath}'");
+                }
+
+                var nodes = networkInterface.Nodes;
+                foreach (Node node in nodes)
+                {
+                    node.SetAttribute("Address", ipAddress);
+                    node.SetAttribute("SubnetMask", subnetMask);
+
+                    if (!string.IsNullOrEmpty(routerAddress))
+                    {
+                        node.SetAttribute("RouterAddress", routerAddress);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to set IP address for '{deviceItemPath}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                pex.Data["ipAddress"] = ipAddress;
+                pex.Data["subnetMask"] = subnetMask;
+                _logger?.LogError(pex, "SetIpAddress failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public void ConnectToSubnet(string deviceItemPath, string subnetName)
+        {
+            _logger?.LogInformation($"Connecting {deviceItemPath} to subnet {subnetName}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found at path '{deviceItemPath}'");
+                }
+
+                var project = _project as Project;
+                var subnet = project?.Subnets?.FirstOrDefault(s => s.Name.Equals(subnetName, StringComparison.OrdinalIgnoreCase));
+
+                if (subnet == null)
+                {
+                    var availableSubnets = project?.Subnets?.Select(s => s.Name) ?? Enumerable.Empty<string>();
+                    throw new PortalException(PortalErrorCode.NotFound, $"Subnet '{subnetName}' not found", availableSubnets);
+                }
+
+                var networkInterface = FindNetworkInterface(deviceItem);
+
+                if (networkInterface == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"No network interface found on device item '{deviceItemPath}'");
+                }
+
+                var nodes = networkInterface.Nodes;
+                foreach (Node node in nodes)
+                {
+                    node.ConnectToSubnet(subnet);
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to connect '{deviceItemPath}' to subnet '{subnetName}'", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                pex.Data["subnetName"] = subnetName;
+                _logger?.LogError(pex, "ConnectToSubnet failed for {DeviceItemPath} -> {SubnetName}", deviceItemPath, subnetName);
+                throw pex;
+            }
+        }
+
+        public void ImportGsdFile(string gsdFilePath)
+        {
+            _logger?.LogInformation($"Importing GSD file: {gsdFilePath}...");
+
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            try
+            {
+                if (!File.Exists(gsdFilePath))
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"GSD file not found at '{gsdFilePath}'");
+                }
+
+                var project = _project as Project;
+
+                if (project == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Project must be a local project to import GSD files");
+                }
+
+                throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to import GSD file '{gsdFilePath}'", null, ex);
+                pex.Data["gsdFilePath"] = gsdFilePath;
+                _logger?.LogError(pex, "ImportGsdFile failed for {GsdFilePath}", gsdFilePath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region hardware and network helpers
+
+        private void CollectNetworkInterfaces(DeviceItem deviceItem, List<(string Name, string InterfaceType, string IpAddress, string SubnetMask)> interfaces)
+        {
+            var networkInterface = deviceItem.GetService<NetworkInterface>();
+
+            if (networkInterface != null)
+            {
+                var ipAddress = "";
+                var subnetMask = "";
+                var interfaceType = networkInterface.InterfaceType.ToString();
+
+                foreach (Node node in networkInterface.Nodes)
+                {
+                    try
+                    {
+                        ipAddress = node.GetAttribute("Address")?.ToString() ?? "";
+                        subnetMask = node.GetAttribute("SubnetMask")?.ToString() ?? "";
+                    }
+                    catch
+                    {
+                        // Some nodes may not have IP attributes
+                    }
+                }
+
+                interfaces.Add((deviceItem.Name, interfaceType, ipAddress, subnetMask));
+            }
+
+            foreach (DeviceItem subItem in deviceItem.DeviceItems)
+            {
+                CollectNetworkInterfaces(subItem, interfaces);
+            }
+        }
+
+        private NetworkInterface? FindNetworkInterface(DeviceItem deviceItem)
+        {
+            var networkInterface = deviceItem.GetService<NetworkInterface>();
+
+            if (networkInterface != null)
+            {
+                return networkInterface;
+            }
+
+            foreach (DeviceItem subItem in deviceItem.DeviceItems)
+            {
+                networkInterface = FindNetworkInterface(subItem);
+                if (networkInterface != null)
+                {
+                    return networkInterface;
+                }
+            }
+
+            return null;
+        }
+
         #endregion
 
         #region software
@@ -624,7 +1102,7 @@ namespace TiaMcpServer.Siemens
 
             if (IsProjectNull())
             {
-                return null; // "Error, no project";
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open");
             }
 
             var softwareContainer = GetSoftwareContainer(softwarePath);
@@ -643,9 +1121,9 @@ namespace TiaMcpServer.Siemens
                         {
                             admin.LoginToSafetyOfflineProgram(secString);
                         }
-                        catch (Exception)
+                        catch (Exception ex)
                         {
-                            return null; // "Error, login to safety offline program failed";
+                            throw new PortalException(PortalErrorCode.InvalidState, "Failed to login to safety offline program", null, ex);
                         }
                     }
                 }
@@ -656,18 +1134,49 @@ namespace TiaMcpServer.Siemens
                 try
                 {
                     ICompilable compileService = plcSoftware.GetService<ICompilable>();
-
                     CompilerResult result = compileService.Compile();
-
+                    _logger?.LogInformation($"Compile result: {result.State}, messages: {result.Messages.Count()}");
                     return result;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    return null; // "Error, compiling failed";
+                    throw new PortalException(PortalErrorCode.ExportFailed, $"Compilation failed: {ex.Message}", null, ex);
                 }
             }
 
-            return null; // "Error";
+            throw new PortalException(PortalErrorCode.NotFound, $"No PLC software found at path: {softwarePath}");
+        }
+
+        /// <summary>
+        /// Recursively collects all compile messages including sub-messages with full depth
+        /// </summary>
+        public static void CollectCompileMessages(IEnumerable<CompilerResultMessage> messages, List<string> output, int depth = 0)
+        {
+            foreach (var msg in messages)
+            {
+                var indent = new string(' ', depth * 2);
+                var state = msg.State.ToString();
+                var path = "";
+                var description = "";
+
+                try { path = msg.Path ?? ""; } catch { }
+                try { description = msg.Description ?? ""; } catch { }
+
+                if (!string.IsNullOrEmpty(description) || !string.IsNullOrEmpty(path))
+                {
+                    output.Add($"{indent}[{state}] {path}: {description}");
+                }
+
+                // Recurse into sub-messages for detailed errors
+                try
+                {
+                    if (msg.Messages != null && msg.Messages.Any())
+                    {
+                        CollectCompileMessages(msg.Messages, output, depth + 1);
+                    }
+                }
+                catch { }
+            }
         }
 
         #endregion
@@ -1707,6 +2216,726 @@ namespace TiaMcpServer.Siemens
             return imported;
         }
 
+        #region block crud
+
+        public void DeleteBlock(string softwarePath, string blockPath)
+        {
+            _logger?.LogInformation($"Deleting block by path: {blockPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var block = GetBlock(softwarePath, blockPath);
+
+                if (block == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Block '{blockPath}' not found");
+                }
+
+                block.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to delete block '{blockPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["blockPath"] = blockPath;
+                _logger?.LogError(pex, "DeleteBlock failed for {SoftwarePath} {BlockPath}", softwarePath, blockPath);
+                throw pex;
+            }
+        }
+
+        public PlcBlock? CopyBlock(string softwarePath, string sourceBlockPath, string targetGroupPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void MoveBlock(string softwarePath, string sourceBlockPath, string targetGroupPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region type crud
+
+        public void DeleteType(string softwarePath, string typePath)
+        {
+            _logger?.LogInformation($"Deleting type by path: {typePath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var type = GetType(softwarePath, typePath);
+
+                if (type == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Type '{typePath}' not found");
+                }
+
+                type.Delete();
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to delete type '{typePath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["typePath"] = typePath;
+                _logger?.LogError(pex, "DeleteType failed for {SoftwarePath} {TypePath}", softwarePath, typePath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region block group management
+
+        public PlcBlockGroup? CreateBlockGroup(string softwarePath, string parentGroupPath, string groupName)
+        {
+            _logger?.LogInformation($"Creating block group '{groupName}' in '{parentGroupPath}'");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                if (string.IsNullOrWhiteSpace(groupName))
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, "Group name cannot be empty");
+                }
+
+                var parentGroup = GetPlcBlockGroupByPath(softwarePath, parentGroupPath);
+
+                if (parentGroup == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Parent group '{parentGroupPath}' not found");
+                }
+
+                var newGroup = parentGroup.Groups.Create(groupName);
+                return newGroup;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to create block group '{groupName}' in '{parentGroupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["parentGroupPath"] = parentGroupPath;
+                pex.Data["groupName"] = groupName;
+                _logger?.LogError(pex, "CreateBlockGroup failed for {SoftwarePath} {ParentGroupPath}/{GroupName}", softwarePath, parentGroupPath, groupName);
+                throw pex;
+            }
+        }
+
+        public void DeleteBlockGroup(string softwarePath, string groupPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public (string Name, string Path, int BlockCount, int SubGroupCount) GetBlockGroupInfo(string softwarePath, string groupPath)
+        {
+            _logger?.LogInformation($"Getting block group info at path: {groupPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var group = GetPlcBlockGroupByPath(softwarePath, groupPath);
+
+                if (group == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Block group '{groupPath}' not found");
+                }
+
+                var blockCount = group.Blocks.Count;
+                var subGroupCount = group.Groups.Count;
+                var path = GetPlcBlockGroupPath(group);
+
+                return (group.Name, path, blockCount, subGroupCount);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get block group info for '{groupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["groupPath"] = groupPath;
+                _logger?.LogError(pex, "GetBlockGroupInfo failed for {SoftwarePath} {GroupPath}", softwarePath, groupPath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region type group management
+
+        public PlcTypeGroup? CreateTypeGroup(string softwarePath, string parentGroupPath, string groupName)
+        {
+            _logger?.LogInformation($"Creating type group '{groupName}' in '{parentGroupPath}'");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                if (string.IsNullOrWhiteSpace(groupName))
+                {
+                    throw new PortalException(PortalErrorCode.InvalidParams, "Group name cannot be empty");
+                }
+
+                var parentGroup = GetPlcTypeGroupByPath(softwarePath, parentGroupPath);
+
+                if (parentGroup == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Parent type group '{parentGroupPath}' not found");
+                }
+
+                var newGroup = parentGroup.Groups.Create(groupName);
+                return newGroup;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to create type group '{groupName}' in '{parentGroupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["parentGroupPath"] = parentGroupPath;
+                pex.Data["groupName"] = groupName;
+                _logger?.LogError(pex, "CreateTypeGroup failed for {SoftwarePath} {ParentGroupPath}/{GroupName}", softwarePath, parentGroupPath, groupName);
+                throw pex;
+            }
+        }
+
+        public void DeleteTypeGroup(string softwarePath, string groupPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public (string Name, string Path, int TypeCount, int SubGroupCount) GetTypeGroupInfo(string softwarePath, string groupPath)
+        {
+            _logger?.LogInformation($"Getting type group info at path: {groupPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var group = GetPlcTypeGroupByPath(softwarePath, groupPath);
+
+                if (group == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Type group '{groupPath}' not found");
+                }
+
+                var typeCount = group.Types.Count;
+                var subGroupCount = group.Groups.Count;
+                var path = GetPlcTypeGroupPath(group);
+
+                return (group.Name, path, typeCount, subGroupCount);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidParams, $"Failed to get type group info for '{groupPath}'", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["groupPath"] = groupPath;
+                _logger?.LogError(pex, "GetTypeGroupInfo failed for {SoftwarePath} {GroupPath}", softwarePath, groupPath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #endregion
+
+        #region tag tables
+
+        public List<PlcTagTable> GetTagTables(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting tag tables...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<PlcTagTable>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var tagTables = plcSoftware.TagTableGroup?.TagTables;
+
+                    if (tagTables != null)
+                    {
+                        bool isRegex = !string.IsNullOrEmpty(regexName) && regexName.Any(c => _regexChars.Contains(c));
+
+                        foreach (PlcTagTable table in tagTables)
+                        {
+                            if (string.IsNullOrEmpty(regexName))
+                            {
+                                list.Add(table);
+                            }
+                            else if (isRegex)
+                            {
+                                if (Regex.IsMatch(table.Name, regexName, RegexOptions.IgnoreCase))
+                                {
+                                    list.Add(table);
+                                }
+                            }
+                            else
+                            {
+                                if (table.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    list.Add(table);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting tag tables");
+            }
+
+            return list;
+        }
+
+        public PlcTagTable? GetTagTable(string softwarePath, string tagTableName)
+        {
+            _logger?.LogInformation($"Getting tag table: {tagTableName}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var tagTables = plcSoftware.TagTableGroup?.TagTables;
+
+                    if (tagTables != null)
+                    {
+                        foreach (PlcTagTable table in tagTables)
+                        {
+                            if (table.Name.Equals(tagTableName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                return table;
+                            }
+                        }
+                    }
+                }
+
+                var candidates = GetTagTables(softwarePath).Select(t => t.Name).ToList();
+                throw new PortalException(PortalErrorCode.NotFound, $"Tag table '{tagTableName}' not found", candidates);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get tag table", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                _logger?.LogError(pex, "GetTagTable failed for {SoftwarePath} {TagTableName}", softwarePath, tagTableName);
+                throw pex;
+            }
+        }
+
+        public List<PlcTag> GetTags(string softwarePath, string tagTableName, string regexName = "")
+        {
+            _logger?.LogInformation($"Getting tags from table: {tagTableName}");
+
+            var list = new List<PlcTag>();
+
+            try
+            {
+                var table = GetTagTable(softwarePath, tagTableName);
+
+                if (table != null)
+                {
+                    bool isRegex = !string.IsNullOrEmpty(regexName) && regexName.Any(c => _regexChars.Contains(c));
+
+                    foreach (PlcTag tag in table.Tags)
+                    {
+                        if (string.IsNullOrEmpty(regexName))
+                        {
+                            list.Add(tag);
+                        }
+                        else if (isRegex)
+                        {
+                            if (Regex.IsMatch(tag.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                list.Add(tag);
+                            }
+                        }
+                        else
+                        {
+                            if (tag.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                list.Add(tag);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get tags", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                _logger?.LogError(pex, "GetTags failed for {SoftwarePath} {TagTableName}", softwarePath, tagTableName);
+                throw pex;
+            }
+
+            return list;
+        }
+
+        public PlcTagTable? ExportTagTable(string softwarePath, string tagTableName, string exportPath)
+        {
+            _logger?.LogInformation($"Exporting tag table: {tagTableName}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var table = GetTagTable(softwarePath, tagTableName);
+
+                if (table == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Tag table '{tagTableName}' not found");
+                }
+
+                exportPath = Path.Combine(exportPath, $"{table.Name}.xml");
+
+                if (File.Exists(exportPath))
+                {
+                    File.Delete(exportPath);
+                }
+
+                table.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
+
+                return table;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export tag table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                pex.Data["exportPath"] = exportPath;
+                _logger?.LogError(pex, "ExportTagTable failed for {SoftwarePath} {TagTableName} -> {ExportPath}", softwarePath, tagTableName, exportPath);
+                throw pex;
+            }
+        }
+
+        public bool ImportTagTable(string softwarePath, string importPath)
+        {
+            _logger?.LogInformation($"Importing tag table from path: {importPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var tagTableGroup = plcSoftware.TagTableGroup;
+
+                    if (tagTableGroup != null)
+                    {
+                        var fileInfo = new FileInfo(importPath);
+                        if (fileInfo.Exists)
+                        {
+                            var imported = tagTableGroup.TagTables.Import(fileInfo, ImportOptions.Override);
+                            if (imported != null && imported.Count > 0)
+                            {
+                                return true;
+                            }
+                        }
+                        else
+                        {
+                            throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
+                        }
+                    }
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import tag table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["importPath"] = importPath;
+                _logger?.LogError(pex, "ImportTagTable failed for {SoftwarePath} {ImportPath}", softwarePath, importPath);
+                throw pex;
+            }
+        }
+
+        public PlcTag? CreateTag(string softwarePath, string tagTableName, string tagName, string dataType, string logicalAddress, string comment = "")
+        {
+            _logger?.LogInformation($"Creating tag '{tagName}' in table '{tagTableName}'");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var table = GetTagTable(softwarePath, tagTableName);
+
+                if (table == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Tag table '{tagTableName}' not found");
+                }
+
+                var tag = table.Tags.Create(tagName, dataType, logicalAddress);
+
+                if (tag != null && !string.IsNullOrEmpty(comment))
+                {
+                    tag.Comment.Items[0].Text = comment;
+                }
+
+                return tag;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Create tag failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                pex.Data["tagName"] = tagName;
+                _logger?.LogError(pex, "CreateTag failed for {SoftwarePath} {TagTableName} {TagName}", softwarePath, tagTableName, tagName);
+                throw pex;
+            }
+        }
+
+        public bool DeleteTag(string softwarePath, string tagTableName, string tagName)
+        {
+            _logger?.LogInformation($"Deleting tag '{tagName}' from table '{tagTableName}'");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var table = GetTagTable(softwarePath, tagTableName);
+
+                if (table == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Tag table '{tagTableName}' not found");
+                }
+
+                foreach (PlcTag tag in table.Tags)
+                {
+                    if (tag.Name.Equals(tagName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        tag.Delete();
+                        return true;
+                    }
+                }
+
+                var candidates = table.Tags.Cast<PlcTag>().Select(t => t.Name).ToList();
+                throw new PortalException(PortalErrorCode.NotFound, $"Tag '{tagName}' not found in table '{tagTableName}'", candidates);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Delete tag failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTableName"] = tagTableName;
+                pex.Data["tagName"] = tagName;
+                _logger?.LogError(pex, "DeleteTag failed for {SoftwarePath} {TagTableName} {TagName}", softwarePath, tagTableName, tagName);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region watch/force tables
+
+        public List<PlcWatchTable> GetWatchTables(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting watch tables...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<PlcWatchTable>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var watchTableGroup = plcSoftware.WatchAndForceTableGroup;
+
+                    if (watchTableGroup != null)
+                    {
+                        bool isRegex = !string.IsNullOrEmpty(regexName) && regexName.Any(c => _regexChars.Contains(c));
+
+                        foreach (PlcWatchTable table in watchTableGroup.WatchTables)
+                        {
+                            if (string.IsNullOrEmpty(regexName))
+                            {
+                                list.Add(table);
+                            }
+                            else if (isRegex)
+                            {
+                                if (Regex.IsMatch(table.Name, regexName, RegexOptions.IgnoreCase))
+                                {
+                                    list.Add(table);
+                                }
+                            }
+                            else
+                            {
+                                if (table.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    list.Add(table);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting watch tables");
+            }
+
+            return list;
+        }
+
+        public PlcWatchTable? ExportWatchTable(string softwarePath, string watchTableName, string exportPath)
+        {
+            _logger?.LogInformation($"Exporting watch table: {watchTableName}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var watchTableGroup = plcSoftware.WatchAndForceTableGroup;
+
+                    if (watchTableGroup != null)
+                    {
+                        PlcWatchTable? foundTable = null;
+
+                        foreach (PlcWatchTable table in watchTableGroup.WatchTables)
+                        {
+                            if (table.Name.Equals(watchTableName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                foundTable = table;
+                                break;
+                            }
+                        }
+
+                        if (foundTable == null)
+                        {
+                            var candidates = new List<string>();
+                            foreach (PlcWatchTable t in watchTableGroup.WatchTables)
+                            {
+                                candidates.Add(t.Name);
+                            }
+                            throw new PortalException(PortalErrorCode.NotFound, $"Watch table '{watchTableName}' not found", candidates);
+                        }
+
+                        exportPath = Path.Combine(exportPath, $"{foundTable.Name}.xml");
+
+                        if (File.Exists(exportPath))
+                        {
+                            File.Delete(exportPath);
+                        }
+
+                        foundTable.Export(new FileInfo(exportPath), ExportOptions.WithDefaults);
+
+                        return foundTable;
+                    }
+                }
+
+                throw new PortalException(PortalErrorCode.InvalidState, "Could not access watch table group");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export watch table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["watchTableName"] = watchTableName;
+                pex.Data["exportPath"] = exportPath;
+                _logger?.LogError(pex, "ExportWatchTable failed for {SoftwarePath} {WatchTableName} -> {ExportPath}", softwarePath, watchTableName, exportPath);
+                throw pex;
+            }
+        }
+
+        public bool ImportWatchTable(string softwarePath, string importPath)
+        {
+            _logger?.LogInformation($"Importing watch table from path: {importPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var watchTableGroup = plcSoftware.WatchAndForceTableGroup;
+
+                    if (watchTableGroup != null)
+                    {
+                        var fileInfo = new FileInfo(importPath);
+                        if (fileInfo.Exists)
+                        {
+                            var imported = watchTableGroup.WatchTables.Import(fileInfo, ImportOptions.Override);
+                            if (imported != null && imported.Count > 0)
+                            {
+                                return true;
+                            }
+                        }
+                        else
+                        {
+                            throw new PortalException(PortalErrorCode.InvalidParams, $"Import file not found: {importPath}");
+                        }
+                    }
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import watch table failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["importPath"] = importPath;
+                _logger?.LogError(pex, "ImportWatchTable failed for {SoftwarePath} {ImportPath}", softwarePath, importPath);
+                throw pex;
+            }
+        }
+
         #endregion
 
         #region private helper
@@ -2699,6 +3928,1111 @@ namespace TiaMcpServer.Siemens
         #endregion
 
         #endregion
+
+        #region external sources
+
+        public List<PlcExternalSource> GetExternalSources(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting external sources...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<PlcExternalSource>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var sourceGroup = plcSoftware.ExternalSourceGroup;
+                    if (sourceGroup != null)
+                    {
+                        foreach (var source in sourceGroup.ExternalSources)
+                        {
+                            if (string.IsNullOrEmpty(regexName))
+                            {
+                                list.Add(source);
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    if (regexName.IndexOfAny(_regexChars) >= 0)
+                                    {
+                                        var regex = new Regex(regexName, RegexOptions.IgnoreCase);
+                                        if (regex.IsMatch(source.Name))
+                                        {
+                                            list.Add(source);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (source.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            list.Add(source);
+                                        }
+                                    }
+                                }
+                                catch (Exception)
+                                {
+                                    // Invalid regex, skip
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Error getting external sources
+            }
+
+            return list;
+        }
+
+        public bool ImportExternalSource(string softwarePath, string groupPath, string importPath)
+        {
+            _logger?.LogInformation($"Importing external source from path: {importPath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var sourceGroup = plcSoftware.ExternalSourceGroup;
+                    if (sourceGroup == null)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, "External source group not found");
+                    }
+
+                    var fileInfo = new FileInfo(importPath);
+                    if (!fileInfo.Exists)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, $"File not found: {importPath}");
+                    }
+
+                    var name = Path.GetFileName(importPath);
+                    sourceGroup.ExternalSources.CreateFromFile(name, importPath);
+                    return true;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, "PLC software not found");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Import external source failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["importPath"] = importPath;
+                _logger?.LogError(pex, "ImportExternalSource failed for {SoftwarePath} {ImportPath}", softwarePath, importPath);
+                throw pex;
+            }
+        }
+
+        public bool GenerateBlocksFromSource(string softwarePath, string sourceName)
+        {
+            _logger?.LogInformation($"Generating blocks from external source: {sourceName}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var sourceGroup = plcSoftware.ExternalSourceGroup;
+                    if (sourceGroup == null)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, "External source group not found");
+                    }
+
+                    var source = sourceGroup.ExternalSources
+                        .FirstOrDefault(s => s.Name.Equals(sourceName, StringComparison.OrdinalIgnoreCase));
+
+                    if (source == null)
+                    {
+                        var candidates = sourceGroup.ExternalSources
+                            .Select(s => s.Name)
+                            .ToList();
+                        throw new PortalException(PortalErrorCode.NotFound, $"External source '{sourceName}' not found", candidates);
+                    }
+
+                    source.GenerateBlocksFromSource();
+                    return true;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, "PLC software not found");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Generate blocks from source failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["sourceName"] = sourceName;
+                _logger?.LogError(pex, "GenerateBlocksFromSource failed for {SoftwarePath} {SourceName}", softwarePath, sourceName);
+                throw pex;
+            }
+        }
+
+        public bool DeleteExternalSource(string softwarePath, string sourceName)
+        {
+            _logger?.LogInformation($"Deleting external source: {sourceName}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var sourceGroup = plcSoftware.ExternalSourceGroup;
+                    if (sourceGroup == null)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, "External source group not found");
+                    }
+
+                    var source = sourceGroup.ExternalSources
+                        .FirstOrDefault(s => s.Name.Equals(sourceName, StringComparison.OrdinalIgnoreCase));
+
+                    if (source == null)
+                    {
+                        var candidates = sourceGroup.ExternalSources
+                            .Select(s => s.Name)
+                            .ToList();
+                        throw new PortalException(PortalErrorCode.NotFound, $"External source '{sourceName}' not found", candidates);
+                    }
+
+                    source.Delete();
+                    return true;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, "PLC software not found");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Delete external source failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["sourceName"] = sourceName;
+                _logger?.LogError(pex, "DeleteExternalSource failed for {SoftwarePath} {SourceName}", softwarePath, sourceName);
+                throw pex;
+            }
+        }
+
+        public bool ExportExternalSource(string softwarePath, string sourceName, string exportPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region cross-references
+
+        public List<(string SourceObject, string ReferencedObject, string ReferenceType, string Path)> GetCrossReferences(string softwarePath, string objectPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+
+        #region online access
+
+        public bool GoOnline(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Going online for device item: {deviceItemPath}");
+
+            if (IsProjectNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
+                }
+
+                var onlineProvider = deviceItem.GetService<OnlineProvider>();
+                if (onlineProvider == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, $"OnlineProvider not available for device item: {deviceItemPath}");
+                }
+
+                onlineProvider.GoOnline();
+
+                return onlineProvider.State == OnlineState.Online;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidState, "GoOnline failed", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GoOnline failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public bool GoOffline(string deviceItemPath)
+        {
+            _logger?.LogInformation($"Going offline for device item: {deviceItemPath}");
+
+            if (IsProjectNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                var deviceItem = GetDeviceItemByPath(deviceItemPath);
+                if (deviceItem == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Device item not found: {deviceItemPath}");
+                }
+
+                var onlineProvider = deviceItem.GetService<OnlineProvider>();
+                if (onlineProvider == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, $"OnlineProvider not available for device item: {deviceItemPath}");
+                }
+
+                onlineProvider.GoOffline();
+
+                return onlineProvider.State == OnlineState.Offline;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.InvalidState, "GoOffline failed", null, ex);
+                pex.Data["deviceItemPath"] = deviceItemPath;
+                _logger?.LogError(pex, "GoOffline failed for {DeviceItemPath}", deviceItemPath);
+                throw pex;
+            }
+        }
+
+        public string DownloadToDevice(string deviceItemPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "Download requires TIA Portal UI. Use Online -> Download in TIA Portal directly.");
+        }
+
+        public string UploadFromDevice(string deviceItemPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "Upload requires TIA Portal UI. Use Online -> Upload in TIA Portal directly.");
+        }
+
+        #endregion
+
+        #region compare
+
+        public List<(string ObjectPath, string ChangeType, string Details)> CompareOfflineOnline(string softwarePath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public List<(string Property, string Value1, string Value2)> CompareBlocks(string softwarePath, string blockPath1, string blockPath2)
+        {
+            _logger?.LogInformation($"Comparing blocks: {blockPath1} vs {blockPath2}");
+
+            if (IsProjectNull())
+            {
+                return new List<(string, string, string)>();
+            }
+
+            try
+            {
+                var block1 = GetBlock(softwarePath, blockPath1);
+                var block2 = GetBlock(softwarePath, blockPath2);
+
+                if (block1 == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Block not found: {blockPath1}");
+                }
+                if (block2 == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Block not found: {blockPath2}");
+                }
+
+                var differences = new List<(string Property, string Value1, string Value2)>();
+
+                // Compare key attributes
+                var attributeNames = new[] { "Name", "Number", "ProgrammingLanguage", "MemoryLayout", "IsConsistent", "HeaderFamily", "HeaderVersion" };
+                foreach (var attrName in attributeNames)
+                {
+                    try
+                    {
+                        var val1 = block1.GetAttribute(attrName)?.ToString() ?? "";
+                        var val2 = block2.GetAttribute(attrName)?.ToString() ?? "";
+                        if (!val1.Equals(val2, StringComparison.Ordinal))
+                        {
+                            differences.Add((attrName, val1, val2));
+                        }
+                    }
+                    catch
+                    {
+                        // Attribute may not exist on all block types
+                    }
+                }
+
+                // Compare modification dates
+                var mod1 = block1.GetAttribute("ModifiedDate")?.ToString() ?? "";
+                var mod2 = block2.GetAttribute("ModifiedDate")?.ToString() ?? "";
+                if (!mod1.Equals(mod2, StringComparison.Ordinal))
+                {
+                    differences.Add(("ModifiedDate", mod1, mod2));
+                }
+
+                return differences;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Compare blocks failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["blockPath1"] = blockPath1;
+                pex.Data["blockPath2"] = blockPath2;
+                _logger?.LogError(pex, "CompareBlocks failed for {BlockPath1} vs {BlockPath2}", blockPath1, blockPath2);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region library management
+
+        public (List<(string Name, string Path)> MasterCopies, List<(string Name, string Version)> Types) GetProjectLibrary(string regexName = "")
+        {
+            _logger?.LogInformation($"Getting project library contents with filter: {regexName}");
+
+            if (IsProjectNull())
+            {
+                return (new List<(string, string)>(), new List<(string, string)>());
+            }
+
+            try
+            {
+                var project = _project as Project;
+                if (project == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Project is not a local project (may be a session)");
+                }
+
+                var library = project.ProjectLibrary;
+                var masterCopies = new List<(string Name, string Path)>();
+                var types = new List<(string Name, string Version)>();
+
+                Regex? regex = null;
+                if (!string.IsNullOrEmpty(regexName))
+                {
+                    regex = new Regex(regexName, RegexOptions.IgnoreCase);
+                }
+
+                // Enumerate master copies
+                CollectMasterCopies(library.MasterCopyFolder, masterCopies, regex, "");
+
+                // Enumerate library types
+                CollectLibraryTypes(library.TypeFolder, types, regex, "");
+
+                return (masterCopies, types);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "GetProjectLibrary failed", null, ex);
+                pex.Data["regexName"] = regexName;
+                _logger?.LogError(pex, "GetProjectLibrary failed with filter {RegexName}", regexName);
+                throw pex;
+            }
+        }
+
+        public List<(string Name, string Path)> GetGlobalLibraries(string regexName = "")
+        {
+            _logger?.LogInformation($"Getting global libraries with filter: {regexName}");
+
+            if (IsPortalNull())
+            {
+                return new List<(string, string)>();
+            }
+
+            try
+            {
+                var libraries = new List<(string Name, string Path)>();
+
+                Regex? regex = null;
+                if (!string.IsNullOrEmpty(regexName))
+                {
+                    regex = new Regex(regexName, RegexOptions.IgnoreCase);
+                }
+
+                foreach (var library in _portal!.GlobalLibraries)
+                {
+                    if (regex == null || regex.IsMatch(library.Name))
+                    {
+                        libraries.Add((library.Name, library.Path?.FullName ?? ""));
+                    }
+                }
+
+                return libraries;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "GetGlobalLibraries failed", null, ex);
+                pex.Data["regexName"] = regexName;
+                _logger?.LogError(pex, "GetGlobalLibraries failed with filter {RegexName}", regexName);
+                throw pex;
+            }
+        }
+
+        public bool OpenGlobalLibrary(string libraryPath)
+        {
+            _logger?.LogInformation($"Opening global library: {libraryPath}");
+
+            if (IsPortalNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                var fileInfo = new FileInfo(libraryPath);
+                if (!fileInfo.Exists)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Library file not found: {libraryPath}");
+                }
+
+                _portal!.GlobalLibraries.Open(fileInfo, OpenMode.ReadWrite);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "OpenGlobalLibrary failed", null, ex);
+                pex.Data["libraryPath"] = libraryPath;
+                _logger?.LogError(pex, "OpenGlobalLibrary failed for {LibraryPath}", libraryPath);
+                throw pex;
+            }
+        }
+
+        public bool CopyToLibrary(string softwarePath, string blockPath, string libraryFolder = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public bool CopyFromLibrary(string softwarePath, string masterCopyName, string targetGroupPath)
+        {
+            _logger?.LogInformation($"Copying from library: {masterCopyName} to {targetGroupPath}");
+
+            if (IsProjectNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                var project = _project as Project;
+                if (project == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Project is not a local project (may be a session)");
+                }
+
+                var masterCopy = FindMasterCopy(project.ProjectLibrary.MasterCopyFolder, masterCopyName);
+                if (masterCopy == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, $"Master copy not found: {masterCopyName}");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var targetGroup = GetPlcBlockGroupByPath(softwarePath, targetGroupPath);
+                    if (targetGroup == null)
+                    {
+                        targetGroup = plcSoftware.BlockGroup;
+                    }
+
+                    targetGroup.Blocks.CreateFrom(masterCopy);
+
+                    return true;
+                }
+
+                throw new PortalException(PortalErrorCode.NotFound, $"PLC software not found at path: {softwarePath}");
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "CopyFromLibrary failed", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["masterCopyName"] = masterCopyName;
+                pex.Data["targetGroupPath"] = targetGroupPath;
+                _logger?.LogError(pex, "CopyFromLibrary failed for {MasterCopyName}", masterCopyName);
+                throw pex;
+            }
+        }
+
+        public List<(string Name, string Version, string Path)> GetLibraryTypes(string libraryName = "")
+        {
+            _logger?.LogInformation($"Getting library types from: {libraryName}");
+
+            if (IsProjectNull())
+            {
+                return new List<(string, string, string)>();
+            }
+
+            try
+            {
+                var types = new List<(string Name, string Version, string Path)>();
+
+                if (string.IsNullOrEmpty(libraryName))
+                {
+                    // Get from project library
+                    var project = _project as Project;
+                    if (project == null)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidState, "Project is not a local project (may be a session)");
+                    }
+
+                    CollectLibraryTypeVersions(project.ProjectLibrary.TypeFolder, types, "");
+                }
+                else
+                {
+                    // Get from global library by name
+                    if (IsPortalNull())
+                    {
+                        return types;
+                    }
+
+                    var globalLib = _portal!.GlobalLibraries.FirstOrDefault(l => l.Name.Equals(libraryName, StringComparison.OrdinalIgnoreCase));
+                    if (globalLib == null)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, $"Global library not found: {libraryName}");
+                    }
+
+                    CollectLibraryTypeVersions(globalLib.TypeFolder, types, "");
+                }
+
+                return types;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "GetLibraryTypes failed", null, ex);
+                pex.Data["libraryName"] = libraryName;
+                _logger?.LogError(pex, "GetLibraryTypes failed for {LibraryName}", libraryName);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region project creation
+
+        public bool CreateProject(string projectPath, string projectName)
+        {
+            _logger?.LogInformation($"Creating project: {projectName} at {projectPath}");
+
+            if (IsPortalNull())
+            {
+                return false;
+            }
+
+            try
+            {
+                if (_project != null)
+                {
+                    (_project as Project)?.Close();
+                    _project = null;
+                }
+
+                if (_session != null)
+                {
+                    _session.Close();
+                    _session = null;
+                }
+
+                var directoryInfo = new DirectoryInfo(projectPath);
+                if (!directoryInfo.Exists)
+                {
+                    directoryInfo.Create();
+                }
+
+                _project = _portal!.Projects.Create(directoryInfo, projectName);
+
+                return _project != null;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "CreateProject failed", null, ex);
+                pex.Data["projectPath"] = projectPath;
+                pex.Data["projectName"] = projectName;
+                _logger?.LogError(pex, "CreateProject failed for {ProjectName} at {ProjectPath}", projectName, projectPath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+        #region multi-user
+
+        public (bool IsMultiuser, string? ServerName, List<string> Users) GetMultiuserInfo()
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region library helpers
+
+        private void CollectMasterCopies(MasterCopyFolder folder, List<(string Name, string Path)> list, Regex? regex, string path)
+        {
+            foreach (var masterCopy in folder.MasterCopies)
+            {
+                var fullPath = string.IsNullOrEmpty(path) ? masterCopy.Name : $"{path}/{masterCopy.Name}";
+                if (regex == null || regex.IsMatch(masterCopy.Name))
+                {
+                    list.Add((masterCopy.Name, fullPath));
+                }
+            }
+
+            foreach (var subFolder in folder.Folders)
+            {
+                var subPath = string.IsNullOrEmpty(path) ? subFolder.Name : $"{path}/{subFolder.Name}";
+                CollectMasterCopies(subFolder, list, regex, subPath);
+            }
+        }
+
+        private void CollectLibraryTypes(LibraryTypeFolder folder, List<(string Name, string Version)> list, Regex? regex, string path)
+        {
+            foreach (var libraryType in folder.Types)
+            {
+                if (regex == null || regex.IsMatch(libraryType.Name))
+                {
+                    var versions = libraryType.Versions;
+                    var latestVersion = versions.LastOrDefault();
+                    list.Add((libraryType.Name, latestVersion?.VersionNumber.ToString() ?? ""));
+                }
+            }
+
+            foreach (var subFolder in folder.Folders)
+            {
+                CollectLibraryTypes(subFolder, list, regex, $"{path}/{subFolder.Name}");
+            }
+        }
+
+        private void CollectLibraryTypeVersions(LibraryTypeFolder folder, List<(string Name, string Version, string Path)> list, string path)
+        {
+            foreach (var libraryType in folder.Types)
+            {
+                foreach (var version in libraryType.Versions)
+                {
+                    var fullPath = string.IsNullOrEmpty(path) ? libraryType.Name : $"{path}/{libraryType.Name}";
+                    list.Add((libraryType.Name, version.VersionNumber.ToString(), fullPath));
+                }
+            }
+
+            foreach (var subFolder in folder.Folders)
+            {
+                var subPath = string.IsNullOrEmpty(path) ? subFolder.Name : $"{path}/{subFolder.Name}";
+                CollectLibraryTypeVersions(subFolder, list, subPath);
+            }
+        }
+
+        private MasterCopyFolder GetOrCreateMasterCopyFolder(MasterCopyFolder root, string folderPath)
+        {
+            var segments = folderPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            var current = root;
+
+            foreach (var segment in segments)
+            {
+                var found = current.Folders.FirstOrDefault(f => f.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
+                if (found != null)
+                {
+                    current = found;
+                }
+                else
+                {
+                    current = current.Folders.Create(segment);
+                }
+            }
+
+            return current;
+        }
+
+        private MasterCopy? FindMasterCopy(MasterCopyFolder folder, string name)
+        {
+            var found = folder.MasterCopies.FirstOrDefault(mc => mc.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (found != null)
+            {
+                return found;
+            }
+
+            foreach (var subFolder in folder.Folders)
+            {
+                found = FindMasterCopy(subFolder, name);
+                if (found != null)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+
+        #endregion
+
+
+        #region HMI
+
+        public HmiTarget? GetHmiTarget(string softwarePath)
+        {
+            var container = GetSoftwareContainer(softwarePath);
+            return container?.Software as HmiTarget;
+        }
+
+        public HmiSoftware? GetHmiSoftware(string softwarePath)
+        {
+            var container = GetSoftwareContainer(softwarePath);
+            return container?.Software as HmiSoftware;
+        }
+
+        #region HMI Tags
+
+        public List<object> GetHmiTagTables(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public List<object> GetHmiTags(string softwarePath, string tagTableName, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void ExportHmiTagTable(string softwarePath, string tagTableName, string exportPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void ImportHmiTagTable(string softwarePath, string importPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region HMI Screens
+
+        public List<object> GetScreens(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public object? GetScreenByName(string softwarePath, string screenName)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void ExportScreen(string softwarePath, string screenName, string exportPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void ImportScreen(string softwarePath, string importPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public object? GetScreenInfo(string softwarePath, string screenName)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region HMI Connections
+
+        public List<object> GetHmiConnections(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void CreateHmiConnection(string softwarePath, string connectionName, string partnerDevicePath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region HMI Alarms
+
+        public List<object> GetDiscreteAlarms(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public List<object> GetAnalogAlarms(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region HMI Text Lists
+
+        public List<object> GetTextLists(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void ExportTextList(string softwarePath, string textListName, string exportPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public void ImportTextList(string softwarePath, string importPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #endregion
+
+
+        #region technology objects
+
+        public List<object> GetTechnologyObjects(string softwarePath, string regexName = "")
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public object? GetTechnologyObject(string softwarePath, string objectName)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public object? ExportTechnologyObject(string softwarePath, string objectName, string exportPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public bool ImportTechnologyObject(string softwarePath, string importPath)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        public bool DeleteTechnologyObject(string softwarePath, string objectName)
+        {
+            throw new PortalException(PortalErrorCode.InvalidState, "This feature requires API types not available in the current TIA Portal Openness version");
+        }
+
+        #endregion
+
+        #region safety programming
+
+        public SafetyAdministration? GetSafetyAdministration(string softwarePath)
+        {
+            _logger?.LogInformation($"Getting safety administration for: {softwarePath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                var deviceItem = softwareContainer?.Parent as DeviceItem;
+
+                if (deviceItem != null)
+                {
+                    var admin = deviceItem.GetService<SafetyAdministration>();
+                    return admin;
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get safety administration", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetSafetyAdministration failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+        }
+
+        public Dictionary<string, object?> GetSafetySettings(string softwarePath)
+        {
+            _logger?.LogInformation($"Getting safety settings for: {softwarePath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var admin = GetSafetyAdministration(softwarePath);
+                var settings = new Dictionary<string, object?>();
+
+                if (admin != null)
+                {
+                    settings["IsLoggedOnToSafetyOfflineProgram"] = admin.IsLoggedOnToSafetyOfflineProgram;
+
+                    try
+                    {
+                        var runtimeGroups = admin.RuntimeGroups;
+                        if (runtimeGroups != null)
+                        {
+                            var groupList = new List<string>();
+                            foreach (var rg in runtimeGroups)
+                            {
+                                groupList.Add(rg.Name);
+                            }
+                            settings["RuntimeGroups"] = groupList;
+                        }
+                    }
+                    catch
+                    {
+                        // RuntimeGroups may not be available on all configurations
+                    }
+                }
+                else
+                {
+                    settings["SafetySupported"] = false;
+                }
+
+                return settings;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get safety settings", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetSafetySettings failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+        }
+
+        public Dictionary<string, object?> GetSafetyInfo(string softwarePath)
+        {
+            _logger?.LogInformation($"Getting safety info for: {softwarePath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var info = new Dictionary<string, object?>();
+                var admin = GetSafetyAdministration(softwarePath);
+
+                info["IsSafetyEnabled"] = admin != null;
+
+                if (admin != null)
+                {
+                    info["IsLoggedOnToSafetyOfflineProgram"] = admin.IsLoggedOnToSafetyOfflineProgram;
+                }
+
+                // Count safety-relevant blocks
+                var safetyBlocks = GetSafetyBlocks(softwarePath);
+                info["SafetyBlockCount"] = safetyBlocks.Count;
+
+                return info;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get safety info", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetSafetyInfo failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+        }
+
+        public bool SetSafetyPassword(string softwarePath, string password)
+        {
+            _logger?.LogInformation($"Setting safety password for: {softwarePath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var admin = GetSafetyAdministration(softwarePath);
+
+                if (admin == null)
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "Safety administration is not available for this PLC");
+                }
+
+                SecureString secString = new NetworkCredential("", password).SecurePassword;
+
+                if (!admin.IsLoggedOnToSafetyOfflineProgram)
+                {
+                    admin.LoginToSafetyOfflineProgram(secString);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to set safety password", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "SetSafetyPassword failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+        }
+
+        public List<PlcBlock> GetSafetyBlocks(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting safety blocks...");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var allBlocks = GetBlocks(softwarePath, regexName);
+                var safetyBlocks = new List<PlcBlock>();
+
+                foreach (var block in allBlocks)
+                {
+                    try
+                    {
+                        var isSafety = block.GetAttribute("SetpointSafety");
+                        if (isSafety is bool safety && safety)
+                        {
+                            safetyBlocks.Add(block);
+                        }
+                    }
+                    catch
+                    {
+                        // Attribute may not exist on non-safety blocks, skip
+                    }
+                }
+
+                return safetyBlocks;
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Failed to get safety blocks", null, ex);
+                pex.Data["softwarePath"] = softwarePath;
+                _logger?.LogError(pex, "GetSafetyBlocks failed for {SoftwarePath}", softwarePath);
+                throw pex;
+            }
+        }
+
+        #endregion
+
+
 
     }
 

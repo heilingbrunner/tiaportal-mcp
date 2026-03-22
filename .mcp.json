@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "tiaportal-mcp": {
+      "command": "C:\\Users\\heman\\Documents\\GitHub\\hjLabs.in-tiaportal-mcp\\src\\TiaMcpServer\\bin\\Release\\net48\\TiaMcpServer.exe",
+      "args": [
+        "--tia-major-version",
+        "20",
+        "--logging",
+        "1"
+      ]
+    }
+  }
+}
