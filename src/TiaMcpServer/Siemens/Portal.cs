@@ -9,6 +9,7 @@ using Siemens.Engineering.Multiuser;
 using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.ExternalSources;
 using Siemens.Engineering.SW.Types;
 using System;
 using System.Collections.Generic;
@@ -1002,51 +1003,65 @@ namespace TiaMcpServer.Siemens
             }
         }
 
-        public bool ImportBlock(string softwarePath, string groupPath, string importPath)
+        public (bool Success, string? Error) ImportBlock(string softwarePath, string groupPath, string importPath)
         {
-            _logger?.LogInformation($"Importing block from path: {importPath}");
-
+            Console.WriteLine($"[DEBUG] ImportBlock: softwarePath='{softwarePath}', groupPath='{groupPath}', importPath='{importPath}'");
+            
             if (IsProjectNull())
             {
-                return false;
+                Console.WriteLine("[DEBUG] FAIL: Project is null");
+                return (false, "Project is not open");
             }
 
             var softwareContainer = GetSoftwareContainer(softwarePath);
+            Console.WriteLine($"[DEBUG] softwareContainer: {(softwareContainer != null ? "found" : "null")}");
+            
             if (softwareContainer?.Software is PlcSoftware plcSoftware)
             {
                 var blockGroup = plcSoftware?.BlockGroup;
+                Console.WriteLine($"[DEBUG] BlockGroup: {(blockGroup != null ? "found" : "null")}");
 
-                if (blockGroup != null)
+                if (blockGroup == null)
                 {
+                    return (false, $"BlockGroup not found in software '{softwarePath}'");
+                }
 
-                    var group = GetPlcBlockGroupByPath(softwarePath, groupPath);
-                    if (group == null)
+                var group = string.IsNullOrEmpty(groupPath) || groupPath.Equals("Program blocks", StringComparison.OrdinalIgnoreCase)
+                    ? plcSoftware.BlockGroup
+                    : GetPlcBlockGroupByPath(softwarePath, groupPath);
+                Console.WriteLine($"[DEBUG] BlockGroup path '{groupPath}': {(group != null ? "found" : "null")}");
+                
+                if (group == null)
+                {
+                    return (false, $"Block group '{groupPath}' not found in software '{softwarePath}'. Check if the group path exists.");
+                }
+
+                try
+                {
+                    var fileInfo = new FileInfo(importPath);
+                    Console.WriteLine($"[DEBUG] File exists: {fileInfo.Exists}");
+                    
+                    if (!fileInfo.Exists)
                     {
-                        return false;
+                        return (false, $"Import file does not exist: {importPath}");
                     }
 
-                    try
+                    var list = group.Blocks.Import(fileInfo, ImportOptions.Override);
+                    Console.WriteLine($"[DEBUG] Import returned: {(list != null ? list.Count.ToString() : "null")} blocks");
+                    
+                    if (list != null && list.Count > 0)
                     {
-                        // Correct the argument type by using FileInfo instead of FileStream  
-                        var fileInfo = new FileInfo(importPath);
-                        if (fileInfo.Exists)
-                        {
-                            var list = group.Blocks.Import(fileInfo, ImportOptions.Override);
-                            if (list != null && list.Count > 0)
-                            {
-                                return true;
-                            }
-                        }
-
+                        return (true, null);
                     }
-                    catch (Exception)
-                    {
-                        return false;
-                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[DEBUG] Exception: {ex.Message}");
+                    return (false, $"Import failed: {ex.Message}");
                 }
             }
 
-            return false;
+            return (false, $"Software container not found for path '{softwarePath}'");
         }
 
         public bool ImportType(string softwarePath, string groupPath, string importPath)
@@ -1094,6 +1109,69 @@ namespace TiaMcpServer.Siemens
             }
 
             return success;
+        }
+
+        public (bool Success, string? Error) ImportExternalSource(string softwarePath, string importPath)
+        {
+            Console.WriteLine($"[DEBUG] ImportExternalSource: softwarePath='{softwarePath}', importPath='{importPath}'");
+
+            if (IsProjectNull())
+            {
+                Console.WriteLine("[DEBUG] FAIL: Project is null");
+                return (false, "Project is not open");
+            }
+
+            var softwareContainer = GetSoftwareContainer(softwarePath);
+            if (softwareContainer?.Software is PlcSoftware plcSoftware)
+            {
+                PlcExternalSource? externalSource = null;
+                try
+                {
+                    var fileInfo = new FileInfo(importPath);
+                    if (!fileInfo.Exists)
+                    {
+                        Console.WriteLine($"[DEBUG] File does not exist: {importPath}");
+                        return (false, $"Import file does not exist: {importPath}");
+                    }
+
+                    var fileName = Path.GetFileNameWithoutExtension(importPath);
+                    Console.WriteLine($"[DEBUG] Creating external source: {fileName}");
+
+                    externalSource = plcSoftware.ExternalSourceGroup.ExternalSources.CreateFromFile(fileName, importPath);
+                    
+                    if (externalSource == null)
+                    {
+                        Console.WriteLine("[DEBUG] CreateFromFile returned null");
+                        return (false, "Failed to create external source");
+                    }
+
+                    Console.WriteLine($"[DEBUG] External source created, generating blocks...");
+                    externalSource.GenerateBlocksFromSource();
+
+                    Console.WriteLine("[DEBUG] SUCCESS");
+                    return (true, null);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[DEBUG] Exception: {ex.Message}");
+                    return (false, $"Import failed: {ex.Message}");
+                }
+                finally
+                {
+                    if (externalSource != null)
+                    {
+                        try
+                        {
+                            Console.WriteLine($"[DEBUG] Deleting external source (cleanup)...");
+                            externalSource.Delete();
+                        }
+                        catch { }
+                    }
+                }
+            }
+
+            Console.WriteLine($"[DEBUG] Software container not found for '{softwarePath}'");
+            return (false, $"Software container not found for path '{softwarePath}'");
         }
 
         public IEnumerable<PlcBlock>? ExportBlocks(string softwarePath, string exportPath, string regexName = "", bool preservePath = false)
@@ -1572,6 +1650,49 @@ namespace TiaMcpServer.Siemens
             }
 
             return exportList;
+        }
+
+        public (bool Success, string? Error) ExportBlockSource(string softwarePath, string blockPath, string exportPath, bool withDependencies = false)
+        {
+            Console.WriteLine($"[DEBUG] ExportBlockSource: softwarePath='{softwarePath}', blockPath='{blockPath}', exportPath='{exportPath}', withDependencies={withDependencies}");
+
+            if (IsProjectNull())
+            {
+                Console.WriteLine("[DEBUG] FAIL: Project is null");
+                return (false, "Project is not open");
+            }
+
+            var softwareContainer = GetSoftwareContainer(softwarePath);
+            if (softwareContainer?.Software is PlcSoftware plcSoftware)
+            {
+                try
+                {
+                    var block = GetBlock(softwarePath, blockPath);
+                    if (block == null)
+                    {
+                        Console.WriteLine($"[DEBUG] Block not found: {blockPath}");
+                        return (false, $"Block not found: {blockPath}");
+                    }
+
+                    var blocks = new List<PlcBlock> { block };
+                    var outputFile = new FileInfo(exportPath);
+                    var options = withDependencies ? GenerateOptions.WithDependencies : GenerateOptions.None;
+
+                    Console.WriteLine($"[DEBUG] Generating source to {exportPath}...");
+                    plcSoftware.ExternalSourceGroup.GenerateSource(blocks, outputFile, options);
+
+                    Console.WriteLine("[DEBUG] SUCCESS");
+                    return (true, null);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[DEBUG] Exception: {ex.Message}");
+                    return (false, $"Export failed: {ex.Message}");
+                }
+            }
+
+            Console.WriteLine($"[DEBUG] Software container not found for '{softwarePath}'");
+            return (false, $"Software container not found for path '{softwarePath}'");
         }
 
         public bool ImportFromDocuments(string softwarePath, string groupPath, string importPath, string fileNameWithoutExtension, ImportDocumentOptions option)

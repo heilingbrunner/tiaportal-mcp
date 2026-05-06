@@ -935,7 +935,8 @@ namespace TiaMcpServer.ModelContextProtocol
         {
             try
             {
-                if (Portal.ImportBlock(softwarePath, groupPath, importPath))
+                var (success, error) = Portal.ImportBlock(softwarePath, groupPath, importPath);
+                if (success)
                 {
                     return new ResponseImportBlock
                     {
@@ -943,18 +944,91 @@ namespace TiaMcpServer.ModelContextProtocol
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
-                            ["success"] = true
+                            ["success"] = true,
+                            ["softwarePath"] = softwarePath,
+                            ["groupPath"] = groupPath
                         }
                     };
                 }
                 else
                 {
-                    throw new McpException($"Failed importing block from '{importPath}' to '{groupPath}'", McpErrorCode.InternalError);
+                    var fileExists = File.Exists(importPath);
+                    throw new McpException($"ImportBlock failed. softwarePath='{softwarePath}', groupPath='{groupPath}', importPath='{importPath}' (file exists: {fileExists}). Cause: {error}", McpErrorCode.InternalError);
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error importing block from '{importPath}' to '{groupPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ImportExternalSource"), Description("Import an external source file (.scl, .awl, .db, .udt) to PLC software and generate blocks")]
+        public static ResponseMessage ImportExternalSource(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("importPath: defines the path of the source file to import")] string importPath)
+        {
+            try
+            {
+                var (success, error) = Portal.ImportExternalSource(softwarePath, importPath);
+                if (success)
+                {
+                    return new ResponseMessage
+                    {
+                        Message = $"External source imported and blocks generated from '{importPath}'",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true,
+                            ["softwarePath"] = softwarePath,
+                            ["importPath"] = importPath
+                        }
+                    };
+                }
+                else
+                {
+                    throw new McpException($"ImportExternalSource failed. softwarePath='{softwarePath}', importPath='{importPath}'. Cause: {error}", McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error importing external source from '{importPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ExportBlockSource"), Description("Export a block to source code file (.scl, .awl, .db, .udt)")]
+        public static ResponseMessage ExportBlockSource(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("blockPath: full path to the block in the project structure, e.g. 'Program blocks/FB_MyBlock'")] string blockPath,
+            [Description("exportPath: full path where to save the source file (with extension .scl, .awl, .db or .udt)")] string exportPath,
+            [Description("withDependencies: export block with all dependencies (UDTs, called blocks, etc.)")] bool withDependencies = false)
+        {
+            try
+            {
+                var (success, error) = Portal.ExportBlockSource(softwarePath, blockPath, exportPath, withDependencies);
+                if (success)
+                {
+                    return new ResponseMessage
+                    {
+                        Message = $"Block exported to source code: {exportPath}",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true,
+                            ["softwarePath"] = softwarePath,
+                            ["blockPath"] = blockPath,
+                            ["exportPath"] = exportPath,
+                            ["withDependencies"] = withDependencies
+                        }
+                    };
+                }
+                else
+                {
+                    throw new McpException($"ExportBlockSource failed. softwarePath='{softwarePath}', blockPath='{blockPath}', exportPath='{exportPath}'. Cause: {error}", McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error exporting block source from '{blockPath}': {ex.Message}", ex, McpErrorCode.InternalError);
             }
         }
 
