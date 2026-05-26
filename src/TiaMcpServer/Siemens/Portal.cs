@@ -236,9 +236,7 @@ namespace TiaMcpServer.Siemens
 
             if (_portal == null)
             {
-                _logger?.LogWarning("No TIA Portal instance available.");
-
-                return [];
+                throw new PortalException(PortalErrorCode.InvalidState, "Not attached to TIA Portal");
             }
 
             var projects = new List<ProjectBase>();
@@ -247,11 +245,37 @@ namespace TiaMcpServer.Siemens
             {
                 foreach (var project in _portal.Projects)
                 {
-                    projects.Add(project);
+                    // Defensive: a single broken/transitioning project must not abort the whole listing.
+                    try
+                    {
+                        projects.Add(project);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Skipping unreadable project during enumeration");
+                    }
                 }
             }
 
             return projects;
+        }
+
+        public ProjectBase GetCurrentProject()
+        {
+            _logger?.LogInformation("Getting current active project...");
+
+            if (_portal == null)
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "Not attached to TIA Portal");
+            }
+
+            var active = _project ?? _session?.Project;
+            if (active == null)
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+            }
+
+            return active;
         }
 
         public bool OpenProject(string projectPath)
@@ -385,7 +409,7 @@ namespace TiaMcpServer.Siemens
 
             if (IsPortalNull())
             {
-                return [];
+                throw new PortalException(PortalErrorCode.InvalidState, "Not attached to TIA Portal");
             }
 
             var sessions = new List<ProjectBase>();
@@ -394,7 +418,19 @@ namespace TiaMcpServer.Siemens
             {
                 foreach (var session in _portal.LocalSessions)
                 {
-                    sessions.Add(session.Project as ProjectBase);
+                    // Defensive: a single broken/transitioning session must not abort the whole listing.
+                    try
+                    {
+                        var sessionProject = session.Project as ProjectBase;
+                        if (sessionProject != null)
+                        {
+                            sessions.Add(sessionProject);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Skipping unreadable local session during enumeration");
+                    }
                 }
             }
 
@@ -543,7 +579,7 @@ namespace TiaMcpServer.Siemens
 
             if (IsProjectNull())
             {
-                return [];
+                throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
             }
 
             var list = new List<Device>();

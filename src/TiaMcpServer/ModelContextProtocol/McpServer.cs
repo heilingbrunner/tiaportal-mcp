@@ -157,27 +157,36 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region project/session
 
-        [McpServerTool(Name = "GetProject"), Description("Get open local project/session")]
+        [McpServerTool(Name = "GetProjects"), Description("Get a list of all open projects and local sessions")]
         public static ResponseGetProjects GetProjects()
         {
             try
             {
                 var list = Portal.GetProjects();
-
                 list.AddRange(Portal.GetSessions());
 
                 var responseList = new List<ResponseProjectInfo>();
                 foreach (var project in list)
                 {
-                    var attributes = Helper.GetAttributeList(project);
-
-                    if (project != null)
+                    if (project == null)
                     {
+                        continue;
+                    }
+
+                    // Defensive: a project with unreadable attributes (e.g. a transitioning
+                    // MultiuserProject) must not poison the whole response.
+                    try
+                    {
+                        var attributes = Helper.GetAttributeList(project);
                         responseList.Add(new ResponseProjectInfo
                         {
                             Name = project.Name,
                             Attributes = attributes
                         });
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger?.LogWarning(ex, "Skipping project with unreadable attributes");
                     }
                 }
 
@@ -192,9 +201,68 @@ namespace TiaMcpServer.ModelContextProtocol
                     }
                 };
             }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error retrieving open projects: {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetProject"), Description("Get info and attributes for the currently active project")]
+        public static ResponseProjectInfo GetProject()
+        {
+            try
+            {
+                var project = Portal.GetCurrentProject();
+
+                IEnumerable<Attribute>? attributes = null;
+                try
+                {
+                    attributes = Helper.GetAttributeList(project);
+                }
+                catch (Exception ex)
+                {
+                    Logger?.LogWarning(ex, "Attribute fetch failed for active project '{Name}'; returning info without attributes", project.Name);
+                }
+
+                return new ResponseProjectInfo
+                {
+                    Name = project.Name,
+                    Attributes = attributes,
+                    Message = $"Active project '{project.Name}' retrieved",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                }
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving active project: {ex.Message}", ex, McpErrorCode.InternalError);
             }
         }
 
@@ -507,37 +575,53 @@ namespace TiaMcpServer.ModelContextProtocol
                 var list = Portal.GetDevices();
                 var responseList = new List<ResponseDeviceInfo>();
 
-                if (list != null)
+                foreach (var device in list)
                 {
-                    foreach (var device in list)
+                    if (device == null)
                     {
-                        if (device != null)
-                        {
-                            var attributes = Helper.GetAttributeList(device);
-                            responseList.Add(new ResponseDeviceInfo
-                            {
-                                Name = device.Name,
-                                Attributes = attributes,
-                                Description = device.ToString()
-                            });
-                        }
+                        continue;
                     }
 
-                    return new ResponseDevices
+                    // Defensive: a single device with unreadable attributes must not poison
+                    // the whole response. Log + skip rather than crashing the tool.
+                    try
                     {
-                        Message = "Devices retrieved",
-                        Items = responseList,
-                        Meta = new JsonObject
+                        var attributes = Helper.GetAttributeList(device);
+                        responseList.Add(new ResponseDeviceInfo
                         {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
+                            Name = device.Name,
+                            Attributes = attributes,
+                            Description = device.ToString()
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger?.LogWarning(ex, "Skipping device with unreadable attributes");
+                    }
                 }
-                else
+
+                return new ResponseDevices
                 {
-                    throw new McpException($"Failed retrieving devices", McpErrorCode.InternalError);
+                    Message = "Devices retrieved",
+                    Items = responseList,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
                 }
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
             }
             catch (Exception ex) when (ex is not McpException)
             {
