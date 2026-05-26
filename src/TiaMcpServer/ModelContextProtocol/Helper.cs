@@ -28,6 +28,24 @@ namespace TiaMcpServer.ModelContextProtocol
             return attributes;
         }
 
+        public static string? MultilingualTextToString(MultilingualText? text)
+        {
+            if (text == null)
+            {
+                return null;
+            }
+
+            foreach (var item in text.Items)
+            {
+                if (!string.IsNullOrWhiteSpace(item.Text))
+                {
+                    return item.Text;
+                }
+            }
+
+            return null;
+        }
+
         public static BlockGroupInfo BuildBlockHierarchy(PlcBlockGroup group)
         {
             var groupInfo = new BlockGroupInfo

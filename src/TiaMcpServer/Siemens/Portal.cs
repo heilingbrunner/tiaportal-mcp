@@ -9,6 +9,7 @@ using Siemens.Engineering.Multiuser;
 using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.Types;
 using System;
 using System.Collections.Generic;
@@ -998,6 +999,198 @@ namespace TiaMcpServer.Siemens
                 if (!pex.Data.Contains("exportPath")) pex.Data["exportPath"] = exportPath;
 
                 _logger?.LogError(pex, "ExportType failed for {SoftwarePath} {TypePath} -> {ExportPath}", softwarePath, typePath, exportPath);
+                throw pex;
+            }
+        }
+
+        public List<PlcTagTable> GetTagTables(string softwarePath, string regexName = "")
+        {
+            _logger?.LogInformation("Getting tag tables...");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<PlcTagTable>();
+
+            try
+            {
+                var softwareContainer = GetSoftwareContainer(softwarePath);
+                if (softwareContainer?.Software is PlcSoftware plcSoftware)
+                {
+                    var rootGroup = plcSoftware?.TagTableGroup;
+
+                    if (rootGroup != null)
+                    {
+                        CollectTagTablesFromComposition(rootGroup.TagTables, list, regexName);
+
+                        foreach (var subgroup in rootGroup.Groups)
+                        {
+                            GetTagTablesRecursive(subgroup, list, regexName);
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Same swallow style as GetBlocks/GetTypes; details surface via downstream errors.
+            }
+
+            return list;
+        }
+
+        public PlcTagTable? GetTagTable(string softwarePath, string tagTablePath)
+        {
+            _logger?.LogInformation($"Getting tag table by path: {tagTablePath}");
+
+            if (IsProjectNull())
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(tagTablePath))
+            {
+                return null;
+            }
+
+            var softwareContainer = GetSoftwareContainer(softwarePath);
+            if (softwareContainer?.Software is PlcSoftware plcSoftware)
+            {
+                var rootGroup = plcSoftware?.TagTableGroup;
+                if (rootGroup == null)
+                {
+                    return null;
+                }
+
+                var parts = tagTablePath.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 0)
+                {
+                    return null;
+                }
+
+                var tableName = parts[parts.Length - 1];
+
+                PlcTagTableComposition? tables;
+                if (parts.Length == 1)
+                {
+                    tables = rootGroup.TagTables;
+                }
+                else
+                {
+                    PlcTagTableUserGroup? current = rootGroup.Groups.FirstOrDefault(g => g.Name.Equals(parts[0], StringComparison.OrdinalIgnoreCase));
+                    for (int i = 1; i < parts.Length - 1 && current != null; i++)
+                    {
+                        current = current.Groups.FirstOrDefault(g => g.Name.Equals(parts[i], StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    if (current == null)
+                    {
+                        return null;
+                    }
+
+                    tables = current.TagTables;
+                }
+
+                return tables.FirstOrDefault(t => t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return null;
+        }
+
+        public List<PlcTag> GetTags(string softwarePath, string tagTablePath, string regexName = "")
+        {
+            _logger?.LogInformation($"Getting tags for table: {tagTablePath}");
+
+            if (IsProjectNull())
+            {
+                return [];
+            }
+
+            var list = new List<PlcTag>();
+
+            try
+            {
+                var table = GetTagTable(softwarePath, tagTablePath);
+                if (table != null)
+                {
+                    foreach (var tag in table.Tags)
+                    {
+                        try
+                        {
+                            if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(tag.Name, regexName, RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            // Invalid regex, skip this tag.
+                            continue;
+                        }
+
+                        list.Add(tag);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Listing failures are swallowed to match GetBlocks/GetTypes shape.
+            }
+
+            return list;
+        }
+
+        public void ExportTagTable(string softwarePath, string tagTablePath, string exportPath, bool preservePath = false)
+        {
+            _logger?.LogInformation($"Exporting tag table by path: {tagTablePath}");
+
+            try
+            {
+                if (IsProjectNull())
+                {
+                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                }
+
+                var table = GetTagTable(softwarePath, tagTablePath);
+
+                if (table == null)
+                {
+                    throw new PortalException(PortalErrorCode.NotFound, "Tag table not found");
+                }
+
+                if (preservePath)
+                {
+                    var groupPath = string.Empty;
+                    if (table.Parent is PlcTagTableUserGroup parentGroup)
+                    {
+                        groupPath = GetPlcTagTableUserGroupPath(parentGroup);
+                    }
+
+                    exportPath = Path.Combine(exportPath, groupPath.Replace('/', '\\'), $"{table.Name}.xml");
+                }
+                else
+                {
+                    exportPath = Path.Combine(exportPath, $"{table.Name}.xml");
+                }
+
+                if (File.Exists(exportPath))
+                {
+                    File.Delete(exportPath);
+                }
+
+                // PlcTagTable does not expose an IsConsistent gate; export directly.
+                table.Export(new FileInfo(exportPath), ExportOptions.None);
+            }
+            catch (Exception ex)
+            {
+                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export failed", null, ex);
+
+                pex.Data["softwarePath"] = softwarePath;
+                pex.Data["tagTablePath"] = tagTablePath;
+                pex.Data["exportPath"] = exportPath;
+
+                _logger?.LogError(pex, "ExportTagTable failed for {SoftwarePath} {TagTablePath} -> {ExportPath}", softwarePath, tagTablePath, exportPath);
                 throw pex;
             }
         }
@@ -2658,6 +2851,66 @@ namespace TiaMcpServer.Siemens
             }
 
             return anySuccess;
+        }
+
+        private void GetTagTablesRecursive(PlcTagTableUserGroup group, List<PlcTagTable> list, string regexName = "")
+        {
+            CollectTagTablesFromComposition(group.TagTables, list, regexName);
+
+            foreach (var subgroup in group.Groups)
+            {
+                GetTagTablesRecursive(subgroup, list, regexName);
+            }
+        }
+
+        private void CollectTagTablesFromComposition(PlcTagTableComposition tables, List<PlcTagTable> list, string regexName)
+        {
+            foreach (var table in tables)
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(table.Name, regexName, RegexOptions.IgnoreCase))
+                    {
+                        continue;
+                    }
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                list.Add(table);
+            }
+        }
+
+        private string GetPlcTagTableUserGroupPath(PlcTagTableUserGroup group)
+        {
+            if (group == null)
+            {
+                return string.Empty;
+            }
+
+            PlcTagTableUserGroup? nullableGroup = group;
+            var path = group.Name;
+
+            while (nullableGroup != null && nullableGroup.Parent != null)
+            {
+                try
+                {
+                    nullableGroup = nullableGroup.Parent as PlcTagTableUserGroup;
+                }
+                catch (Exception)
+                {
+                    break;
+                }
+
+                if (nullableGroup != null)
+                {
+                    path = $"{nullableGroup.Name}/{path}";
+                }
+            }
+
+            return path;
         }
 
         private bool GetTypesRecursive(PlcTypeGroup group, List<PlcType> list, string regexName = "")

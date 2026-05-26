@@ -927,6 +927,167 @@ namespace TiaMcpServer.ModelContextProtocol
                 return string.Empty; // best effort only
             }
         }
+
+        [McpServerTool(Name = "GetTagTables"), Description("Get a list of tag tables in plc software")]
+        public static ResponseTagTables GetTagTables(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("regexName: defines the name or regular expression to find the tag table. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetTagTables(softwarePath, regexName);
+
+                var responseList = new List<ResponseTagTableInfo>();
+                foreach (var table in list)
+                {
+                    if (table != null)
+                    {
+                        var attributes = Helper.GetAttributeList(table);
+
+                        responseList.Add(new ResponseTagTableInfo
+                        {
+                            Name = table.Name,
+                            TypeName = table.GetType().Name,
+                            IsDefault = table.IsDefault,
+                            Attributes = attributes,
+                            Description = table.ToString()
+                        });
+                    }
+                }
+
+                if (list != null)
+                {
+                    return new ResponseTagTables
+                    {
+                        Message = $"Tag tables with regex '{regexName}' retrieved from '{softwarePath}'",
+                        Items = responseList,
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+                else
+                {
+                    throw new McpException($"Failed retrieving tag tables with regex '{regexName}' in '{softwarePath}'", McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving tag tables with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "GetTags"), Description("Get a list of tags from a specific tag table in plc software")]
+        public static ResponseTags GetTags(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("tagTablePath: full path to the tag table in the tag-table tree, e.g. 'Group/Subgroup/Name' (single names allowed only at the root level)")] string tagTablePath,
+            [Description("regexName: defines the name or regular expression to find the tag. Use empty string (default) to find all")] string regexName = "")
+        {
+            try
+            {
+                var list = Portal.GetTags(softwarePath, tagTablePath, regexName);
+
+                var responseList = new List<ResponseTagInfo>();
+                foreach (var tag in list)
+                {
+                    if (tag != null)
+                    {
+                        var attributes = Helper.GetAttributeList(tag);
+
+                        responseList.Add(new ResponseTagInfo
+                        {
+                            Name = tag.Name,
+                            DataTypeName = tag.DataTypeName,
+                            LogicalAddress = tag.LogicalAddress?.ToString(),
+                            Comment = Helper.MultilingualTextToString(tag.Comment),
+                            Attributes = attributes
+                        });
+                    }
+                }
+
+                if (list != null)
+                {
+                    return new ResponseTags
+                    {
+                        Message = $"Tags with regex '{regexName}' retrieved from tag table '{tagTablePath}' in '{softwarePath}'",
+                        Items = responseList,
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+                else
+                {
+                    throw new McpException($"Failed retrieving tags from tag table '{tagTablePath}' in '{softwarePath}'", McpErrorCode.InternalError);
+                }
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error retrieving tags from tag table '{tagTablePath}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
+        [McpServerTool(Name = "ExportTagTable"), Description("Export a tag table from plc software to file")]
+        public static ResponseExportTagTable ExportTagTable(
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("tagTablePath: full path to the tag table in the tag-table tree, e.g. 'Group/Subgroup/Name' (single names allowed only at the root level)")] string tagTablePath,
+            [Description("exportPath: defines the folder where to export the tag table")] string exportPath,
+            [Description("preservePath: preserves the tag-table folder structure under exportPath")] bool preservePath = false)
+        {
+            try
+            {
+                Portal.ExportTagTable(softwarePath, tagTablePath, exportPath, preservePath);
+
+                return new ResponseExportTagTable
+                {
+                    Message = $"Tag table exported from '{tagTablePath}' to '{exportPath}'",
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                switch (pex.Code)
+                {
+                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
+                        {
+                            throw new McpException("Tag table not found.", McpErrorCode.InvalidParams);
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.ExportFailed:
+                        {
+                            var reason = pex.InnerException?.Message?.Trim();
+                            var msg = "Failed to export tag table.";
+                            if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
+
+                            Logger?.LogError(pex, "MCP ExportTagTable failed for {SoftwarePath} {TagTablePath} -> {ExportPath}",
+                                pex.Data?["softwarePath"], pex.Data?["tagTablePath"], pex.Data?["exportPath"]);
+
+                            throw new McpException(msg, McpErrorCode.InternalError);
+                        }
+
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
+                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
+                        {
+                            throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                        }
+                }
+
+                throw new McpException(pex.Message, McpErrorCode.InternalError);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error exporting tag table from '{tagTablePath}' to '{exportPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+            }
+        }
+
         [McpServerTool(Name = "ImportBlock"), Description("Import a block file to plc software")]
         public static ResponseImportBlock ImportBlock(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,

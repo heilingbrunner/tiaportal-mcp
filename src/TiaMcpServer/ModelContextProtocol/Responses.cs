@@ -186,4 +186,34 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         public IEnumerable<ResponseBlockInfo>? Items { get; set; }
     }
+
+    public class ResponseTagTableInfo : ResponseAttributes
+    {
+        public string? Name { get; set; }
+        public string? TypeName { get; set; }
+        public bool? IsDefault { get; set; }
+        public string? Description { get; set; }
+    }
+
+    public class ResponseTagInfo : ResponseAttributes
+    {
+        public string? Name { get; set; }
+        public string? DataTypeName { get; set; }
+        public string? LogicalAddress { get; set; }
+        public string? Comment { get; set; }
+    }
+
+    public class ResponseTagTables : ResponseMessage
+    {
+        public IEnumerable<ResponseTagTableInfo>? Items { get; set; }
+    }
+
+    public class ResponseTags : ResponseMessage
+    {
+        public IEnumerable<ResponseTagInfo>? Items { get; set; }
+    }
+
+    public class ResponseExportTagTable : ResponseMessage
+    {
+    }
 }
