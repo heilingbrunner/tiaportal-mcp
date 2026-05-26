@@ -552,12 +552,27 @@ namespace TiaMcpServer.Siemens
             {
                 foreach (Device device in _project.Devices)
                 {
-                    list.Add(device);
+                    // Defensive: a single broken device must not abort the whole listing.
+                    try
+                    {
+                        list.Add(device);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Skipping unreadable device during root enumeration");
+                    }
                 }
 
                 foreach (var group in _project.DeviceGroups)
                 {
-                    GetDevicesRecursive(group, list, regexName);
+                    try
+                    {
+                        GetDevicesRecursive(group, list, regexName);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Skipping unreadable device group during enumeration");
+                    }
                 }
 
                 //foreach (var group in _project.UngroupedDevicesGroup)
