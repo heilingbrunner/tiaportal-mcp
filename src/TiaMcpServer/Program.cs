@@ -17,6 +17,10 @@ namespace TiaMcpServer
 {
     public class Program
     {
+        // Upper bound for how long the HTTP bridge waits on the MCP server's
+        // response for one request. Bounds the DoS surface where a malformed
+        // or unanswerable request would otherwise hold the gate forever.
+        private const int ResponseTimeoutSeconds = 60;
 
         public static async Task Main(string[] args)
         {
@@ -349,18 +353,34 @@ namespace TiaMcpServer
                         return;
                     }
 
-                    var responseLine = await ReadJsonRpcResponseAsync(outboundReader, ct).ConfigureAwait(false);
-                    if (responseLine == null)
+                    // Bound the read on a linked CTS so a hung SDK cannot pin the gate forever.
+                    // Outer ct stays the cancellation source for shutdown; CancelAfter bolts on
+                    // the per-request budget. When the linked token fires alone, we surface 504.
+                    using (var requestCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
                     {
-                        await WriteStatusAsync(response, 500, "MCP server closed the response stream").ConfigureAwait(false);
-                        return;
-                    }
+                        requestCts.CancelAfter(TimeSpan.FromSeconds(ResponseTimeoutSeconds));
+                        try
+                        {
+                            var responseLine = await ReadJsonRpcResponseAsync(outboundReader, requestCts.Token).ConfigureAwait(false);
+                            if (responseLine == null)
+                            {
+                                await WriteStatusAsync(response, 500, "MCP server closed the response stream").ConfigureAwait(false);
+                                return;
+                            }
 
-                    var bytes = Encoding.UTF8.GetBytes(responseLine);
-                    response.StatusCode = 200;
-                    response.ContentType = "application/json";
-                    response.ContentLength64 = bytes.LongLength;
-                    await response.OutputStream.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false);
+                            var bytes = Encoding.UTF8.GetBytes(responseLine);
+                            response.StatusCode = 200;
+                            response.ContentType = "application/json";
+                            response.ContentLength64 = bytes.LongLength;
+                            await response.OutputStream.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                        {
+                            // Per-request budget exhausted; server shutdown was NOT requested.
+                            logger.LogWarning("Request exceeded {Seconds}s response budget; returning 504", ResponseTimeoutSeconds);
+                            await WriteStatusAsync(response, 504, $"Gateway Timeout: MCP server did not respond within {ResponseTimeoutSeconds}s").ConfigureAwait(false);
+                        }
+                    }
                 }
                 finally
                 {
