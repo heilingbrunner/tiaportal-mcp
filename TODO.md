@@ -31,18 +31,19 @@ Centralized list of actionable improvements gathered from initial repo review. U
 
 ## Transports (HTTP / TCP)
 
-- [ ] Add CLI flags for transport selection
+- [x] Add CLI flags for transport selection
   - `--transport stdio|http` (default: stdio)
   - `--http-prefix http://127.0.0.1:8765/`
   - `--http-api-key <secret>` (optional; header `X-API-Key`)
-- [ ] Implement `RunHttpHost` (MVP) using `HttpListener` on .NET Framework 4.8
+- [x] Implement `RunHttpHost` (MVP) using `HttpListener` on .NET Framework 4.8
   - Bind to loopback by default; configurable via `--http-prefix`
   - Endpoint: `POST /mcp` with `application/json`
-  - Forward request body to MCP handler and return JSON response
-  - Map validation errors to `400`, unexpected to `500`
+  - Forward request body to MCP handler and return JSON response (via `System.IO.Pipelines` bridge into `WithStreamServerTransport`)
+  - Map validation errors to `400`, unexpected to `500`, hung SDK to `504` (60s budget)
   - Optional API key guard (header `X-API-Key`)
 - [ ] Prefer SDK’s HTTP transport if/when available
   - If the SDK adds `.WithHttpServerTransport(...)`, replace the manual `HttpListener` host with the official transport.
+  - As of `ModelContextProtocol 0.3.0-preview.4`, HTTP transport lives in `ModelContextProtocol.AspNetCore` which targets .NET 8+ only — unusable on our net48 target.
 - [ ] Consider TCP transport via streams as a quick alternative
   - Add a TCP listener and pass the network streams to `.WithStreamServerTransport(input, output)`
   - Useful for remote connectivity prior to HTTP
@@ -50,9 +51,11 @@ Centralized list of actionable improvements gathered from initial repo review. U
   - Honor `MCP-Protocol-Version` header
   - Session handling via `Mcp-Session-Id` when applicable
   - Optional SSE support if clients require streaming
-- [ ] Documentation
-  - Update root and server README with a "Transports" section (stdio today; streams possible; HTTP planned).
-  - Add usage examples for `--transport http` when implemented (curl examples; security notes).
+- [ ] Patch 3: id-correlated demuxer in the HTTP bridge
+  - Today's single `SemaphoreSlim` gate serializes all requests and silently drops server-emitted notifications (progress, logging). Server-initiated requests (sampling/createMessage, roots/list) would be mis-routed as HTTP responses. A demuxer that fans outbound JSON-RPC frames into per-id `TaskCompletionSource` waiters plus a notification channel would unblock concurrency and unlock bidirectional MCP.
+- [x] Documentation
+  - Update root and server README with a "Transports" section (stdio today; streams possible; HTTP MVP shipped).
+  - Add usage examples for `--transport http` (curl examples; security notes).
 
 ## Siemens Wrappers Refactor (Duplication/Exceptions)
 

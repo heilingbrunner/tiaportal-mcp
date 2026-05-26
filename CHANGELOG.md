@@ -1,5 +1,16 @@
 # Change Log
 
+## [Unreleased]
+
+- New: `--transport http` MVP. Hosts an `HttpListener` on `--http-prefix` (default `http://127.0.0.1:8765/`); bridges `POST /mcp` requests into the MCP SDK via a `System.IO.Pipelines` pair backing `WithStreamServerTransport`. Optional `--http-api-key <secret>` enforces the `X-API-Key` header.
+- New: Tag tools `GetTagTables`, `GetTags`, `ExportTagTable` for the `Siemens.Engineering.SW.Tags` surface. Follows the established `GetBlocks` / `ExportBlock` shape and canonical `PortalException` template.
+- New: Singular `GetProject` tool that returns info + attributes for the *active* project. The previous `GetProject` tool (which actually returned a list) is renamed to `GetProjects` to match its behavior. **Breaking change** for any client calling the old `GetProject` expecting list-of-projects shape.
+- Fix: `Helper.GetAttributeList` is now resilient: per-attribute try/catch around `obj.GetAttribute(name)`, plus value normalization (Enum → name, MultilingualText → first non-empty translation, COM-wrapped types → `.ToString()`) so System.Text.Json no longer chokes at the SDK boundary. Resolves the persistent `-32603 "An error occurred."` from `GetProject` / `GetProjects` / `GetDevices`.
+- Fix: HTTP bridge bounds the SDK response read with a 60s linked-CTS timeout; malformed but JSON-parseable requests (e.g. missing `jsonrpc` field) used to permanently lock the `SemaphoreSlim` gate and DoS the server. They now return `504 Gateway Timeout` and the server stays responsive.
+- Fix: Defensive guards in `Portal.GetDevices`, `Portal.GetProjects`, `Portal.GetSessions` — a single broken/transitioning item is logged and skipped instead of aborting the whole listing.
+- Refactor: `Portal.GetProjects`, `GetSessions`, and `GetDevices` now throw `PortalException(InvalidState)` on fundamental failure ("Not attached to TIA Portal" / "No project is open") instead of silently returning empty. McpServer maps these to clean `McpException(InvalidParams)`.
+- New helper: `Portal.GetCurrentProject()` returns the active `ProjectBase` (preferring `_project`, falling back to `_session?.Project`), throwing `PortalException(InvalidState)` if none.
+
 ## [0.0.16] - 2025-09-02
 
 - New: ImportFromDocuments and ImportBlocksFromDocuments (V20+)
