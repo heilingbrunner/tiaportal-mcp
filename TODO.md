@@ -31,18 +31,19 @@ Centralized list of actionable improvements gathered from initial repo review. U
 
 ## Transports (HTTP / TCP)
 
-- [ ] Add CLI flags for transport selection
+- [x] Add CLI flags for transport selection
   - `--transport stdio|http` (default: stdio)
   - `--http-prefix http://127.0.0.1:8765/`
   - `--http-api-key <secret>` (optional; header `X-API-Key`)
-- [ ] Implement `RunHttpHost` (MVP) using `HttpListener` on .NET Framework 4.8
+- [x] Implement `RunHttpHost` (MVP) using `HttpListener` on .NET Framework 4.8
   - Bind to loopback by default; configurable via `--http-prefix`
   - Endpoint: `POST /mcp` with `application/json`
-  - Forward request body to MCP handler and return JSON response
-  - Map validation errors to `400`, unexpected to `500`
+  - Forward request body to MCP handler and return JSON response (via `System.IO.Pipelines` bridge into `WithStreamServerTransport`)
+  - Map validation errors to `400`, unexpected to `500`, hung SDK to `504` (60s budget)
   - Optional API key guard (header `X-API-Key`)
 - [ ] Prefer SDK’s HTTP transport if/when available
   - If the SDK adds `.WithHttpServerTransport(...)`, replace the manual `HttpListener` host with the official transport.
+  - As of `ModelContextProtocol 0.3.0-preview.4`, HTTP transport lives in `ModelContextProtocol.AspNetCore` which targets .NET 8+ only — unusable on our net48 target.
 - [ ] Consider TCP transport via streams as a quick alternative
   - Add a TCP listener and pass the network streams to `.WithStreamServerTransport(input, output)`
   - Useful for remote connectivity prior to HTTP
@@ -50,9 +51,11 @@ Centralized list of actionable improvements gathered from initial repo review. U
   - Honor `MCP-Protocol-Version` header
   - Session handling via `Mcp-Session-Id` when applicable
   - Optional SSE support if clients require streaming
-- [ ] Documentation
-  - Update root and server README with a "Transports" section (stdio today; streams possible; HTTP planned).
-  - Add usage examples for `--transport http` when implemented (curl examples; security notes).
+- [ ] Patch 3: id-correlated demuxer in the HTTP bridge
+  - Today's single `SemaphoreSlim` gate serializes all requests and silently drops server-emitted notifications (progress, logging). Server-initiated requests (sampling/createMessage, roots/list) would be mis-routed as HTTP responses. A demuxer that fans outbound JSON-RPC frames into per-id `TaskCompletionSource` waiters plus a notification channel would unblock concurrency and unlock bidirectional MCP.
+- [x] Documentation
+  - Update root and server README with a "Transports" section (stdio today; streams possible; HTTP MVP shipped).
+  - Add usage examples for `--transport http` (curl examples; security notes).
 
 ## Siemens Wrappers Refactor (Duplication/Exceptions)
 
@@ -210,3 +213,16 @@ Centralized list of actionable improvements gathered from initial repo review. U
 - [ ] Validate enum mapping for `importOption` (Override/None; extend if environment exposes more values).
 - [ ] Verify placement into `groupPath` (root vs. nested groups) and behavior when group does not exist.
 - [ ] Add docs pages under `docs/tools/` for import-from-documents tools; include file discovery rules (.s7dcl/.s7res), name derivation, and option mapping.
+
+## Research / Investigations
+
+These items surfaced from a triage of the workspace dossier
+(`docs/TIA Portal MCP Openness Deep Dive.md`) plus our own gap analysis.
+None are urgent; each needs hands-on verification before we commit code.
+See companion KB entry `KB-07-external-projects-and-techniques.md`.
+
+- [ ] **STA/MTA concurrency stress test.** Today the HTTP bridge dispatches each request via `Task.Run` (default MTA thread pool). The dossier claims Openness COM objects are STA-pinned and we should hit `InvalidCastException`/`COMException` under any concurrency. We have NOT observed this in single-threaded tests against PLC4002_V20. Need a deliberate stress: 8+ concurrent HTTP clients exercising tool calls that touch the Portal hierarchy; watch for COM exceptions and TIA Portal process memory growth. Outcome decides whether Patch 3 (id-correlated demuxer) needs an STA dispatcher behind it or can stay on the pool.
+- [ ] **`Marshal.ReleaseComObject` hygiene audit.** `Portal.cs` currently dot-chains COM properties freely (e.g. `project.Devices.DeviceItems.Name`) and does no explicit `Marshal.ReleaseComObject`. The .NET GC eventually reclaims RCWs, so we have not observed leaks in short sessions. Audit becomes important if (a) we add long-running session use, (b) we see TIA Portal process memory creep, or (c) the STA stress test reveals leaks. Approach: add `Marshal.ReleaseComObject` calls in reverse-acquisition order at the end of high-frequency enumeration methods (`GetBlocks`, `GetDevices`, `GetSoftwareTree`), bench memory before/after under sustained load.
+- [ ] **Evaluate offline-parser path via `jfk-solutions/TiaFileFormat`.** Commercial library (NOT free, despite how the dossier framed it) that reads TIA `.apXX` files (V10.5–V20) directly without TIA Portal, Openness, or a STEP 7 Professional license at parse time. If commercial terms work out, this enables a parallel "offline" tool surface that bypasses the export-license blocker we hit on 2026-05-26 (`STEP 7 Professional license missing` from `block.Export()`). Read-only only — useful for inspection/audit workflows, not for write operations. Action: licensing inquiry to `info@jfk-solutions.de` if we commit to this path, plus a spike with the demo viewer `jfk-solutions/TiaProjectBrowser`.
+- [ ] **Adopt SCL-First architecture before any write tool ships.** Standing design rule: when we add `CreateBlock`/`UpdateBlock`/`CreateType` tools, the LLM must produce SCL (Pascal-like, well-trained), and the server deterministically wraps it in SimaticML XML using validated templates. Never let LLM-authored XML reach `Openness.Import`. Cross-reference: `T-IA Connect` (`feelautom/tia-copilot-genai-bridge`) appears to follow this pattern in their commercial product. Action: capture this as a server-README architectural decision when the first write tool lands.
+- [ ] **Call-graph extraction (post-Patch 3).** `StaniB88/TIAOpenessManager` builds project-wide call graphs for dead-code analysis. A `GetBlockCallers` / `GetCallGraph(blockPath)` MCP tool would be high-value for the kind of refactor pitch we built around the CM DO date-gap finding. Investigate after the HTTP bridge stabilizes.

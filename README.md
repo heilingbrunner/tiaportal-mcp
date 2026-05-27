@@ -7,6 +7,8 @@ A MCP server which connects to Siemens TIA Portal.
 - Connect to a TIA Portal instance
 - Browse and interact with TIA Portal projects
 - Perform basic project operations from within VS Code
+- Inspect PLC tag tables and tags (`GetTagTables`, `GetTags`, `ExportTagTable`)
+- Choose `stdio` or `http` transport (see [Transports](#transports))
 
 ## Requirements
 
@@ -43,19 +45,22 @@ A MCP server which connects to Siemens TIA Portal.
 - The MCP layer maps these to `McpException` codes. For `ExportFailed`, it includes a concise reason from the underlying error; for `NotFound`, it returns `InvalidParams` and may suggest likely full block paths if a bare name was provided.
 - Consistency required: TIA Portal never exports inconsistent blocks/types. Single export returns `InvalidParams` with a message to compile first. Bulk export skips inconsistent items and returns them in an `Inconsistent` list alongside `Items`.
 - Standardization: Exception context metadata is attached in a single catch per portal method right before rethrow, not at inline throw sites. See `docs/error-model.md`.
-- This standardized pattern currently applies to `ExportBlock` and will expand incrementally.
+- This standardized pattern currently applies to `ExportBlock`, `ExportTagTable`, `GetProjects`, `GetProject`, and `GetDevices`. Rollout to remaining methods is incremental.
 
 ## Transports
 
-- Supported today: `stdio`
+- `stdio` (default)
   - Program wires `AddMcpServer().WithStdioServerTransport()`.
   - For stdio, logs must go to stderr to avoid corrupting JSON-RPC.
-- Available via SDK: `stream` (custom streams)
-  - The SDK exposes `WithStreamServerTransport(Stream input, Stream output)` which can be used to host over TCP sockets or other streams.
-  - Not wired in this repo yet.
-- HTTP/Streamable HTTP: not implemented yet
-  - The current ModelContextProtocol .NET package in use (0.3.0-preview.4) does not provide an HTTP server transport out of the box.
-  - Plan (see TODO): add `--transport http`, `--http-prefix`, and `--http-api-key`, host with `HttpListener`, and route POST `/mcp` to the MCP handlers. Later align with MCP Streamable HTTP spec.
+- `http` (MVP, loopback)
+  - Select with `--transport http`. Defaults: `--http-prefix http://127.0.0.1:8765/`, no auth.
+  - Optional `--http-api-key <secret>` enforces the `X-API-Key` request header (401 on mismatch).
+  - Endpoint: `POST /mcp` with `Content-Type: application/json`. Each request flows through a `System.IO.Pipelines` bridge into the SDK's `StreamServerTransport`; the MCP session is persistent across HTTP requests so attached state (Portal singleton, current project) survives.
+  - Status codes: 200 OK on response; 202 Accepted on JSON-RPC notifications; 400 on malformed JSON; 401 on bad/missing API key; 404 on wrong path; 405 on non-POST; 504 if the SDK takes longer than 60s to respond; 500 on unexpected errors.
+  - Example: `curl -X POST -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' http://127.0.0.1:8765/mcp`
+- `stream` (custom streams)
+  - The SDK exposes `WithStreamServerTransport(Stream input, Stream output)`. Used internally by the HTTP bridge; not exposed as a separate CLI mode.
+- Follow-ups tracked in TODO.md: align with MCP Streamable HTTP spec (`Mcp-Session-Id`, SSE for server-to-client notifications/requests), and prefer the SDK's HTTP transport if/when it ships for net48.
 
 ## Copilot Chat
 

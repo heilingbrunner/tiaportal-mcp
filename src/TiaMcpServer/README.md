@@ -38,12 +38,13 @@ The TiaMcpServer project provides the following functionality:
 
 *   **Connecting and disconnecting from the TIA Portal:** The `Connect` and `Disconnect` tools allow the LLM to connect to and disconnect from the TIA Portal.
 *   **Getting the state of the TIA Portal:** The `GetState` tool allows the LLM to get the current state of the TIA Portal, such as whether it is connected to a project and the name of the project.
-*   **Working with projects and sessions:** The `GetOpenProjects`, `OpenProject`, `SaveProject`, `SaveAsProject`, and `CloseProject` tools allow the LLM to work with TIA Portal projects and sessions.
+*   **Working with projects and sessions:** The `GetProjects` (list all open), `GetProject` (info + attributes for the active project), `OpenProject`, `SaveProject`, `SaveAsProject`, and `CloseProject` tools allow the LLM to work with TIA Portal projects and sessions. **Note:** the listing tool was renamed from `GetProject` to `GetProjects` in the latest revision; the new singular `GetProject` returns the active project specifically.
 *   **Working with devices:** The `GetStructure`, `GetDeviceInfo`, `GetDeviceItemInfo`, and `GetDevices` tools allow the LLM to get information about the devices in a project.
 *   **Working with PLC software:** The `GetSoftwareInfo` and `CompileSoftware` tools allow the LLM to get information about and compile PLC software.
 *   **Working with blocks:** The `GetBlockInfo`, `GetBlocks`, `GetBlocksWithHierarchy`, `ExportBlock`, `ImportBlock`, and `ExportBlocks` tools allow the LLM to work with blocks.
     - `ExportBlock` expects `blockPath` to be a fully qualified path like `Group/Subgroup/Name`. Passing just a name is ambiguous; the MCP layer will return `InvalidParams` and may suggest likely full paths based on project contents.
 *   **Working with types:** The `GetTypeInfo`, `GetTypes`, `ExportType`, `ImportType`, and `ExportTypes` tools allow the LLM to work with types.
+*   **Working with tag tables:** The `GetTagTables`, `GetTags`, and `ExportTagTable` tools allow the LLM to inspect and export PLC tag tables and the tags inside them. `tagTablePath` is `Group/Subgroup/Name` (single name allowed at root). `ExportTagTable` follows the same `PortalException` template as `ExportBlock` (no `IsConsistent` gate -- `PlcTagTable` does not expose one).
 *   **Exporting blocks as documents (V20+):** The `ExportAsDocuments` and `ExportBlocksAsDocuments` tools export blocks as SIMATIC SD documents (.s7dcl/.s7res). Requires TIA Portal V20 or newer.
 *   **Importing blocks from documents (V20+):** The `ImportFromDocuments` and `ImportBlocksFromDocuments` tools import blocks from SIMATIC SD documents into PLC software. Requires TIA Portal V20 or newer.
 
@@ -61,13 +62,20 @@ The TiaMcpServer project is a powerful tool that allows LLMs to interact with th
 
 ## Transports
 
-- Current transport: `stdio`
-  - The server is hosted with `AddMcpServer().WithStdioServerTransport()`.
-  - For stdio, all logs must go to stderr.
-- Streams transport: available in SDK (not wired here)
-  - The SDK also exposes `WithStreamServerTransport(Stream input, Stream output)` which can be used to host over TCP or other custom streams.
-- HTTP (planned)
-  - This repo does not yet include an HTTP or SSE transport. The plan is to add a CLI flag `--transport http` and host a loopback `HttpListener` that forwards POST `/mcp` to the MCP request handler, then iterate towards MCP Streamable HTTP compliance.
+- `stdio` (default)
+  - Hosted with `AddMcpServer().WithStdioServerTransport()`.
+  - All logs must go to stderr to keep stdout clean for JSON-RPC.
+- `http` (MVP, loopback by default)
+  - Selected with `--transport http`. Defaults: `--http-prefix http://127.0.0.1:8765/`, no auth.
+  - Optional `--http-api-key <secret>` enforces `X-API-Key` (401 on mismatch).
+  - Endpoint: `POST /mcp`, `Content-Type: application/json`. The bridge writes each JSON-RPC frame newline-delimited into a `System.IO.Pipelines` pair backing `WithStreamServerTransport`, then reads the first id-bearing response line and returns it as HTTP 200 (or 202 for client notifications). Per-request budget of 60s caps the response read so a malformed input can't lock the bridge.
+  - Single shared MCP session for all HTTP clients — Portal singleton state (current project, current attach) is preserved across requests.
+  - Known caveats (see root `TODO.md`):
+    - Server-to-client notifications (progress, logging) are not forwarded back to HTTP clients.
+    - Server-initiated requests (sampling/createMessage, roots/list) are not supported.
+    - One slow tool call blocks all other in-flight HTTP requests (head-of-line). Patch 3 (id demuxer) is the fix.
+- `stream` (custom streams)
+  - The SDK exposes `WithStreamServerTransport(Stream input, Stream output)`. Used internally by the HTTP bridge; not exposed as a separate CLI mode.
 
 ## Error Handling Standard (ExportBlock)
 
@@ -80,7 +88,7 @@ The TiaMcpServer project is a powerful tool that allows LLMs to interact with th
   - Maps `ExportFailed` to `InternalError` and includes a concise reason from `InnerException.Message`.
   - Consistency: TIA Portal does not export inconsistent blocks/types. Single-item exports return `InvalidParams` advising to compile first. Bulk exports skip inconsistent items and include them in an `Inconsistent` list in the response.
   - Keeps user messages concise; structured details live in logs and context.
-  - Current standardization is applied to `ExportBlock` and will be rolled out to other methods incrementally.
+  - Current standardization is applied to `ExportBlock`, `ExportTagTable`, `GetProjects`, `GetProject`, and `GetDevices`. Rollout to remaining methods is incremental.
   - Exception metadata: Context keys (e.g., `softwarePath`, `blockPath`/`typePath`, `exportPath`) are attached in a single catch per portal method just before rethrow, not at inline throw sites. See `docs/error-model.md`.
 
 ## Contributing
