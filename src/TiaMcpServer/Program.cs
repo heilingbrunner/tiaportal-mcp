@@ -228,10 +228,13 @@ namespace TiaMcpServer
                 // for the frame write, not the await) and responses are dispatched back to
                 // per-request TaskCompletionSources by JSON-RPC id.
                 var waiters = new ConcurrentDictionary<int, TaskCompletionSource<string>>();
+                // Patch 4: SSE side pipe. Active GET /mcp/sse listeners get every server-to-client
+                // notification (and any server-initiated request) the SDK emits on the outbound pipe.
+                var sseSubscribers = new ConcurrentDictionary<Guid, SseSubscriber>();
                 var writeLock = new SemaphoreSlim(1, 1);
                 var hostTask = host.RunAsync(cts.Token);
-                var demuxerTask = DemuxOutboundAsync(outboundPipe.Reader, waiters, logger, cts.Token);
-                var listenerTask = AcceptLoopAsync(listener, inboundPipe.Writer, writeLock, waiters, options.HttpApiKey, logger, cts.Token);
+                var demuxerTask = DemuxOutboundAsync(outboundPipe.Reader, waiters, sseSubscribers, logger, cts.Token);
+                var listenerTask = AcceptLoopAsync(listener, inboundPipe.Writer, writeLock, waiters, sseSubscribers, options.HttpApiKey, logger, cts.Token);
 
                 try
                 {
@@ -242,6 +245,15 @@ namespace TiaMcpServer
                     cts.Cancel();
                     try { listener.Stop(); } catch { }
                     listener.Close();
+
+                    // Tear down any still-open SSE subscribers so their handler tasks unblock.
+                    foreach (var key in sseSubscribers.Keys)
+                    {
+                        if (sseSubscribers.TryRemove(key, out var sub))
+                        {
+                            sub.Dispose();
+                        }
+                    }
 
                     // Closing the inbound writer signals EOF to the MCP server so it shuts down.
                     inboundPipe.Writer.Complete();
@@ -259,6 +271,7 @@ namespace TiaMcpServer
             PipeWriter inboundWriter,
             SemaphoreSlim writeLock,
             ConcurrentDictionary<int, TaskCompletionSource<string>> waiters,
+            ConcurrentDictionary<Guid, SseSubscriber> sseSubscribers,
             string? apiKey,
             ILogger logger,
             CancellationToken ct)
@@ -279,7 +292,7 @@ namespace TiaMcpServer
                     return;
                 }
 
-                _ = Task.Run(() => HandleRequestAsync(context, inboundWriter, writeLock, waiters, apiKey, logger, ct), ct);
+                _ = Task.Run(() => HandleRequestAsync(context, inboundWriter, writeLock, waiters, sseSubscribers, apiKey, logger, ct), ct);
             }
         }
 
@@ -288,6 +301,7 @@ namespace TiaMcpServer
             PipeWriter inboundWriter,
             SemaphoreSlim writeLock,
             ConcurrentDictionary<int, TaskCompletionSource<string>> waiters,
+            ConcurrentDictionary<Guid, SseSubscriber> sseSubscribers,
             string? apiKey,
             ILogger logger,
             CancellationToken ct)
@@ -297,6 +311,16 @@ namespace TiaMcpServer
 
             try
             {
+                // SSE side pipe: GET /mcp/sse subscribes to server-to-client notifications.
+                // Branch before the POST validation so the SSE handler can own the response lifetime.
+                if (string.Equals(request.HttpMethod, "GET", StringComparison.OrdinalIgnoreCase)
+                    && request.Url != null
+                    && string.Equals(request.Url.AbsolutePath, "/mcp/sse", StringComparison.OrdinalIgnoreCase))
+                {
+                    await HandleSseAsync(context, sseSubscribers, apiKey, logger, ct).ConfigureAwait(false);
+                    return;
+                }
+
                 if (!string.Equals(request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
                 {
                     await WriteStatusAsync(response, 405, "Method Not Allowed").ConfigureAwait(false);
@@ -486,6 +510,7 @@ namespace TiaMcpServer
         private static async Task DemuxOutboundAsync(
             PipeReader outboundReader,
             ConcurrentDictionary<int, TaskCompletionSource<string>> waiters,
+            ConcurrentDictionary<Guid, SseSubscriber> sseSubscribers,
             ILogger logger,
             CancellationToken ct)
         {
@@ -500,7 +525,7 @@ namespace TiaMcpServer
                         // cancels any still-pending waiters so their handlers don't hang.
                         return;
                     }
-                    DispatchOutboundFrame(line, waiters, logger);
+                    await DispatchOutboundFrameAsync(line, waiters, sseSubscribers, logger, ct).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException)
@@ -518,13 +543,19 @@ namespace TiaMcpServer
             }
         }
 
-        private static void DispatchOutboundFrame(
+        private static async Task DispatchOutboundFrameAsync(
             string line,
             ConcurrentDictionary<int, TaskCompletionSource<string>> waiters,
-            ILogger logger)
+            ConcurrentDictionary<Guid, SseSubscriber> sseSubscribers,
+            ILogger logger,
+            CancellationToken ct)
         {
             try
             {
+                bool hasId;
+                bool hasMethod;
+                bool idIsInt = false;
+                int id = 0;
                 using (var doc = JsonDocument.Parse(line))
                 {
                     if (doc.RootElement.ValueKind != JsonValueKind.Object)
@@ -532,35 +563,193 @@ namespace TiaMcpServer
                         logger.LogDebug("Demuxer: non-object outbound frame discarded ({Len} bytes)", line.Length);
                         return;
                     }
-                    if (!doc.RootElement.TryGetProperty("id", out var idElement))
+                    hasId = doc.RootElement.TryGetProperty("id", out var idElement);
+                    hasMethod = doc.RootElement.TryGetProperty("method", out _);
+                    if (hasId && idElement.ValueKind == JsonValueKind.Number && idElement.TryGetInt32(out var parsedId))
                     {
-                        // Server-to-client notification (progress, logging, listChanged...). For Patch 3 we
-                        // drop with a debug log. Forwarding to clients is Patch 4 (SSE channel).
-                        logger.LogDebug("Demuxer: notification discarded (no SSE channel wired yet)");
-                        return;
+                        idIsInt = true;
+                        id = parsedId;
                     }
-                    if (idElement.ValueKind != JsonValueKind.Number || !idElement.TryGetInt32(out int id))
-                    {
-                        logger.LogDebug("Demuxer: outbound frame with non-int id discarded");
-                        return;
-                    }
-                    if (waiters.TryGetValue(id, out var tcs))
-                    {
-                        // TrySetResult: if the waiter already cancelled (timeout fired) this is a no-op.
-                        tcs.TrySetResult(line);
-                    }
-                    else
-                    {
-                        // Could be: (a) a late response after our request timed out and we removed the
-                        // entry, or (b) a server-to-client REQUEST (sampling/createMessage etc.) whose
-                        // id space is server-side. Either way, no client is waiting -- drop.
-                        logger.LogDebug("Demuxer: outbound frame for unknown id {Id} discarded", id);
-                    }
+                }
+
+                // No id => notification (progress, logging, listChanged, ...). Broadcast on SSE.
+                if (!hasId)
+                {
+                    await BroadcastSseAsync(line, sseSubscribers, logger, ct).ConfigureAwait(false);
+                    return;
+                }
+
+                // id + method => server-initiated request (sampling/createMessage, elicitation, ...).
+                // The client receiving the SSE stream is expected to handle these; we relay verbatim.
+                if (hasMethod)
+                {
+                    await BroadcastSseAsync(line, sseSubscribers, logger, ct).ConfigureAwait(false);
+                    return;
+                }
+
+                // id, no method => response to a previous POST. Route to the waiter.
+                if (!idIsInt)
+                {
+                    logger.LogDebug("Demuxer: outbound response with non-int id discarded");
+                    return;
+                }
+                if (waiters.TryGetValue(id, out var tcs))
+                {
+                    // TrySetResult: if the waiter already cancelled (timeout fired) this is a no-op.
+                    tcs.TrySetResult(line);
+                }
+                else
+                {
+                    // Late response after the client's request already timed out -- drop.
+                    logger.LogDebug("Demuxer: response for unknown id {Id} discarded (late)", id);
                 }
             }
             catch (JsonException)
             {
                 logger.LogDebug("Demuxer: unparseable outbound frame discarded");
+            }
+        }
+
+        private static async Task BroadcastSseAsync(
+            string jsonFrame,
+            ConcurrentDictionary<Guid, SseSubscriber> sseSubscribers,
+            ILogger logger,
+            CancellationToken ct)
+        {
+            if (sseSubscribers.IsEmpty)
+            {
+                return;
+            }
+
+            // SSE wire format: an "event:" line and a "data:" line, terminated by a blank line.
+            // The JSON frame is single-line by construction (ReadLineAsync stops at '\n'), so it
+            // safely fits in one data: field with no need to split.
+            var payload = Encoding.UTF8.GetBytes("event: message\ndata: " + jsonFrame + "\n\n");
+
+            foreach (var kv in sseSubscribers)
+            {
+                var sub = kv.Value;
+                try
+                {
+                    await sub.WriteAsync(payload, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogDebug(ex, "SSE: write failed for subscriber {Id}; removing", sub.Id);
+                    if (sseSubscribers.TryRemove(sub.Id, out var removed))
+                    {
+                        removed.Dispose();
+                    }
+                }
+            }
+        }
+
+        private static async Task HandleSseAsync(
+            HttpListenerContext context,
+            ConcurrentDictionary<Guid, SseSubscriber> sseSubscribers,
+            string? apiKey,
+            ILogger logger,
+            CancellationToken ct)
+        {
+            var request = context.Request;
+            var response = context.Response;
+
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                var presented = request.Headers["X-API-Key"];
+                if (string.IsNullOrEmpty(presented) || !string.Equals(presented, apiKey, StringComparison.Ordinal))
+                {
+                    await WriteStatusAsync(response, 401, "Unauthorized").ConfigureAwait(false);
+                    try { response.OutputStream.Close(); } catch { }
+                    try { response.Close(); } catch { }
+                    return;
+                }
+            }
+
+            response.StatusCode = 200;
+            response.ContentType = "text/event-stream";
+            response.Headers["Cache-Control"] = "no-cache";
+            response.KeepAlive = true;
+            // Unknown body length: stream with chunked transfer encoding so we can keep writing
+            // as long as the client stays connected.
+            response.SendChunked = true;
+
+            var sub = new SseSubscriber(response);
+            sseSubscribers[sub.Id] = sub;
+            logger.LogInformation("SSE: subscriber {Id} connected ({Count} active)", sub.Id, sseSubscribers.Count);
+
+            CancellationTokenRegistration ctReg = default;
+            try
+            {
+                // Prime the stream so the headers flush and the client sees the connection open
+                // even before any notifications arrive.
+                var hello = Encoding.UTF8.GetBytes(": connected\n\n");
+                await sub.WriteAsync(hello, ct).ConfigureAwait(false);
+
+                // Server shutdown signals the subscriber's Closed TCS so this handler unblocks.
+                ctReg = ct.Register(() => sub.Closed.TrySetResult(true));
+
+                // Park here until shutdown or a broadcast write fails and disposes us.
+                await sub.Closed.Task.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "SSE: subscriber {Id} setup/wait failed", sub.Id);
+            }
+            finally
+            {
+                ctReg.Dispose();
+                if (sseSubscribers.TryRemove(sub.Id, out var removed))
+                {
+                    removed.Dispose();
+                }
+                logger.LogInformation("SSE: subscriber {Id} disconnected ({Count} active)", sub.Id, sseSubscribers.Count);
+            }
+        }
+
+        // Holds one HTTP listener response that's been hijacked as an SSE stream. Writes are
+        // serialized through a per-subscriber semaphore -- BroadcastSseAsync runs from the demuxer
+        // (single threaded today) but the heartbeat / initial prime could otherwise race.
+        private sealed class SseSubscriber : IDisposable
+        {
+            private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
+            private int _disposed;
+
+            public Guid Id { get; } = Guid.NewGuid();
+            public HttpListenerResponse Response { get; }
+            public TaskCompletionSource<bool> Closed { get; } =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public SseSubscriber(HttpListenerResponse response)
+            {
+                Response = response;
+            }
+
+            public async Task WriteAsync(byte[] payload, CancellationToken ct)
+            {
+                await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    await Response.OutputStream.WriteAsync(payload, 0, payload.Length, ct).ConfigureAwait(false);
+                    await Response.OutputStream.FlushAsync(ct).ConfigureAwait(false);
+                }
+                finally
+                {
+                    _writeLock.Release();
+                }
+            }
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+                try { Response.OutputStream.Close(); } catch { }
+                try { Response.Close(); } catch { }
+                Closed.TrySetResult(true);
+                _writeLock.Dispose();
             }
         }
 
