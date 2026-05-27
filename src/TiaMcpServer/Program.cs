@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.IO.Pipelines;
 using System.Net;
@@ -220,13 +221,21 @@ namespace TiaMcpServer
                     return;
                 }
 
-                var transportGate = new SemaphoreSlim(1, 1);
+                // Patch 3: per-id correlation via a demuxer that owns the outbound pipe.
+                // The single SemaphoreSlim gate from Patch 1 is gone -- it serialized the
+                // *whole* request/response cycle and produced head-of-line blocking when one
+                // tool was slow. Now requests are written under a tiny writeLock (held only
+                // for the frame write, not the await) and responses are dispatched back to
+                // per-request TaskCompletionSources by JSON-RPC id.
+                var waiters = new ConcurrentDictionary<int, TaskCompletionSource<string>>();
+                var writeLock = new SemaphoreSlim(1, 1);
                 var hostTask = host.RunAsync(cts.Token);
-                var listenerTask = AcceptLoopAsync(listener, inboundPipe.Writer, outboundPipe.Reader, transportGate, options.HttpApiKey, logger, cts.Token);
+                var demuxerTask = DemuxOutboundAsync(outboundPipe.Reader, waiters, logger, cts.Token);
+                var listenerTask = AcceptLoopAsync(listener, inboundPipe.Writer, writeLock, waiters, options.HttpApiKey, logger, cts.Token);
 
                 try
                 {
-                    await Task.WhenAny(hostTask, listenerTask);
+                    await Task.WhenAny(hostTask, listenerTask, demuxerTask);
                 }
                 finally
                 {
@@ -238,6 +247,7 @@ namespace TiaMcpServer
                     inboundPipe.Writer.Complete();
                     try { await hostTask; } catch (OperationCanceledException) { }
                     try { await listenerTask; } catch (OperationCanceledException) { }
+                    try { await demuxerTask; } catch (OperationCanceledException) { }
 
                     Console.CancelKeyPress -= cancelHandler;
                 }
@@ -247,8 +257,8 @@ namespace TiaMcpServer
         private static async Task AcceptLoopAsync(
             HttpListener listener,
             PipeWriter inboundWriter,
-            PipeReader outboundReader,
-            SemaphoreSlim gate,
+            SemaphoreSlim writeLock,
+            ConcurrentDictionary<int, TaskCompletionSource<string>> waiters,
             string? apiKey,
             ILogger logger,
             CancellationToken ct)
@@ -269,15 +279,15 @@ namespace TiaMcpServer
                     return;
                 }
 
-                _ = Task.Run(() => HandleRequestAsync(context, inboundWriter, outboundReader, gate, apiKey, logger, ct), ct);
+                _ = Task.Run(() => HandleRequestAsync(context, inboundWriter, writeLock, waiters, apiKey, logger, ct), ct);
             }
         }
 
         private static async Task HandleRequestAsync(
             HttpListenerContext context,
             PipeWriter inboundWriter,
-            PipeReader outboundReader,
-            SemaphoreSlim gate,
+            SemaphoreSlim writeLock,
+            ConcurrentDictionary<int, TaskCompletionSource<string>> waiters,
             string? apiKey,
             ILogger logger,
             CancellationToken ct)
@@ -328,63 +338,90 @@ namespace TiaMcpServer
                     return;
                 }
 
-                bool hasId;
-                try
+                var idKind = TryExtractRequestId(body, out int requestId);
+                switch (idKind)
                 {
-                    hasId = JsonRequestHasId(body);
+                    case IdExtraction.InvalidJson:
+                        await WriteStatusAsync(response, 400, "Invalid JSON").ConfigureAwait(false);
+                        return;
+                    case IdExtraction.UnsupportedId:
+                        await WriteStatusAsync(response, 400, "JSON-RPC id must be a 32-bit integer (string/float ids not supported by this bridge)").ConfigureAwait(false);
+                        return;
                 }
-                catch (JsonException)
+
+                var payload = Encoding.UTF8.GetBytes(body.Trim() + "\n");
+
+                if (idKind == IdExtraction.Notification)
                 {
-                    await WriteStatusAsync(response, 400, "Invalid JSON").ConfigureAwait(false);
+                    // Notification: write under writeLock, no response expected.
+                    await writeLock.WaitAsync(ct).ConfigureAwait(false);
+                    try
+                    {
+                        await inboundWriter.WriteAsync(payload, ct).ConfigureAwait(false);
+                        await inboundWriter.FlushAsync(ct).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        writeLock.Release();
+                    }
+                    await WriteStatusAsync(response, 202, "Accepted").ConfigureAwait(false);
                     return;
                 }
 
-                await gate.WaitAsync(ct).ConfigureAwait(false);
+                // Request path: register a per-id TCS so the demuxer can route the response back.
+                var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+                if (!waiters.TryAdd(requestId, tcs))
+                {
+                    await WriteStatusAsync(response, 400, $"Duplicate in-flight JSON-RPC id {requestId}; client must use unique ids per outstanding request").ConfigureAwait(false);
+                    return;
+                }
+
                 try
                 {
-                    var payload = Encoding.UTF8.GetBytes(body.Trim() + "\n");
-                    await inboundWriter.WriteAsync(payload, ct).ConfigureAwait(false);
-                    await inboundWriter.FlushAsync(ct).ConfigureAwait(false);
-
-                    if (!hasId)
-                    {
-                        // Notification: MCP server will not produce a response.
-                        await WriteStatusAsync(response, 202, "Accepted").ConfigureAwait(false);
-                        return;
-                    }
-
-                    // Bound the read on a linked CTS so a hung SDK cannot pin the gate forever.
-                    // Outer ct stays the cancellation source for shutdown; CancelAfter bolts on
-                    // the per-request budget. When the linked token fires alone, we surface 504.
+                    // Per-request budget (Patch 1). Outer ct still drives shutdown.
                     using (var requestCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
                     {
                         requestCts.CancelAfter(TimeSpan.FromSeconds(ResponseTimeoutSeconds));
+
+                        // Inbound write -- briefly serialized so JSON-RPC frames don't interleave on the wire.
+                        // The lock is NOT held across the await on the response. That's the whole point of Patch 3.
+                        await writeLock.WaitAsync(requestCts.Token).ConfigureAwait(false);
                         try
                         {
-                            var responseLine = await ReadJsonRpcResponseAsync(outboundReader, requestCts.Token).ConfigureAwait(false);
-                            if (responseLine == null)
-                            {
-                                await WriteStatusAsync(response, 500, "MCP server closed the response stream").ConfigureAwait(false);
-                                return;
-                            }
-
-                            var bytes = Encoding.UTF8.GetBytes(responseLine);
-                            response.StatusCode = 200;
-                            response.ContentType = "application/json";
-                            response.ContentLength64 = bytes.LongLength;
-                            await response.OutputStream.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false);
+                            await inboundWriter.WriteAsync(payload, requestCts.Token).ConfigureAwait(false);
+                            await inboundWriter.FlushAsync(requestCts.Token).ConfigureAwait(false);
                         }
-                        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                        finally
                         {
-                            // Per-request budget exhausted; server shutdown was NOT requested.
-                            logger.LogWarning("Request exceeded {Seconds}s response budget; returning 504", ResponseTimeoutSeconds);
-                            await WriteStatusAsync(response, 504, $"Gateway Timeout: MCP server did not respond within {ResponseTimeoutSeconds}s").ConfigureAwait(false);
+                            writeLock.Release();
+                        }
+
+                        // Bridge the timeout into the TCS via a cancellation callback. When the linked
+                        // CTS fires, TrySetCanceled() unblocks the await with OperationCanceledException.
+                        // Late demuxer dispatches after we've cancelled will TrySetResult on a cancelled
+                        // TCS (no-op) and we will have already removed our dict entry in the outer finally.
+                        using (requestCts.Token.Register(() => tcs.TrySetCanceled()))
+                        {
+                            try
+                            {
+                                var responseLine = await tcs.Task.ConfigureAwait(false);
+                                var bytes = Encoding.UTF8.GetBytes(responseLine);
+                                response.StatusCode = 200;
+                                response.ContentType = "application/json";
+                                response.ContentLength64 = bytes.LongLength;
+                                await response.OutputStream.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false);
+                            }
+                            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                            {
+                                logger.LogWarning("Request id={Id} exceeded {Seconds}s response budget; returning 504", requestId, ResponseTimeoutSeconds);
+                                await WriteStatusAsync(response, 504, $"Gateway Timeout: MCP server did not respond within {ResponseTimeoutSeconds}s").ConfigureAwait(false);
+                            }
                         }
                     }
                 }
                 finally
                 {
-                    gate.Release();
+                    waiters.TryRemove(requestId, out _);
                 }
             }
             catch (OperationCanceledException)
@@ -410,45 +447,120 @@ namespace TiaMcpServer
             }
         }
 
-        private static bool JsonRequestHasId(string body)
+        private enum IdExtraction
         {
-            using (var doc = JsonDocument.Parse(body))
+            Notification,
+            IntId,
+            UnsupportedId,
+            InvalidJson,
+        }
+
+        private static IdExtraction TryExtractRequestId(string body, out int id)
+        {
+            id = 0;
+            try
             {
-                if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                using (var doc = JsonDocument.Parse(body))
                 {
-                    throw new JsonException("Expected JSON-RPC object");
+                    if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                    {
+                        return IdExtraction.InvalidJson;
+                    }
+                    if (!doc.RootElement.TryGetProperty("id", out var idElement))
+                    {
+                        return IdExtraction.Notification;
+                    }
+                    if (idElement.ValueKind == JsonValueKind.Number && idElement.TryGetInt32(out id))
+                    {
+                        return IdExtraction.IntId;
+                    }
+                    return IdExtraction.UnsupportedId;
                 }
-                return doc.RootElement.TryGetProperty("id", out _);
+            }
+            catch (JsonException)
+            {
+                return IdExtraction.InvalidJson;
             }
         }
 
-        private static async Task<string?> ReadJsonRpcResponseAsync(PipeReader reader, CancellationToken ct)
+        private static async Task DemuxOutboundAsync(
+            PipeReader outboundReader,
+            ConcurrentDictionary<int, TaskCompletionSource<string>> waiters,
+            ILogger logger,
+            CancellationToken ct)
         {
-            // The MCP server may emit notifications (no "id") interleaved with the actual
-            // response. Skip past notifications until we see a line carrying an "id" field.
-            while (true)
+            try
             {
-                var line = await ReadLineAsync(reader, ct).ConfigureAwait(false);
-                if (line == null)
+                while (!ct.IsCancellationRequested)
                 {
-                    return null;
-                }
-
-                try
-                {
-                    using (var doc = JsonDocument.Parse(line))
+                    var line = await ReadLineAsync(outboundReader, ct).ConfigureAwait(false);
+                    if (line == null)
                     {
-                        if (doc.RootElement.ValueKind == JsonValueKind.Object
-                            && doc.RootElement.TryGetProperty("id", out _))
-                        {
-                            return line;
-                        }
+                        // Outbound pipe closed -- SDK shut down. Exit cleanly; the finally below
+                        // cancels any still-pending waiters so their handlers don't hang.
+                        return;
+                    }
+                    DispatchOutboundFrame(line, waiters, logger);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Shutdown.
+            }
+            finally
+            {
+                // Anyone still awaiting now will never get a response from the SDK -- cancel them
+                // so their HandleRequestAsync surfaces 504/cleanup instead of hanging on a dead pipe.
+                foreach (var kv in waiters)
+                {
+                    kv.Value.TrySetCanceled();
+                }
+            }
+        }
+
+        private static void DispatchOutboundFrame(
+            string line,
+            ConcurrentDictionary<int, TaskCompletionSource<string>> waiters,
+            ILogger logger)
+        {
+            try
+            {
+                using (var doc = JsonDocument.Parse(line))
+                {
+                    if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                    {
+                        logger.LogDebug("Demuxer: non-object outbound frame discarded ({Len} bytes)", line.Length);
+                        return;
+                    }
+                    if (!doc.RootElement.TryGetProperty("id", out var idElement))
+                    {
+                        // Server-to-client notification (progress, logging, listChanged...). For Patch 3 we
+                        // drop with a debug log. Forwarding to clients is Patch 4 (SSE channel).
+                        logger.LogDebug("Demuxer: notification discarded (no SSE channel wired yet)");
+                        return;
+                    }
+                    if (idElement.ValueKind != JsonValueKind.Number || !idElement.TryGetInt32(out int id))
+                    {
+                        logger.LogDebug("Demuxer: outbound frame with non-int id discarded");
+                        return;
+                    }
+                    if (waiters.TryGetValue(id, out var tcs))
+                    {
+                        // TrySetResult: if the waiter already cancelled (timeout fired) this is a no-op.
+                        tcs.TrySetResult(line);
+                    }
+                    else
+                    {
+                        // Could be: (a) a late response after our request timed out and we removed the
+                        // entry, or (b) a server-to-client REQUEST (sampling/createMessage etc.) whose
+                        // id space is server-side. Either way, no client is waiting -- drop.
+                        logger.LogDebug("Demuxer: outbound frame for unknown id {Id} discarded", id);
                     }
                 }
-                catch (JsonException)
-                {
-                    // Not parseable as a JSON-RPC frame; treat as noise and keep reading.
-                }
+            }
+            catch (JsonException)
+            {
+                logger.LogDebug("Demuxer: unparseable outbound frame discarded");
             }
         }
 
