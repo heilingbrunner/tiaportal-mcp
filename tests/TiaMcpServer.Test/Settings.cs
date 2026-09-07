@@ -28,5 +28,6 @@
         public const string Project1ExportPath6 = "D:\\Temp\\TIA-Portal\\Project1\\Group1\\Group1.1\\Group1.1.1\\PLC_1.1.1";
         public const string Project1ExportPath7 = "D:\\Temp\\TIA-Portal\\Project1\\Group1\\Group1.1\\Group1.1.1\\PC-System_1.1.1\\Software PLC_1.1.1";
 
+        public const int TiaMajorVersion = 21;
     }
 }

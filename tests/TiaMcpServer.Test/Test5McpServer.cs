@@ -16,7 +16,8 @@ namespace TiaMcpServer.Test
         {
             if (!_isInitialized)
             {
-                Openness.Initialize();
+                Engineering.TiaMajorVersion = Settings.TiaMajorVersion;
+                Openness.Initialize(Engineering.TiaMajorVersion);
             }
 
             var response = McpServer.Connect();
@@ -86,8 +87,6 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        //[DataRow(Settings.Project1ProjectPath)]
-        //// [DataRow(Settings.Session1ProjectPath)]
         public void Test_503_McpServer_GetProjects()
         {
 

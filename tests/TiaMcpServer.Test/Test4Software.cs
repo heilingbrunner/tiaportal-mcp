@@ -18,7 +18,8 @@ namespace TiaMcpServer.Test
         {
             if (!_isInitialized)
             {
-                Openness.Initialize();
+                Engineering.TiaMajorVersion = Settings.TiaMajorVersion;
+                Openness.Initialize(Engineering.TiaMajorVersion);
             }
 
             var loggerFactory = LoggerFactory.Create(builder =>
@@ -242,10 +243,10 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "0_OBs", Settings.Project1ExportPath0 + "\\0_OBs\\Main_1.xml")]
-        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests", Settings.Project1ExportPath0 + "\\1_Tests\\FC_Block_1.xml")]
-        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests", Settings.Project1ExportPath0 + "\\1_Tests\\DB_Block_1.xml")]
-        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister", Settings.Project1ExportPath0 + "\\Common\\CarrierRegister\\GLOBAL_POSITIONING.xml")]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "0_OBs", Settings.Project1ExportPath0 + "\\Program blocks\\0_OBs\\Main_1.xml")]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests", Settings.Project1ExportPath0 + "\\Program blocks\\1_Tests\\FC_Block_1.xml")]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests", Settings.Project1ExportPath0 + "\\Program blocks\\1_Tests\\DB_Block_1.xml")]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister", Settings.Project1ExportPath0 + "\\Program blocks\\Common\\CarrierRegister\\GLOBAL_POSITIONING.xml")]
         public void Test_415_ImportBlock(string projectPath, string softwarePath, string groupPath, string importPath)
         {
             if (_portal == null)
@@ -295,8 +296,8 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister", Settings.Project1ExportPath0 + "\\Common\\CarrierRegister\\ML_SubstratState.xml")]
-        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister", Settings.Project1ExportPath0 + "\\Common\\CarrierRegister\\ML_CarrierRegisterShort.xml")]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister", Settings.Project1ExportPath0 + "\\Plc data types\\Common\\CarrierRegister\\ML_SubstratState.xml")]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister", Settings.Project1ExportPath0 + "\\Plc data types\\Common\\CarrierRegister\\ML_CarrierRegisterShort.xml")]
         public void Test_416_ImportType(string projectPath, string softwarePath, string groupPath, string importPath)
         {
             if (_portal == null)

@@ -16,7 +16,8 @@ namespace TiaMcpServer.Test
         {
             if (!_isInitialized)
             {
-                Openness.Initialize();
+                Engineering.TiaMajorVersion = Settings.TiaMajorVersion;
+                Openness.Initialize(Engineering.TiaMajorVersion);
             }
 
             var loggerFactory = LoggerFactory.Create(builder =>
