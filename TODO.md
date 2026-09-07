@@ -31,28 +31,17 @@ Centralized list of actionable improvements gathered from initial repo review. U
 
 ## Transports (HTTP / TCP)
 
-- [ ] Add CLI flags for transport selection
-  - `--transport stdio|http` (default: stdio)
-  - `--http-prefix http://127.0.0.1:8765/`
-  - `--http-api-key <secret>` (optional; header `X-API-Key`)
-- [ ] Implement `RunHttpHost` (MVP) using `HttpListener` on .NET Framework 4.8
-  - Bind to loopback by default; configurable via `--http-prefix`
-  - Endpoint: `POST /mcp` with `application/json`
-  - Forward request body to MCP handler and return JSON response
-  - Map validation errors to `400`, unexpected to `500`
-  - Optional API key guard (header `X-API-Key`)
-- [ ] Prefer SDK’s HTTP transport if/when available
-  - If the SDK adds `.WithHttpServerTransport(...)`, replace the manual `HttpListener` host with the official transport.
-- [ ] Consider TCP transport via streams as a quick alternative
-  - Add a TCP listener and pass the network streams to `.WithStreamServerTransport(input, output)`
-  - Useful for remote connectivity prior to HTTP
-- [ ] Align with MCP Streamable HTTP spec (follow-up)
-  - Honor `MCP-Protocol-Version` header
-  - Session handling via `Mcp-Session-Id` when applicable
-  - Optional SSE support if clients require streaming
+Streamable HTTP is **not reachable from this project**: the SDK ships it in
+`ModelContextProtocol.AspNetCore`, which requires .NET 8+, while this server is
+pinned to `net48` by TIA Openness. The former plan to hand-roll an `HttpListener`
+host is retired — it would not be spec-compliant Streamable HTTP.
+
+- [ ] Decide whether remote access is wanted at all (stdio covers the VS Code extension today)
+- [ ] If yes, evaluate a separate .NET 8+ proxy that speaks Streamable HTTP to clients and stdio to this server
+- [ ] Cheaper interim option: TCP transport via `.WithStreamServerTransport(input, output)` with a TCP listener
+  - Not MCP Streamable HTTP; only useful for bespoke clients
 - [ ] Documentation
-  - Update root and server README with a "Transports" section (stdio today; streams possible; HTTP planned).
-  - Add usage examples for `--transport http` when implemented (curl examples; security notes).
+  - Keep the "Transports" and "MCP Protocol" sections in both READMEs in sync with whatever is chosen
 
 ## Siemens Wrappers Refactor (Duplication/Exceptions)
 

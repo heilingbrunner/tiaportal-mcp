@@ -1,5 +1,49 @@
 # Change Log
 
+## [0.1.0] - 2026-09-07
+
+Upgrade to the current MCP .NET SDK and adopt the newer protocol surface.
+
+### Breaking
+
+- Tool failures are no longer JSON-RPC errors. `ModelContextProtocol` 2.x turns an
+  `McpException` thrown from a tool into a `CallToolResult` with `isError: true`, carrying
+  the message as text content. Clients that inspected JSON-RPC `error.code` (`InvalidParams`,
+  `InternalError`, ...) must read the tool result's `isError` flag and message instead.
+  `McpErrorCode` was removed from all 75 throw sites; error codes now live only on the
+  derived `McpProtocolException`, which is reserved for protocol-level faults.
+
+### Changed
+
+- `ModelContextProtocol` 0.3.0-preview.4 -> 2.2.0; `Microsoft.Extensions.Hosting`
+  10.0.0-preview.4 -> 10.0.10. Negotiated protocol revisions are now `2024-11-05`,
+  `2025-03-26`, `2025-06-18` and `2025-11-25`.
+- `initialize` now reports `serverInfo` (name, title, version) and `instructions` telling the
+  client to call `Connect` and `OpenProject` first and how to discover path arguments.
+- Progress reporting for `ExportBlocks`, `ExportTypes`, `ExportBlocksAsDocuments` and
+  `ImportBlocksFromDocuments` moved from hand-rolled `notifications/progress` calls to the
+  SDK-injected `IProgress<ProgressNotificationValue>`. The removed `IMcpServer` and
+  `RequestContext<CallToolRequestParams>` parameters were SDK-injected and never part of the
+  tool input schemas, so the wire-visible schemas are unchanged. Progress notifications are
+  emitted only when the client supplies a `progressToken`, as before; the non-standard
+  `Error` field previously sent on failure notifications is gone.
+- Tools and prompts are registered explicitly (`WithTools`/`WithPrompts`) instead of by
+  assembly scanning, giving a stable `tools/list` order.
+
+### Added
+
+- All 30 tools carry a `title` and behaviour annotations: 13 read-only `Get*` tools are
+  `readOnlyHint: true`; project mutations (`SaveProject`, `SaveAsProject`, `CloseProject`),
+  all export tools (they overwrite files already present at the target path) and all import tools
+  are `destructiveHint: true`. Everything is `openWorldHint: false`.
+- The 13 read-only tools publish an `outputSchema` and return `structuredContent`.
+
+### Removed
+
+- `src/TiaMcpServer/packages.config` — a stale packages.config-era leftover pinning
+  `ModelContextProtocol` 0.2.0-preview.1. The project has used SDK-style `PackageReference`
+  for some time and the build ignored this file.
+
 ## [0.0.16] - 2025-09-02
 
 - New: ImportFromDocuments and ImportBlocksFromDocuments (V20+)

@@ -5,9 +5,9 @@ This document standardizes how errors are raised in the Siemens portal layer and
 ## Principles
 
 - Clear categories
-  - Validation: invalid input, missing resources → `PortalErrorCode.InvalidParams` / MCP `InvalidParams`.
-  - Invalid state: operation cannot proceed due to project or item state (e.g., inconsistent block/type) → `PortalErrorCode.InvalidState` / MCP `InvalidParams` with guidance.
-  - Operation failure: environment/IO/underlying API issues → `PortalErrorCode.ExportFailed` (or similar) / MCP `InternalError` with concise reason.
+  - Validation: invalid input, missing resources → `PortalErrorCode.InvalidParams` → `McpException` with a user-guidance message.
+  - Invalid state: operation cannot proceed due to project or item state (e.g., inconsistent block/type) → `PortalErrorCode.InvalidState` → `McpException` with guidance on how to proceed.
+  - Operation failure: environment/IO/underlying API issues → `PortalErrorCode.ExportFailed` (or similar) → `McpException` with a concise reason.
 
 - Single decoration point
   - Do not attach `Exception.Data` inline at throw sites.
@@ -47,8 +47,8 @@ This keeps the decoration and logging in one place, avoids repeated code, and gu
 
 ## MCP Mapping
 
-- Map `PortalErrorCode.InvalidParams` and `InvalidState` to MCP `InvalidParams` with user-guidance messages.
-- Map `PortalErrorCode.ExportFailed` (and similar) to MCP `InternalError`, include a concise `Reason` from the inner exception, and log full details.
+- Every `PortalErrorCode` is surfaced as an `McpException`. Since SDK 2.x, an `McpException` thrown from a tool is converted by the SDK into a `CallToolResult` with `isError: true` and the message as text content, rather than a JSON-RPC error object. The model therefore sees the reason and can self-correct, so the message text carries the meaning that an error code used to.
+- `InvalidParams` and `InvalidState` produce user-guidance messages; `ExportFailed` (and similar) include a concise reason from the inner exception, with full details logged.
 - For `NotFound`, provide suggestions when the input is ambiguous (e.g., single-name block paths).
 
 ## Bulk Export Reporting

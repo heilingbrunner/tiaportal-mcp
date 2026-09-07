@@ -56,7 +56,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region portal
 
-        [McpServerTool(Name = "Connect"), Description("Connect to TIA-Portal")]
+        [McpServerTool(Name = "Connect", Title = "Connect to TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false), Description("Connect to TIA-Portal")]
         public static ResponseConnect Connect()
         {
             Logger?.LogInformation("Connecting to TIA Portal...");
@@ -77,16 +77,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException("Failed to connect to TIA-Portal", McpErrorCode.InternalError);
+                    throw new McpException("Failed to connect to TIA-Portal");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error connecting to TIA-Portal: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error connecting to TIA-Portal: {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "Disconnect"), Description("Disconnect from TIA-Portal")]
+        [McpServerTool(Name = "Disconnect", Title = "Disconnect from TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false), Description("Disconnect from TIA-Portal")]
         public static ResponseDisconnect Disconnect()
         {
             try
@@ -105,12 +105,12 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException("Failed disconnecting from TIA-Portal", McpErrorCode.InternalError);
+                    throw new McpException("Failed disconnecting from TIA-Portal");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error disconnecting from TIA-Portal: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error disconnecting from TIA-Portal: {ex.Message}", ex);
             }
         }
 
@@ -118,7 +118,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region state
 
-        [McpServerTool(Name = "GetState"), Description("Get the state of the TIA-Portal MCP server")]
+        [McpServerTool(Name = "GetState", Title = "Get server state", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get the state of the TIA-Portal MCP server")]
         public static ResponseState GetState()
         {
             try
@@ -142,14 +142,14 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException("Failed to retrieve TIA-Portal MCP server state", McpErrorCode.InternalError);
+                    throw new McpException("Failed to retrieve TIA-Portal MCP server state");
                 }
                 
 
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving TIA-Portal MCP server state: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving TIA-Portal MCP server state: {ex.Message}", ex);
             }
         }
 
@@ -157,7 +157,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region project/session
 
-        [McpServerTool(Name = "GetProject"), Description("Get open local project/session")]
+        [McpServerTool(Name = "GetProject", Title = "Get open project", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get open local project/session")]
         public static ResponseGetProjects GetProjects()
         {
             try
@@ -194,11 +194,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving open projects: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving open projects: {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "OpenProject"), Description("Open a TIA-Portal local project/session")]
+        [McpServerTool(Name = "OpenProject", Title = "Open project or session", Destructive = false, Idempotent = true, OpenWorld = false), Description("Open a TIA-Portal local project/session")]
         public static ResponseOpenProject OpenProject(
             [Description("path: defines the path where to the project/session")] string path)
         {
@@ -213,7 +213,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 if (!Regex.IsMatch(extension, @"^\.ap\d+$") &&
                     !Regex.IsMatch(extension, @"^\.als\d+$"))
                 {
-                    throw new McpException("Invalid project file extension. Use .apXX for projects or .alsXX for sessions, where XX=18,19,20,....", McpErrorCode.InvalidParams);
+                    throw new McpException("Invalid project file extension. Use .apXX for projects or .alsXX for sessions, where XX=18,19,20,....");
                 }
 
                 bool success = false;
@@ -241,16 +241,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed to open project '{path}'", McpErrorCode.InternalError);
+                    throw new McpException($"Failed to open project '{path}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error opening project '{path}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error opening project '{path}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "SaveProject"), Description("Save the current TIA-Portal local project/session")]
+        [McpServerTool(Name = "SaveProject", Title = "Save project", Destructive = true, Idempotent = true, OpenWorld = false), Description("Save the current TIA-Portal local project/session")]
         public static ResponseSaveProject SaveProject()
         {
             try
@@ -271,7 +271,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     }
                     else
                     {
-                        throw new McpException("Failed to save local session", McpErrorCode.InternalError);
+                        throw new McpException("Failed to save local session");
                     }
                 }
                 else
@@ -290,17 +290,17 @@ namespace TiaMcpServer.ModelContextProtocol
                     }
                     else
                     {
-                        throw new McpException("Failed to save project", McpErrorCode.InternalError);
+                        throw new McpException("Failed to save project");
                     }
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error saving local project/session: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error saving local project/session: {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "SaveAsProject"), Description("Save current TIA-Portal project/session with a new name")]
+        [McpServerTool(Name = "SaveAsProject", Title = "Save project as", Destructive = true, Idempotent = true, OpenWorld = false), Description("Save current TIA-Portal project/session with a new name")]
         public static ResponseSaveAsProject SaveAsProject(
             [Description("newProjectPath: defines the new path where to save the project")] string newProjectPath)
         {
@@ -308,7 +308,7 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 if (Portal.IsLocalSession)
                 {
-                    throw new McpException($"Cannot save local session as '{newProjectPath}'", McpErrorCode.InvalidParams);
+                    throw new McpException($"Cannot save local session as '{newProjectPath}'");
                 }
                 else
                 {
@@ -326,18 +326,18 @@ namespace TiaMcpServer.ModelContextProtocol
                     }
                     else
                     {
-                        throw new McpException($"Failed saving local project as '{newProjectPath}'", McpErrorCode.InternalError);
+                        throw new McpException($"Failed saving local project as '{newProjectPath}'");
                     }
                 }
 
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error saving local project/session as '{newProjectPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error saving local project/session as '{newProjectPath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "CloseProject"), Description("Close the current TIA-Portal project/session")]
+        [McpServerTool(Name = "CloseProject", Title = "Close project", Destructive = true, Idempotent = true, OpenWorld = false), Description("Close the current TIA-Portal project/session")]
         public static ResponseCloseProject CloseProject()
         {
             try
@@ -361,7 +361,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     }
                     else
                     {
-                        throw new McpException("Failed closing local session", McpErrorCode.InternalError);
+                        throw new McpException("Failed closing local session");
                     }
                 }
                 else
@@ -381,14 +381,14 @@ namespace TiaMcpServer.ModelContextProtocol
                     }
                     else
                     {
-                        throw new McpException("Failed closing project", McpErrorCode.InternalError);
+                        throw new McpException("Failed closing project");
                     }
                 }
 
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error closing local project/session: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error closing local project/session: {ex.Message}", ex);
             }
         }
 
@@ -396,7 +396,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region devices
 
-        [McpServerTool(Name = "GetProjectTree"), Description("Get project structure as a tree view on current local project/session")]
+        [McpServerTool(Name = "GetProjectTree", Title = "Get project tree", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get project structure as a tree view on current local project/session")]
         public static ResponseProjectTree GetProjectTree()
         {
             try
@@ -418,16 +418,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException("Failed retrieving project tree", McpErrorCode.InternalError);
+                    throw new McpException("Failed retrieving project tree");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving project tree: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving project tree: {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "GetDeviceInfo"), Description("Get info from a device from the current project/session")]
+        [McpServerTool(Name = "GetDeviceInfo", Title = "Get device info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get info from a device from the current project/session")]
         public static ResponseDeviceInfo GetDeviceInfo(
             [Description("devicePath: defines the path in the project structure to the device")] string devicePath)
         {
@@ -454,16 +454,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Device not found at '{devicePath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Device not found at '{devicePath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving device info from '{devicePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving device info from '{devicePath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "GetDeviceItemInfo"), Description("Get info from a device item from the current project/session")]
+        [McpServerTool(Name = "GetDeviceItemInfo", Title = "Get device item info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get info from a device item from the current project/session")]
         public static ResponseDeviceItemInfo GetDeviceItemInfo(
             [Description("deviceItemPath: defines the path in the project structure to the device item")] string deviceItemPath)
         {
@@ -490,16 +490,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Device item not found at '{deviceItemPath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Device item not found at '{deviceItemPath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving device item info from '{deviceItemPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving device item info from '{deviceItemPath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "GetDevices"), Description("Get a list of all devices in the project/session")]
+        [McpServerTool(Name = "GetDevices", Title = "Get devices", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of all devices in the project/session")]
         public static ResponseDevices GetDevices()
         {
             try
@@ -536,12 +536,12 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed retrieving devices", McpErrorCode.InternalError);
+                    throw new McpException($"Failed retrieving devices");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving devices: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving devices: {ex.Message}", ex);
             }
         }
 
@@ -549,7 +549,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region plc software
 
-        [McpServerTool(Name = "GetSoftwareInfo"), Description("Get plc software info")]
+        [McpServerTool(Name = "GetSoftwareInfo", Title = "Get PLC software info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get plc software info")]
         public static ResponseSoftwareInfo GetSoftwareInfo(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath)
         {
@@ -576,16 +576,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Software not found at '{softwarePath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Software not found at '{softwarePath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving software info from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving software info from '{softwarePath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "CompileSoftware"), Description("Compile the plc software")]
+        [McpServerTool(Name = "CompileSoftware", Title = "Compile PLC software", Destructive = false, Idempotent = true, OpenWorld = false), Description("Compile the plc software")]
         public static ResponseCompileSoftware CompileSoftware(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("password: the password to access adminsitration, default: no password")] string password = "")
@@ -607,16 +607,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed compiling software '{softwarePath}': {result}", McpErrorCode.InternalError);
+                    throw new McpException($"Failed compiling software '{softwarePath}': {result}");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error compiling software '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error compiling software '{softwarePath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "GetSoftwareTree"), Description("Get the structure/tree of a given PLC software showing blocks, types, and external sources")]
+        [McpServerTool(Name = "GetSoftwareTree", Title = "Get PLC software tree", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get the structure/tree of a given PLC software showing blocks, types, and external sources")]
         public static ResponseSoftwareTree GetSoftwareTree(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath)
         {
@@ -639,12 +639,12 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed retrieving software tree from '{softwarePath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Failed retrieving software tree from '{softwarePath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving software tree from '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving software tree from '{softwarePath}': {ex.Message}", ex);
             }
         }
 
@@ -652,7 +652,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region blocks
 
-        [McpServerTool(Name = "GetBlockInfo"), Description("Get a block info, which is located in the plc software")]
+        [McpServerTool(Name = "GetBlockInfo", Title = "Get block info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a block info, which is located in the plc software")]
         public static ResponseBlockInfo GetBlockInfo(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("blockPath: defines the path in the project structure to the block")] string blockPath)
@@ -687,16 +687,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Block not found at '{blockPath}' in '{softwarePath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Block not found at '{blockPath}' in '{softwarePath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving block info from '{blockPath}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving block info from '{blockPath}' in '{softwarePath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "GetBlocks"), Description("Get a list of blocks, which are located in plc software")]
+        [McpServerTool(Name = "GetBlocks", Title = "Get blocks", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of blocks, which are located in plc software")]
         public static ResponseBlocks GetBlocks(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "")
@@ -744,16 +744,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed retrieving blocks with regex '{regexName}' in '{softwarePath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Failed retrieving blocks with regex '{regexName}' in '{softwarePath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving blocks with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving blocks with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "GetBlocksWithHierarchy"), Description("Get a list of all blocks with their group hierarchy from the plc software.")]
+        [McpServerTool(Name = "GetBlocksWithHierarchy", Title = "Get blocks with hierarchy", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of all blocks with their group hierarchy from the plc software.")]
         public static ResponseBlocksWithHierarchy GetBlocksWithHierarchy(
         [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath)
         {
@@ -777,19 +777,19 @@ namespace TiaMcpServer.ModelContextProtocol
                 else
                 {
                     // Specific failure: root group could not be resolved
-                    throw new McpException($"Block root group not found for '{softwarePath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Block root group not found for '{softwarePath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
                 // Generic unexpected failure wrapper
-                throw new McpException($"Unexpected error retrieving block hierarchy for '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving block hierarchy for '{softwarePath}': {ex.Message}", ex);
             }
         }
 
 
 
-        [McpServerTool(Name = "ExportBlock"), Description("Export a block from plc software to file")]
+        [McpServerTool(Name = "ExportBlock", Title = "Export block to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export a block from plc software to file")]
         public static ResponseExportBlock ExportBlock(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("blockPath: full path to the block in the project structure, e.g. 'Group/Subgroup/Name' (single names are ambiguous)")] string blockPath,
@@ -812,7 +812,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     };
                 }
                 // Should not be reachable because Portal.ExportBlock throws on failure
-                throw new McpException($"Failed exporting block from '{blockPath}' to '{exportPath}'", McpErrorCode.InternalError);
+                throw new McpException($"Failed exporting block from '{blockPath}' to '{exportPath}'");
             }
             catch (TiaMcpServer.Siemens.PortalException pex)
             {
@@ -853,7 +853,7 @@ namespace TiaMcpServer.ModelContextProtocol
                             }
 
                             var msg = $"Block not found.{suggestionNote}".Trim();
-                            throw new McpException(msg, McpErrorCode.InvalidParams);
+                            throw new McpException(msg);
                         }
 
                     case TiaMcpServer.Siemens.PortalErrorCode.ExportFailed:
@@ -866,22 +866,22 @@ namespace TiaMcpServer.ModelContextProtocol
                             Logger?.LogError(pex, "MCP ExportBlock failed for {SoftwarePath} {BlockPath} -> {ExportPath}",
                                 pex.Data?["softwarePath"], pex.Data?["blockPath"], pex.Data?["exportPath"]);
 
-                            throw new McpException(msg, McpErrorCode.InternalError);
+                            throw new McpException(msg);
                         }
 
                     case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
                     case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
                         {
-                            throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                            throw new McpException(pex.Message);
                         }
                 }
 
                 // Fallback
-                throw new McpException(pex.Message, McpErrorCode.InternalError);
+                throw new McpException(pex.Message);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error exporting block from '{blockPath}' to '{exportPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error exporting block from '{blockPath}' to '{exportPath}': {ex.Message}", ex);
             }
         }
 
@@ -927,7 +927,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 return string.Empty; // best effort only
             }
         }
-        [McpServerTool(Name = "ImportBlock"), Description("Import a block file to plc software")]
+        [McpServerTool(Name = "ImportBlock", Title = "Import block from XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import a block file to plc software")]
         public static ResponseImportBlock ImportBlock(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("groupPath: defines the path in the project structure to the group, where to import the block")] string groupPath,
@@ -949,26 +949,24 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed importing block from '{importPath}' to '{groupPath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Failed importing block from '{importPath}' to '{groupPath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error importing block from '{importPath}' to '{groupPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error importing block from '{importPath}' to '{groupPath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "ExportBlocks"), Description("Export all blocks from the plc software to path")]
+        [McpServerTool(Name = "ExportBlocks", Title = "Export blocks to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export all blocks from the plc software to path")]
         public static async Task<ResponseExportBlocks> ExportBlocks(
-            IMcpServer server,
-            RequestContext<CallToolRequestParams> context,
+            IProgress<ProgressNotificationValue> progress,
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("exportPath: defines the path where to export the blocks")] string exportPath,
             [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "",
             [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
         {
             var startTime = DateTime.Now;
-            var progressToken = context.Params?.ProgressToken;
             
             try
             {
@@ -980,16 +978,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                 if (totalBlocks == 0)
                 {
-                    if (progressToken != null)
-                    {
-                        await server.SendNotificationAsync("notifications/progress", new
-                        {
-                            Progress = 0,
-                            Total = 0,
-                            Message = "No blocks found to export",
-                            progressToken
-                        });
-                    }
+                    progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = "No blocks found to export" });
                     
                     return new ResponseExportBlocks
                     {
@@ -1007,16 +996,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
 
                 // Send initial progress notification
-                if (progressToken != null)
-                {
-                    await server.SendNotificationAsync("notifications/progress", new
-                    {
-                        Progress = 0,
-                        Total = totalBlocks,
-                        Message = $"Starting export of {totalBlocks} blocks...",
-                        progressToken
-                    });
-                }
+                progress.Report(new ProgressNotificationValue { Progress = 0, Total = totalBlocks, Message = $"Starting export of {totalBlocks} blocks..." });
 
                 // Export blocks asynchronously
                 var exportedBlocks = await Task.Run(() => Portal.ExportBlocks(softwarePath, exportPath, regexName, preservePath));
@@ -1049,16 +1029,10 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 
                 // Send progress update after export completion
-                if (exportedBlocks != null && progressToken != null)
+                if (exportedBlocks != null)
                 {
                     var exportedCount = exportedBlocks.Count();
-                    await server.SendNotificationAsync("notifications/progress", new
-                    {
-                        Progress = exportedCount,
-                        Total = totalBlocks,
-                        Message = $"Exported {exportedCount} of {totalBlocks} blocks",
-                        progressToken
-                    });
+                    progress.Report(new ProgressNotificationValue { Progress = exportedCount, Total = totalBlocks, Message = $"Exported {exportedCount} of {totalBlocks} blocks" });
                 }
 
                 if (exportedBlocks != null)
@@ -1091,16 +1065,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     }
 
                     // Send final progress notification
-                    if (progressToken != null)
-                    {
-                        await server.SendNotificationAsync("notifications/progress", new
-                        {
-                            Progress = processedCount,
-                            Total = totalBlocks,
-                            Message = $"Export completed: {processedCount} blocks exported successfully",
-                            progressToken
-                        });
-                    }
+                    progress.Report(new ProgressNotificationValue { Progress = processedCount, Total = totalBlocks, Message = $"Export completed: {processedCount} blocks exported successfully" });
 
                     var duration = (DateTime.Now - startTime).TotalSeconds;
                     Logger?.LogInformation($"Export completed: {processedCount} blocks exported in {duration:F2} seconds");
@@ -1123,33 +1088,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed exporting blocks with '{regexName}' from '{softwarePath}' to {exportPath}", McpErrorCode.InternalError);
+                    throw new McpException($"Failed exporting blocks with '{regexName}' from '{softwarePath}' to {exportPath}");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
                 // Send error progress notification if we have a progress token
-                if (progressToken != null)
-                {
-                    try
-                    {
-                        await server.SendNotificationAsync("notifications/progress", new
-                        {
-                            Progress = 0,
-                            Total = 0,
-                            Message = $"Export failed: {ex.Message}",
-                            Error = true,
-                            progressToken
-                        });
-                    }
-                    catch
-                    {
-                        // Ignore notification errors during error handling
-                    }
-                }
+                progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Export failed: {ex.Message}" });
                 
                 Logger?.LogError(ex, $"Failed exporting blocks with '{regexName}' from '{softwarePath}' to {exportPath}");
-                throw new McpException($"Unexpected error exporting blocks with '{regexName}' from '{softwarePath}' to {exportPath}: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error exporting blocks with '{regexName}' from '{softwarePath}' to {exportPath}: {ex.Message}", ex);
             }
         }
 
@@ -1157,7 +1105,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region types
 
-        [McpServerTool(Name = "GetTypeInfo"), Description("Get a type info from the plc software")]
+        [McpServerTool(Name = "GetTypeInfo", Title = "Get type info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a type info from the plc software")]
         public static ResponseTypeInfo GetTypeInfo(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("typePath: defines the path in the project structure to the type")] string typePath)
@@ -1189,16 +1137,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Type not found at '{typePath}' in '{softwarePath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Type not found at '{typePath}' in '{softwarePath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving type info from '{typePath}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving type info from '{typePath}' in '{softwarePath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "GetTypes"), Description("Get a list of types from the plc software")]
+        [McpServerTool(Name = "GetTypes", Title = "Get types", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of types from the plc software")]
         public static ResponseTypes GetTypes(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "")
@@ -1243,16 +1191,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed retrieving user defined types with regex '{regexName}' in '{softwarePath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Failed retrieving user defined types with regex '{regexName}' in '{softwarePath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving user defined types with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error retrieving user defined types with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "ExportType"), Description("Export a type from the plc software")]
+        [McpServerTool(Name = "ExportType", Title = "Export type to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export a type from the plc software")]
         public static ResponseExportType ExportType(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("exportPath: defines the path where export the type")] string exportPath,
@@ -1276,7 +1224,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed exporting type from '{typePath}' to '{exportPath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Failed exporting type from '{typePath}' to '{exportPath}'");
                 }
             }
             catch (TiaMcpServer.Siemens.PortalException pex)
@@ -1284,10 +1232,10 @@ namespace TiaMcpServer.ModelContextProtocol
                 switch (pex.Code)
                 {
                     case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
-                        throw new McpException("Type not found.", McpErrorCode.InvalidParams);
+                        throw new McpException("Type not found.");
                     case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
                     case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
-                        throw new McpException(pex.Message, McpErrorCode.InvalidParams);
+                        throw new McpException(pex.Message);
                     case TiaMcpServer.Siemens.PortalErrorCode.ExportFailed:
                         {
                             var reason = pex.InnerException?.Message?.Trim();
@@ -1295,18 +1243,18 @@ namespace TiaMcpServer.ModelContextProtocol
                             if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
                             Logger?.LogError(pex, "MCP ExportType failed for {SoftwarePath} {TypePath} -> {ExportPath}",
                                 pex.Data?["softwarePath"], pex.Data?["typePath"], pex.Data?["exportPath"]);
-                            throw new McpException(msg, McpErrorCode.InternalError);
+                            throw new McpException(msg);
                         }
                 }
-                throw new McpException(pex.Message, McpErrorCode.InternalError);
+                throw new McpException(pex.Message);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error exporting type from '{typePath}' to '{exportPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error exporting type from '{typePath}' to '{exportPath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "ImportType"), Description("Import a type from file into the plc software")]
+        [McpServerTool(Name = "ImportType", Title = "Import type from XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import a type from file into the plc software")]
         public static ResponseImportType ImportType(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("groupPath: defines the path in the project structure to the group, where to import the type")] string groupPath,
@@ -1328,26 +1276,24 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed importing type from '{importPath}' to '{groupPath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Failed importing type from '{importPath}' to '{groupPath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error importing type from '{importPath}' to '{groupPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error importing type from '{importPath}' to '{groupPath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "ExportTypes"), Description("Export types from the plc software to path")]
+        [McpServerTool(Name = "ExportTypes", Title = "Export types to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export types from the plc software to path")]
         public static async Task<ResponseExportTypes> ExportTypes(
-            IMcpServer server,
-            RequestContext<CallToolRequestParams> context,
+            IProgress<ProgressNotificationValue> progress,
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("exportPath: defines the path where to export the types")] string exportPath,
             [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "",
             [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
         {
             var startTime = DateTime.Now;
-            var progressToken = context.Params?.ProgressToken;
             
             try
             {
@@ -1359,16 +1305,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                 if (totalTypes == 0)
                 {
-                    if (progressToken != null)
-                    {
-                        await server.SendNotificationAsync("notifications/progress", new
-                        {
-                            Progress = 0,
-                            Total = 0,
-                            Message = "No types found to export",
-                            progressToken
-                        });
-                    }
+                    progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = "No types found to export" });
                     
                     return new ResponseExportTypes
                     {
@@ -1386,16 +1323,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
 
                 // Send initial progress notification
-                if (progressToken != null)
-                {
-                    await server.SendNotificationAsync("notifications/progress", new
-                    {
-                        Progress = 0,
-                        Total = totalTypes,
-                        Message = $"Starting export of {totalTypes} types...",
-                        progressToken
-                    });
-                }
+                progress.Report(new ProgressNotificationValue { Progress = 0, Total = totalTypes, Message = $"Starting export of {totalTypes} types..." });
 
                 // Export types asynchronously
                 var exportedTypes = await Task.Run(() => Portal.ExportTypes(softwarePath, exportPath, regexName, preservePath));
@@ -1425,16 +1353,10 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 
                 // Send progress update after export completion
-                if (exportedTypes != null && progressToken != null)
+                if (exportedTypes != null)
                 {
                     var exportedCount = exportedTypes.Count();
-                    await server.SendNotificationAsync("notifications/progress", new
-                    {
-                        Progress = exportedCount,
-                        Total = totalTypes,
-                        Message = $"Exported {exportedCount} of {totalTypes} types",
-                        progressToken
-                    });
+                    progress.Report(new ProgressNotificationValue { Progress = exportedCount, Total = totalTypes, Message = $"Exported {exportedCount} of {totalTypes} types" });
                 }
 
                 if (exportedTypes != null)
@@ -1464,16 +1386,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     }
 
                     // Send final progress notification
-                    if (progressToken != null)
-                    {
-                        await server.SendNotificationAsync("notifications/progress", new
-                        {
-                            Progress = processedCount,
-                            Total = totalTypes,
-                            Message = $"Export completed: {processedCount} types exported successfully",
-                            progressToken
-                        });
-                    }
+                    progress.Report(new ProgressNotificationValue { Progress = processedCount, Total = totalTypes, Message = $"Export completed: {processedCount} types exported successfully" });
 
                     var duration = (DateTime.Now - startTime).TotalSeconds;
                     Logger?.LogInformation($"Type export completed: {processedCount} types exported in {duration:F2} seconds");
@@ -1496,33 +1409,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed exporting types '{regexName}' from '{softwarePath}' to {exportPath}", McpErrorCode.InternalError);
+                    throw new McpException($"Failed exporting types '{regexName}' from '{softwarePath}' to {exportPath}");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
                 // Send error progress notification if we have a progress token
-                if (progressToken != null)
-                {
-                    try
-                    {
-                        await server.SendNotificationAsync("notifications/progress", new
-                        {
-                            Progress = 0,
-                            Total = 0,
-                            Message = $"Type export failed: {ex.Message}",
-                            Error = true,
-                            progressToken
-                        });
-                    }
-                    catch
-                    {
-                        // Ignore notification errors during error handling
-                    }
-                }
+                progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Type export failed: {ex.Message}" });
                 
                 Logger?.LogError(ex, $"Failed exporting types '{regexName}' from '{softwarePath}' to {exportPath}");
-                throw new McpException($"Unexpected error exporting types '{regexName}' from '{softwarePath}' to {exportPath}: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error exporting types '{regexName}' from '{softwarePath}' to {exportPath}: {ex.Message}", ex);
             }
         }
 
@@ -1530,7 +1426,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region documents
 
-        [McpServerTool(Name = "ExportAsDocuments"), Description("Export as documents (.s7dcl/.s7res) from a block in the plc software to path")]
+        [McpServerTool(Name = "ExportAsDocuments", Title = "Export block as documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export as documents (.s7dcl/.s7res) from a block in the plc software to path")]
         public static ResponseExportAsDocuments ExportAsDocuments(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("blockPath: defines the path in the project structure to the block")] string blockPath,
@@ -1541,7 +1437,7 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 if (Engineering.TiaMajorVersion < 20)
                 {
-                    throw new McpException("ExportAsDocuments requires TIA Portal V20 or newer", McpErrorCode.InvalidParams);
+                    throw new McpException("ExportAsDocuments requires TIA Portal V20 or newer");
                 }
                 if (Portal.ExportAsDocuments(softwarePath, blockPath, exportPath, preservePath))
                 {
@@ -1557,32 +1453,30 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed exporting documents from '{blockPath}' to '{exportPath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Failed exporting documents from '{blockPath}' to '{exportPath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error exporting documents from '{blockPath}' to '{exportPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error exporting documents from '{blockPath}' to '{exportPath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "ExportBlocksAsDocuments"), Description("Export as documents (.s7dcl/.s7res) from blocks in the plc software to path")]
+        [McpServerTool(Name = "ExportBlocksAsDocuments", Title = "Export blocks as documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export as documents (.s7dcl/.s7res) from blocks in the plc software to path")]
         public static async Task<ResponseExportBlocksAsDocuments> ExportBlocksAsDocuments(
-            IMcpServer server,
-            RequestContext<CallToolRequestParams> context,
+            IProgress<ProgressNotificationValue> progress,
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("exportPath: defines the path where to export the documents")] string exportPath,
             [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "",
             [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
         {
             var startTime = DateTime.Now;
-            var progressToken = context.Params?.ProgressToken;
             
             try
             {
                 if (Engineering.TiaMajorVersion < 20)
                 {
-                    throw new McpException("ExportBlocksAsDocuments requires TIA Portal V20 or newer", McpErrorCode.InvalidParams);
+                    throw new McpException("ExportBlocksAsDocuments requires TIA Portal V20 or newer");
                 }
                 // First, get the list of blocks to determine total count
                 Logger?.LogInformation($"Starting export of blocks as documents from '{softwarePath}' to '{exportPath}'");
@@ -1592,16 +1486,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                 if (totalBlocks == 0)
                 {
-                    if (progressToken != null)
-                    {
-                        await server.SendNotificationAsync("notifications/progress", new
-                        {
-                            Progress = 0,
-                            Total = 0,
-                            Message = "No blocks found to export as documents",
-                            progressToken
-                        });
-                    }
+                    progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = "No blocks found to export as documents" });
                     
                     return new ResponseExportBlocksAsDocuments
                     {
@@ -1619,31 +1504,16 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
 
                 // Send initial progress notification
-                if (progressToken != null)
-                {
-                    await server.SendNotificationAsync("notifications/progress", new
-                    {
-                        Progress = 0,
-                        Total = totalBlocks,
-                        Message = $"Starting export of {totalBlocks} blocks as documents...",
-                        progressToken
-                    });
-                }
+                progress.Report(new ProgressNotificationValue { Progress = 0, Total = totalBlocks, Message = $"Starting export of {totalBlocks} blocks as documents..." });
 
                 // Export blocks as documents asynchronously
                 var exportedBlocks = await Task.Run(() => Portal.ExportBlocksAsDocuments(softwarePath, exportPath, regexName, preservePath));
                 
                 // Send progress update after export completion
-                if (exportedBlocks != null && progressToken != null)
+                if (exportedBlocks != null)
                 {
                     var exportedCount = exportedBlocks.Count();
-                    await server.SendNotificationAsync("notifications/progress", new
-                    {
-                        Progress = exportedCount,
-                        Total = totalBlocks,
-                        Message = $"Exported {exportedCount} of {totalBlocks} blocks as documents",
-                        progressToken
-                    });
+                    progress.Report(new ProgressNotificationValue { Progress = exportedCount, Total = totalBlocks, Message = $"Exported {exportedCount} of {totalBlocks} blocks as documents" });
                 }
 
                 if (exportedBlocks != null)
@@ -1676,16 +1546,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     }
 
                     // Send final progress notification
-                    if (progressToken != null)
-                    {
-                        await server.SendNotificationAsync("notifications/progress", new
-                        {
-                            Progress = processedCount,
-                            Total = totalBlocks,
-                            Message = $"Document export completed: {processedCount} blocks exported successfully",
-                            progressToken
-                        });
-                    }
+                    progress.Report(new ProgressNotificationValue { Progress = processedCount, Total = totalBlocks, Message = $"Document export completed: {processedCount} blocks exported successfully" });
 
                     var duration = (DateTime.Now - startTime).TotalSeconds;
                     Logger?.LogInformation($"Document export completed: {processedCount} blocks exported in {duration:F2} seconds");
@@ -1706,37 +1567,20 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed exporting documents to '{exportPath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Failed exporting documents to '{exportPath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
                 // Send error progress notification if we have a progress token
-                if (progressToken != null)
-                {
-                    try
-                    {
-                        await server.SendNotificationAsync("notifications/progress", new
-                        {
-                            Progress = 0,
-                            Total = 0,
-                            Message = $"Document export failed: {ex.Message}",
-                            Error = true,
-                            progressToken
-                        });
-                    }
-                    catch
-                    {
-                        // Ignore notification errors during error handling
-                    }
-                }
+                progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Document export failed: {ex.Message}" });
                 
                 Logger?.LogError(ex, $"Failed exporting documents to '{exportPath}'");
-                throw new McpException($"Unexpected error exporting documents to '{exportPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error exporting documents to '{exportPath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "ImportFromDocuments"), Description("Import program block from SIMATIC SD documents (.s7dcl/.s7res) into PLC software (V20+)")]
+        [McpServerTool(Name = "ImportFromDocuments", Title = "Import block from documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import program block from SIMATIC SD documents (.s7dcl/.s7res) into PLC software (V20+)")]
         public static ResponseImportFromDocuments ImportFromDocuments(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("groupPath: optional path within the PLC program where the block should be placed (empty for root)")] string groupPath,
@@ -1748,7 +1592,7 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 if (Engineering.TiaMajorVersion < 20)
                 {
-                    throw new McpException("ImportFromDocuments requires TIA Portal V20 or newer", McpErrorCode.InvalidParams);
+                    throw new McpException("ImportFromDocuments requires TIA Portal V20 or newer");
                 }
 
                 var option = ParseImportDocumentOption(importOption);
@@ -1789,19 +1633,18 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed importing '{fileNameWithoutExtension}' from '{importPath}'", McpErrorCode.InternalError);
+                    throw new McpException($"Failed importing '{fileNameWithoutExtension}' from '{importPath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error importing from documents: {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error importing from documents: {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "ImportBlocksFromDocuments"), Description("Import program blocks from SIMATIC SD documents (.s7dcl/.s7res) into PLC software (V20+)")]
+        [McpServerTool(Name = "ImportBlocksFromDocuments", Title = "Import blocks from documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import program blocks from SIMATIC SD documents (.s7dcl/.s7res) into PLC software (V20+)")]
         public static async Task<ResponseImportBlocksFromDocuments> ImportBlocksFromDocuments(
-            IMcpServer server,
-            RequestContext<CallToolRequestParams> context,
+            IProgress<ProgressNotificationValue> progress,
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("groupPath: optional path within the PLC program where the blocks should be placed (empty for root)")] string groupPath,
             [Description("importPath: directory containing the document files (.s7dcl/.s7res)")] string importPath,
@@ -1809,13 +1652,12 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("importOption: ImportDocumentOptions value (None, Override, SkipInactiveCultures, ActivateInactiveCultures)")] string importOption = "Override")
         {
             var startTime = DateTime.Now;
-            var progressToken = context.Params?.ProgressToken;
 
             try
             {
                 if (Engineering.TiaMajorVersion < 20)
                 {
-                    throw new McpException("ImportBlocksFromDocuments requires TIA Portal V20 or newer", McpErrorCode.InvalidParams);
+                    throw new McpException("ImportBlocksFromDocuments requires TIA Portal V20 or newer");
                 }
 
                 // Determine total by scanning .s7dcl files matching regex
@@ -1852,16 +1694,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 catch { /* ignore pre-scan errors */ }
 
-                if (progressToken != null)
-                {
-                    await server.SendNotificationAsync("notifications/progress", new
-                    {
-                        Progress = 0,
-                        Total = total,
-                        Message = total > 0 ? $"Starting import of {total} blocks from documents..." : "Scanning import directory...",
-                        progressToken
-                    });
-                }
+                progress.Report(new ProgressNotificationValue { Progress = 0, Total = total, Message = total > 0 ? $"Starting import of {total} blocks from documents..." : "Scanning import directory..." });
 
                 var option = ParseImportDocumentOption(importOption);
                 var imported = await Task.Run(() => Portal.ImportBlocksFromDocuments(softwarePath, groupPath, importPath, regexName, option));
@@ -1894,16 +1727,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     }
                 }
 
-                if (progressToken != null)
-                {
-                    await server.SendNotificationAsync("notifications/progress", new
-                    {
-                        Progress = processed,
-                        Total = total,
-                        Message = $"Document import completed: {processed} blocks imported successfully",
-                        progressToken
-                    });
-                }
+                progress.Report(new ProgressNotificationValue { Progress = processed, Total = total, Message = $"Document import completed: {processed} blocks imported successfully" });
 
                 var duration = (DateTime.Now - startTime).TotalSeconds;
                 Logger?.LogInformation($"Document import completed: {processed} blocks imported in {duration:F2} seconds");
@@ -1925,24 +1749,10 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                if (progressToken != null)
-                {
-                    try
-                    {
-                        await server.SendNotificationAsync("notifications/progress", new
-                        {
-                            Progress = 0,
-                            Total = 0,
-                            Message = $"Document import failed: {ex.Message}",
-                            Error = true,
-                            progressToken
-                        });
-                    }
-                    catch { }
-                }
+                progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Document import failed: {ex.Message}" });
 
                 Logger?.LogError(ex, $"Failed importing documents from '{importPath}'");
-                throw new McpException($"Unexpected error importing documents from '{importPath}': {ex.Message}", ex, McpErrorCode.InternalError);
+                throw new McpException($"Unexpected error importing documents from '{importPath}': {ex.Message}", ex);
             }
         }
 
@@ -1974,7 +1784,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 case "activateinactive":
                     return ImportDocumentOptions.ActivateInactiveCultures;
                 default:
-                    throw new McpException($"Invalid importOption '{option}'. Allowed: None, Override, SkipInactiveCultures, ActivateInactiveCultures", McpErrorCode.InvalidParams);
+                    throw new McpException($"Invalid importOption '{option}'. Allowed: None, Override, SkipInactiveCultures, ActivateInactiveCultures");
             }
         }
 

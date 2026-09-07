@@ -42,7 +42,7 @@ The TiaMcpServer project provides the following functionality:
 *   **Working with devices:** The `GetStructure`, `GetDeviceInfo`, `GetDeviceItemInfo`, and `GetDevices` tools allow the LLM to get information about the devices in a project.
 *   **Working with PLC software:** The `GetSoftwareInfo` and `CompileSoftware` tools allow the LLM to get information about and compile PLC software.
 *   **Working with blocks:** The `GetBlockInfo`, `GetBlocks`, `GetBlocksWithHierarchy`, `ExportBlock`, `ImportBlock`, and `ExportBlocks` tools allow the LLM to work with blocks.
-    - `ExportBlock` expects `blockPath` to be a fully qualified path like `Group/Subgroup/Name`. Passing just a name is ambiguous; the MCP layer will return `InvalidParams` and may suggest likely full paths based on project contents.
+    - `ExportBlock` expects `blockPath` to be a fully qualified path like `Group/Subgroup/Name`. Passing just a name is ambiguous; the tool fails with an error result and may suggest likely full paths based on project contents.
 *   **Working with types:** The `GetTypeInfo`, `GetTypes`, `ExportType`, `ImportType`, and `ExportTypes` tools allow the LLM to work with types.
 *   **Exporting blocks as documents (V20+):** The `ExportAsDocuments` and `ExportBlocksAsDocuments` tools export blocks as SIMATIC SD documents (.s7dcl/.s7res). Requires TIA Portal V20 or newer.
 *   **Importing blocks from documents (V20+):** The `ImportFromDocuments` and `ImportBlocksFromDocuments` tools import blocks from SIMATIC SD documents into PLC software. Requires TIA Portal V20 or newer.
@@ -76,9 +76,10 @@ The TiaMcpServer project is a powerful tool that allows LLMs to interact with th
   - Attaches context via `Exception.Data` keys: `softwarePath`, `blockPath`, `exportPath`.
   - Preserves the original exception as `InnerException` for `ExportFailed` and logs full details.
 - MCP layer
-  - Maps `NotFound` to `McpException` with `InvalidParams`. If `blockPath` is a single name, it suggests likely full paths by scanning blocks.
-  - Maps `ExportFailed` to `InternalError` and includes a concise reason from `InnerException.Message`.
-  - Consistency: TIA Portal does not export inconsistent blocks/types. Single-item exports return `InvalidParams` advising to compile first. Bulk exports skip inconsistent items and include them in an `Inconsistent` list in the response.
+  - Rethrows as `McpException`. Since SDK 2.x an `McpException` thrown from a tool becomes a `CallToolResult` with `isError: true` carrying the message as text, instead of a JSON-RPC error, so the model can read the reason and retry.
+  - For `NotFound`, if `blockPath` is a single name, it suggests likely full paths by scanning blocks.
+  - For `ExportFailed`, includes a concise reason from `InnerException.Message`.
+  - Consistency: TIA Portal does not export inconsistent blocks/types. Single-item exports fail with a message advising to compile first. Bulk exports skip inconsistent items and include them in an `Inconsistent` list in the response.
   - Keeps user messages concise; structured details live in logs and context.
   - Current standardization is applied to `ExportBlock` and will be rolled out to other methods incrementally.
   - Exception metadata: Context keys (e.g., `softwarePath`, `blockPath`/`typePath`, `exportPath`) are attached in a single catch per portal method just before rethrow, not at inline throw sites. See `docs/error-model.md`.

@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Xml;
 using TiaMcpServer.ModelContextProtocol;
@@ -78,10 +79,24 @@ namespace TiaMcpServer
                 }
 
                 builder.Services
-                    .AddMcpServer()
+                    .AddMcpServer(serverOptions =>
+                    {
+                        serverOptions.ServerInfo = new global::ModelContextProtocol.Protocol.Implementation
+                        {
+                            Name = "TiaMcpServer",
+                            Title = "TIA Portal MCP Server",
+                            Version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0"
+                        };
+
+                        serverOptions.ServerInstructions =
+                            "Exposes Siemens TIA Portal via Openness. Call 'Connect' first, then 'OpenProject' with an " +
+                            "absolute .apXX project or .alsXX session path. Use 'GetProjectTree' or 'GetSoftwareTree' to " +
+                            "discover the path strings that the other tools expect. Export and import tools operate on " +
+                            "the local file system of the machine running this server.";
+                    })
                     .WithStdioServerTransport()
-                    .WithToolsFromAssembly()
-                    .WithPromptsFromAssembly();
+                    .WithTools((IEnumerable<Type>)new[] { typeof(McpServer) })
+                    .WithPrompts((IEnumerable<Type>)new[] { typeof(McpPrompts) });
 
                 // Register the Portal service for dependency injection
                 builder.Services.AddSingleton<Portal>();
