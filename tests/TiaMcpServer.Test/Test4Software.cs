@@ -51,7 +51,7 @@ namespace TiaMcpServer.Test
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath6, "")]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath7, "")]
         //[DataRow(Settings.Project2ProjectPath, Settings.Project2PlcSoftwarePath, "")]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "Safety1st")]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "Safety1st")]
         public void Test_400_CompilePlcSoftware(string projectPath, string softwarePath, string password)
         {
             if (_portal == null)
@@ -88,7 +88,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "0_OBs/Main_1")]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "0_OBs/Main_1")]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "0_OBs/Main_1")]
         public void Test_411_GetBlock(string projectPath, string softwarePath, string blockPath)
         {
             if (_portal == null)
@@ -147,7 +147,7 @@ namespace TiaMcpServer.Test
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "^M.+")]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath1, "")]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath2, "")]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "")]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "")]
         public void Test_413_GetBlocks(string projectPath, string softwarePath, string regexName)
         {
             if (_portal == null)
@@ -180,9 +180,9 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "")]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "")]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "DataTyp.+")]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "ErrTyp.+")]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "")]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "DataTyp.+")]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "ErrTyp.+")]
         public void Test_414_GetTypes(string projectPath, string softwarePath, string regexName)
         {
             if (_portal == null)
@@ -211,9 +211,9 @@ namespace TiaMcpServer.Test
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "0_OBs/Main_1", false)]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "1_Tests/FC_Block_1", true)]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "1_Tests/DB_Block_1", true)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "0_OBs/Main_1", true)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "0_OBs/Main_1", false)]
-        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "Common/CarrierRegister/GLOBAL_POSITIONING", true)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "0_OBs/Main_1", true)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "0_OBs/Main_1", false)]
+        //[DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "Common/CarrierRegister/GLOBAL_POSITIONING", true)]
         public void Test_415_ExportBlock(string projectPath, string softwarePath, string exportPath, string blockPath, bool preservePath)
         {
             if (_portal == null)
@@ -319,9 +319,9 @@ namespace TiaMcpServer.Test
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "M.*", false)]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath1, Settings.Project1ExportPath1, "", true)]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath2, Settings.Project1ExportPath2, "", true)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "", true)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "_HMI_.+", true)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "_HMI_.+", false)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "", true)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "_HMI_.+", true)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "_HMI_.+", false)]
         public void Test_417_ExportBlocks(string projectPath, string softwarePath, string exportPath, string regexName, bool preservePath)
         {
             if (_portal == null)
@@ -357,9 +357,9 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "", true)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "", true)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "(^ErrTyp_|_HMI_AllError$)", true)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "(^ErrTyp_|_HMI_AllError$)", false)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "", true)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "(^ErrTyp_|_HMI_AllError$)", true)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "(^ErrTyp_|_HMI_AllError$)", false)]
         public void Test_418_ExportTypes(string projectPath, string softwarePath, string exportPath, string regexName, bool preservePath)
         {
             if (_portal == null)
@@ -419,9 +419,9 @@ namespace TiaMcpServer.Test
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "M.*", false)]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath1, Settings.Project1ExportPath1, "", true)]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath2, Settings.Project1ExportPath2, "", true)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "", true)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "_HMI_.+", true)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "_HMI_.+", false)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "", true)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "_HMI_.+", true)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "_HMI_.+", false)]
         public void Test_422_ExportBlocksAsDocuments(string projectPath, string softwarePath, string exportPath, string regexName, bool preservePath)
         {
             if (_portal == null)

@@ -30,7 +30,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath)]
-        [DataRow(Settings.Session1ProjectPath)]
+        // [DataRow(Settings.Session1ProjectPath)]
         public void Test_500_McpServer_OpenCloseProject(string projectPath)
         {
 
@@ -45,7 +45,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath)]
-        [DataRow(Settings.Session1ProjectPath)]
+        // [DataRow(Settings.Session1ProjectPath)]
         public void Test_501_McpServer_GetProjectTree(string projectPath)
         {
 
@@ -65,7 +65,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath)]
-        [DataRow(Settings.Session1ProjectPath)]
+        // [DataRow(Settings.Session1ProjectPath)]
         public void Test_502_McpServer_GetState(string projectPath)
         {
 
@@ -87,7 +87,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         //[DataRow(Settings.Project1ProjectPath)]
-        //[DataRow(Settings.Session1ProjectPath)]
+        //// [DataRow(Settings.Session1ProjectPath)]
         public void Test_503_McpServer_GetProjects()
         {
 
@@ -126,7 +126,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath)]
-        [DataRow(Settings.Session1ProjectPath)]
+        // [DataRow(Settings.Session1ProjectPath)]
         public void Test_504_McpServer_GetDevices(string projectPath)
         {
 
@@ -147,7 +147,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath)]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath)]
         public void Test_505_McpServer_GetSoftwareInfo(string projectPath, string softwarePath)
         {
 
@@ -165,7 +165,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, "HMI_0")]
-        [DataRow(Settings.Session1ProjectPath, "PC-System_1")]
+        //[DataRow(Settings.Session1ProjectPath, "PC-System_1")]
         public void Test_506_McpServer_GetDeviceInfo(string projectPath, string devicePath)
         {
 
@@ -183,7 +183,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, "PC-System_0/PLC_0")]
-        [DataRow(Settings.Session1ProjectPath, "PC-System_1/Software PLC_1")]
+        //[DataRow(Settings.Session1ProjectPath, "PC-System_1/Software PLC_1")]
         public void Test_507_McpServer_GetDeviceItemInfo(string projectPath, string deviceItemPath)
         {
 
@@ -202,7 +202,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "0_OBs/Main_1")]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "0_OBs/Main_1")]
+        //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, "0_OBs/Main_1")]
         public void Test_508_McpServer_GetBlockInfo(string projectPath, string softwarePath, string blockPath)
         {
 

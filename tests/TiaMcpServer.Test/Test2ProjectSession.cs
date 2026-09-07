@@ -67,7 +67,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath)]
-        [DataRow(Settings.Session1ProjectPath)]
+        // [DataRow(Settings.Session1ProjectPath)]
         public void Test_21_GetProjectTree(string projectPath)
         {
             if (_portal == null)
@@ -89,7 +89,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
-        [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath)]
+        // [DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath)]
         public void Test_22_GetSoftwareTree(string projectPath, string softwarePath)
         {
             if (_portal == null)

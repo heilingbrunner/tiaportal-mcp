@@ -34,7 +34,7 @@ namespace TiaMcpServer.Siemens
             };
 
             // IEnumerable without given majorVersionString
-            var excludedTiaMajorVersions = new[] { "V13", "V14", "V15", "V16", "V17", "V18", "V19", "V20" }
+            var excludedTiaMajorVersions = new[] { "V13", "V14", "V15", "V16", "V17", "V18", "V19", "V20", "V21" }
                                     .Where(v => v != $"V{tiaMajorVersionString}");
 
             foreach (var dir in searchDirectories)

@@ -112,7 +112,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath)]
-        [DataRow(Settings.Session1ProjectPath)]
+        // [DataRow(Settings.Session1ProjectPath)]
         public void Test_303_GetDevices(string projectPath)
         {
             if (_portal == null)

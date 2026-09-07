@@ -15,6 +15,12 @@ Upgrade to the current MCP .NET SDK and adopt the newer protocol surface.
 
 ### Changed
 
+- Siemens TIA Portal Openness updated to V21. `Siemens.Collaboration.Net.TiaPortal.Packages.Openness` 20.0.1744190253 -> 21.0.1765349347 and
+  `Siemens.Collaboration.Net.TiaPortal.Openness.Resolver` 1.1.1725480302 -> 2.0.1765367256. The default
+  TIA major version is now 21 (`Openness.Initialize`, `Program.Main`); older versions remain reachable via
+  `--tia-major-version`. `Engineering.Resolver` now also excludes `V21` directories when targeting another
+  version, and the test `App.config` probing path points at `Portal V21`. A machine with TIA Portal V21
+  Openness installed is now required to build.
 - `ModelContextProtocol` 0.3.0-preview.4 -> 2.2.0; `Microsoft.Extensions.Hosting`
   10.0.0-preview.4 -> 10.0.10. Negotiated protocol revisions are now `2024-11-05`,
   `2025-03-26`, `2025-06-18` and `2025-11-25`.

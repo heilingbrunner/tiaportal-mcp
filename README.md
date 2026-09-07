@@ -11,13 +11,13 @@ A MCP server which connects to Siemens TIA Portal.
 ## Requirements
 
 - __.net Framework 4.8__ installed
-- __Siemens TIA Portal V20__ installed and running on your machine
-- Check if under `Environment Variables/User variable for user <name>` the variable `TiaPortalLocation` is set to `C:\Program Files\Siemens\Automation\Portal V20`
+- __Siemens TIA Portal V21__ installed and running on your machine
+- Check if under `Environment Variables/User variable for user <name>` the variable `TiaPortalLocation` is set to `C:\Program Files\Siemens\Automation\Portal V21`
 - User must be in Windows User Group `Siemens TIA Openness`
 
 ## TIA-Portal Versions
 
-- __V20__ is the default version.
+- __V21__ is the default version.
 - Previous versions are also supported, but must use the `--tia-major-version` argument to specify the version.
 - Export as documents (.s7dcl/.s7res) via `ExportAsDocuments`/`ExportBlocksAsDocuments` requires TIA Portal V20 or newer.
 - Import from documents (.s7dcl/.s7res) via `ImportFromDocuments`/`ImportBlocksFromDocuments` also requires TIA Portal V20 or newer.

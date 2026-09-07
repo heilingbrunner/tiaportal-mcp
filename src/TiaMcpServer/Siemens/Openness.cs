@@ -7,15 +7,15 @@ namespace TiaMcpServer.Siemens
     {
         public static int TiaMajorVersion { get; private set; }
 
-        public static void Initialize(int? tiaMajorVersion = 20)
+        public static void Initialize(int? tiaMajorVersion = 21)
         {
             // with nuget packages:
             // 2.1 nuget package: Siemens.Collaboration.Net.TiaPortal.Openness.Resolver
-            //     & User Environment Variable: TiaPortalLocation=C:\Program Files\Siemens\Automation\Portal V20
+            //     & User Environment Variable: TiaPortalLocation=C:\Program Files\Siemens\Automation\Portal V21
             // 2.2 nuget package: Siemens.Collaboration.Net.TiaPortal.Packages.Openness
-            // 2.3 Api.Global.Openness().Initialize(tiaMajorVersion: 20); // fixed version 20
+            // 2.3 Api.Global.Openness().Initialize(tiaMajorVersion: 21); // fixed version 21
 
-            TiaMajorVersion = tiaMajorVersion ?? 20; // Default to TIA Portal V20 if not specified
+            TiaMajorVersion = tiaMajorVersion ?? 21; // Default to TIA Portal V21 if not specified
 
             // Initialize the Openness API with the specified TIA Portal major version
             Api.Global.Openness().Initialize(tiaMajorVersion: tiaMajorVersion);

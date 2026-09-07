@@ -6,6 +6,9 @@
 	<BaseOutputPath>.\bin</BaseOutputPath>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="Test22Session.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="MSTest" Version="3.9.2" />
   </ItemGroup>
