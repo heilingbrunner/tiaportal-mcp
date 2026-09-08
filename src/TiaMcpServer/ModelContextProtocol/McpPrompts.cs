@@ -8,6 +8,26 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         #region Basic Connection Templates
 
+        [McpServerPrompt(Name = "Doctor"), Description("Diagnose the TIA Portal environment")]
+        public static string Doctor()
+        {
+            return @"Diagnose the TIA Portal environment.
+
+The report shows:
+- Connected: whether this server currently holds a TIA Portal connection
+- Project: name and path of the open project, or 'No project open'
+- Active Version: the TIA major version this server was started with (see the --tia-major-version argument)
+- Installed TIA Portal versions: every installed version >= V21 with its installation path, plus a check
+  that the Openness assemblies ('Engineering') and the Portal executable ('Portal') are present
+- User in 'Siemens TIA Openness' user group: required for any Openness access
+
+Start here when a connection fails: a missing user group membership, a missing installation or an
+active version that is not installed are the usual causes.
+
+Use the Doctor tool to run the diagnosis. It is read-only: it does not connect to TIA Portal,
+does not open a project and does not change user group membership.";
+        }
+
         [McpServerPrompt(Name = "Connect"), Description("Connect to TIA Portal")]
         public static string Connect()
         {
