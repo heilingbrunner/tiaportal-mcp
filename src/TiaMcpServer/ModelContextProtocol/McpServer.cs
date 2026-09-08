@@ -153,6 +153,47 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
+        [McpServerTool(Name = "Doctor", Title = "Diagnose the TIA Portal environment", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Diagnose the TIA-Portal environment: connection, open project, active and installed TIA-Portal versions, Openness user group membership")]
+        public static ResponseDoctor Doctor()
+        {
+            Logger?.LogInformation("Running TIA Portal diagnostics...");
+
+            try
+            {
+                // Fully qualified: 'Diagnostics' alone would collide with the System.Diagnostics namespace.
+                var report = TiaMcpServer.Siemens.Diagnostics.Run(Portal);
+
+                return new ResponseDoctor
+                {
+                    Message = "TIA-Portal environment diagnosed",
+                    Report = report.Text,
+                    IsConnected = report.IsConnected,
+                    ActiveTiaMajorVersion = report.ActiveTiaMajorVersion,
+                    ProjectName = report.ProjectName,
+                    ProjectPath = report.ProjectPath,
+                    IsUserInGroup = report.IsUserInGroup,
+                    Installations = report.Installations
+                        .Select(i => new ResponseTiaInstallation
+                        {
+                            MajorVersion = i.MajorVersion,
+                            InstallPath = i.InstallPath,
+                            EngineeringExists = i.EngineeringExists,
+                            PortalExeExists = i.PortalExeExists
+                        })
+                        .ToList(),
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error diagnosing the TIA-Portal environment: {ex.Message}", ex);
+            }
+        }
+
         #endregion
 
         #region project/session

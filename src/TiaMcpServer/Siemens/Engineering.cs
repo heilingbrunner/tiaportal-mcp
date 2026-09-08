@@ -12,6 +12,9 @@ namespace TiaMcpServer.Siemens
     {
         public static int TiaMajorVersion { get; set; }
 
+        // Registry sub keys below 'TIAP{version}' that hold the installation path, most specific first.
+        private static readonly string[] PreferredInstallPathSubKeys = { "TIA_Opns", "Global", "EditionMain" };
+
         public static Assembly? Resolver(object sender, ResolveEventArgs args)
         {
             var assemblyName = new AssemblyName(args.Name);
@@ -26,23 +29,33 @@ namespace TiaMcpServer.Siemens
                 return null;
             }
 
-            var tiaMajorVersionString = TiaMajorVersion.ToString();
+            var assemblyPath = FindAssembly(tiaInstallPath!, TiaMajorVersion, assemblyName.Name + ".dll");
+
+            return assemblyPath != null ? Assembly.LoadFrom(assemblyPath) : null;
+        }
+
+        /// <summary>
+        /// Locates a Siemens.Engineering.* assembly below a TIA Portal installation, skipping the
+        /// PublicAPI folders of all other major versions.
+        /// </summary>
+        public static string? FindAssembly(string installPath, int majorVersion, string fileName)
+        {
             var searchDirectories = new[]
             {
-                Path.Combine(tiaInstallPath, "PublicAPI", $"V{tiaMajorVersionString}"),
-                Path.Combine(tiaInstallPath, "Bin", "PublicAPI")
+                Path.Combine(installPath, "PublicAPI", $"V{majorVersion}"),
+                Path.Combine(installPath, "Bin", "PublicAPI")
             };
 
             // IEnumerable without given majorVersionString
             var excludedTiaMajorVersions = new[] { "V13", "V14", "V15", "V16", "V17", "V18", "V19", "V20", "V21" }
-                                    .Where(v => v != $"V{tiaMajorVersionString}");
+                                    .Where(v => v != $"V{majorVersion}");
 
             foreach (var dir in searchDirectories)
             {
-                var assemblyPath = FindAssemblyRecursive(dir, assemblyName.Name + ".dll", excludedTiaMajorVersions);
+                var assemblyPath = FindAssemblyRecursive(dir, fileName, excludedTiaMajorVersions);
                 if (assemblyPath != null)
                 {
-                    return Assembly.LoadFrom(assemblyPath);
+                    return assemblyPath;
                 }
             }
 
@@ -51,21 +64,63 @@ namespace TiaMcpServer.Siemens
 
         private static string? GetTiaPortalInstallPath()
         {
-            var subKeyName = $@"SOFTWARE\Siemens\Automation\_InstalledSW\TIAP{TiaMajorVersion}\TIA_Opns";
-
-            using (var regBaseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
-            using (var tiaOpnsKey = regBaseKey.OpenSubKey(subKeyName))
+            var registryPath = GetTiaPortalInstallPath(TiaMajorVersion);
+            if (!string.IsNullOrEmpty(registryPath))
             {
-                var registryPath = tiaOpnsKey?.GetValue("Path")?.ToString();
-                if (!string.IsNullOrEmpty(registryPath))
-                {
-                    return registryPath;
-                }
+                return registryPath;
             }
 
             // Same variable the Siemens Openness resolver package uses.
             var envPath = Environment.GetEnvironmentVariable("TiaPortalLocation");
             return Directory.Exists(envPath) ? envPath : null;
+        }
+
+        /// <summary>
+        /// Reads the installation path of a specific TIA Portal major version from the registry.
+        /// Returns <c>null</c> when that version is not installed.
+        /// </summary>
+        public static string? GetTiaPortalInstallPath(int majorVersion)
+        {
+            var subKeyName = $@"SOFTWARE\Siemens\Automation\_InstalledSW\TIAP{majorVersion}";
+
+            using (var regBaseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+            using (var tiapKey = regBaseKey.OpenSubKey(subKeyName))
+            {
+                if (tiapKey == null)
+                {
+                    return null;
+                }
+
+                // Not every installation writes 'TIA_Opns'. Fall back to the other product keys of
+                // the same version - they all carry the same installation path.
+                var candidates = PreferredInstallPathSubKeys
+                    .Concat(tiapKey.GetSubKeyNames())
+                    .Distinct(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var candidate in candidates)
+                {
+                    using (var productKey = tiapKey.OpenSubKey(candidate))
+                    {
+                        var registryPath = productKey?.GetValue("Path")?.ToString();
+                        if (string.IsNullOrEmpty(registryPath))
+                        {
+                            continue;
+                        }
+
+                        var installPath = registryPath!.TrimEnd(Path.DirectorySeparatorChar);
+
+                        // A partially uninstalled product can leave a stale 'Path' behind. Only accept
+                        // a candidate that actually looks like an installation root, so that callers
+                        // can still fall back to the 'TiaPortalLocation' environment variable.
+                        if (Directory.Exists(Path.Combine(installPath, "Bin")))
+                        {
+                            return installPath;
+                        }
+                    }
+                }
+
+                return null;
+            }
         }
 
         private static string? FindAssemblyRecursive(string directory, string fileName, IEnumerable<string> excludedTiaMajorVersions)

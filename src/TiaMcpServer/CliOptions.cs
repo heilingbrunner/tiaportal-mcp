@@ -4,6 +4,7 @@
     {
         public int? TiaMajorVersion { get; set; }
         public int? Logging { get; set; } // "stdio" or "http"
+        public bool Doctor { get; set; } // print environment diagnostics and exit
 
         public static CliOptions ParseArgs(string[] args)
         {
@@ -19,6 +20,11 @@
                             options.TiaMajorVersion = v;
                             i++;
                         }
+                        break;
+
+                    case "-doctor":
+                    case "--doctor":
+                        options.Doctor = true;
                         break;
 
                     case "-logging":
