@@ -88,7 +88,7 @@ Use the GetSoftwareTree tool with these parameters:
         #region Export Templates
 
         [McpServerPrompt(Name = "ExportBlocks"), Description("Export blocks from PLC software")]
-        public static string ExportBlocks(string softwarePath, string exportPath, string regexName, bool preservePath)
+        public static string ExportBlocks(string softwarePath, string exportPath, string regexName = "", string preservePath = "false")
         {
             return $@"Export blocks from PLC software.
 
@@ -102,11 +102,11 @@ Use the ExportBlocks tool with these parameters:
 - softwarePath: {softwarePath}
 - exportPath: {exportPath}
 - regexName: {regexName}
-- preservePath: {preservePath.ToString().ToLower()}";
+- preservePath: {NormalizeBool(preservePath)}";
         }
 
         [McpServerPrompt(Name = "ExportTypes"), Description("Export types from PLC software")]
-        public static string ExportTypes(string softwarePath, string exportPath, string regexName, bool preservePath)
+        public static string ExportTypes(string softwarePath, string exportPath, string regexName = "", string preservePath = "false")
         {
             return $@"Export user-defined types from PLC software.
 
@@ -120,11 +120,11 @@ Use the ExportTypes tool with these parameters:
 - softwarePath: {softwarePath}
 - exportPath: {exportPath}
 - regexName: {regexName}
-- preservePath: {preservePath.ToString().ToLower()}";
+- preservePath: {NormalizeBool(preservePath)}";
         }
 
         [McpServerPrompt(Name = "ExportBlocksAsDocuments"), Description("Export blocks as documents (.s7dcl/.s7res format)")]
-        public static string ExportBlocksAsDocuments(string softwarePath, string exportPath, string regexName, bool preservePath)
+        public static string ExportBlocksAsDocuments(string softwarePath, string exportPath, string regexName = "", string preservePath = "false")
         {
             return $@"Export blocks as SIMATIC SD documents (.s7dcl/.s7res format) from PLC software.
 Requires TIA Portal V20 or newer.
@@ -139,7 +139,7 @@ Use the ExportBlocksAsDocuments tool with these parameters:
 - softwarePath: {softwarePath}
 - exportPath: {exportPath}
 - regexName: {regexName}
-- preservePath: {preservePath.ToString().ToLower()}";
+- preservePath: {NormalizeBool(preservePath)}";
         }
 
         #endregion
@@ -149,37 +149,37 @@ Use the ExportBlocksAsDocuments tool with these parameters:
         [McpServerPrompt(Name = "ExportAllBlocksFlattened"), Description("Export all blocks from PLC software (flattened)")]
         public static string ExportAllBlocksFlattened(string softwarePath, string exportPath)
         {
-            return ExportBlocks(softwarePath, exportPath, "", false);
+            return ExportBlocks(softwarePath, exportPath, "", "false");
         }
 
         [McpServerPrompt(Name = "ExportAllBlocksStructured"), Description("Export all blocks from PLC software (structured)")]
         public static string ExportAllBlocksStructured(string softwarePath, string exportPath)
         {
-            return ExportBlocks(softwarePath, exportPath, "", true);
+            return ExportBlocks(softwarePath, exportPath, "", "true");
         }
 
         [McpServerPrompt(Name = "ExportAllTypesFlattened"), Description("Export all types from PLC software (flattened)")]
         public static string ExportAllTypesFlattened(string softwarePath, string exportPath)
         {
-            return ExportTypes(softwarePath, exportPath, "", false);
+            return ExportTypes(softwarePath, exportPath, "", "false");
         }
 
         [McpServerPrompt(Name = "ExportAllTypesStructured"), Description("Export all types from PLC software (structured)")]
         public static string ExportAllTypesStructured(string softwarePath, string exportPath)
         {
-            return ExportTypes(softwarePath, exportPath, "", true);
+            return ExportTypes(softwarePath, exportPath, "", "true");
         }
 
         [McpServerPrompt(Name = "ExportAllBlocksAsDocumentsFlattened"), Description("Export all blocks as documents from PLC software (flattened)")]
         public static string ExportAllBlocksAsDocumentsFlattened(string softwarePath, string exportPath)
         {
-            return ExportBlocksAsDocuments(softwarePath, exportPath, "", false);
+            return ExportBlocksAsDocuments(softwarePath, exportPath, "", "false");
         }
 
         [McpServerPrompt(Name = "ExportAllBlocksAsDocumentsStructured"), Description("Export all blocks as documents from PLC software (structured)")]
         public static string ExportAllBlocksAsDocumentsStructured(string softwarePath, string exportPath)
         {
-            return ExportBlocksAsDocuments(softwarePath, exportPath, "", true);
+            return ExportBlocksAsDocuments(softwarePath, exportPath, "", "true");
         }
 
         #endregion
@@ -187,7 +187,7 @@ Use the ExportBlocksAsDocuments tool with these parameters:
         #region Import From Documents Templates
 
         [McpServerPrompt(Name = "ImportFromDocuments"), Description("Import a single block from SIMATIC SD documents (.s7dcl/.s7res) (V20+)")]
-        public static string ImportFromDocuments(string softwarePath, string groupPath, string importPath, string fileNameWithoutExtension, string importOption)
+        public static string ImportFromDocuments(string softwarePath, string importPath, string fileNameWithoutExtension, string groupPath = "", string importOption = "Override")
         {
             return $@"Import a single program block from SIMATIC SD documents into PLC software (requires TIA Portal V20 or newer).
 
@@ -209,7 +209,7 @@ Use the ImportFromDocuments tool with these parameters:
         }
 
         [McpServerPrompt(Name = "ImportBlocksFromDocuments"), Description("Import blocks from SIMATIC SD documents (.s7dcl/.s7res) (V20+)")]
-        public static string ImportBlocksFromDocuments(string softwarePath, string groupPath, string importPath, string regexName, string importOption)
+        public static string ImportBlocksFromDocuments(string softwarePath, string importPath, string groupPath = "", string regexName = "", string importOption = "Override")
         {
             return $@"Import multiple program blocks from SIMATIC SD documents into PLC software (requires TIA Portal V20 or newer).
 
@@ -231,6 +231,22 @@ Use the ImportBlocksFromDocuments tool with these parameters:
         }
 
         #endregion
+
+        // MCP prompt arguments are always strings, so boolean flags arrive as text.
+        private static string NormalizeBool(string? value)
+        {
+            var text = value?.Trim();
+            if (string.IsNullOrEmpty(text))
+            {
+                return "false";
+            }
+
+            return text.Equals("true", System.StringComparison.OrdinalIgnoreCase)
+                || text.Equals("1", System.StringComparison.Ordinal)
+                || text.Equals("yes", System.StringComparison.OrdinalIgnoreCase)
+                    ? "true"
+                    : "false";
+        }
     }
 }
 

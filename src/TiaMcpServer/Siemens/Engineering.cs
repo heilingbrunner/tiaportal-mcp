@@ -23,7 +23,7 @@ namespace TiaMcpServer.Siemens
             var tiaInstallPath = GetTiaPortalInstallPath();
             if (string.IsNullOrEmpty(tiaInstallPath))
             {
-                throw new InvalidOperationException($"Could not find TIA Portal installation path for version {TiaMajorVersion} in the registry.");
+                return null;
             }
 
             var tiaMajorVersionString = TiaMajorVersion.ToString();
@@ -46,7 +46,7 @@ namespace TiaMcpServer.Siemens
                 }
             }
 
-            throw new FileNotFoundException($"Could not find DLL '{assemblyName.Name}' for TIA Portal version {TiaMajorVersion} in the installation directories.");
+            return null;
         }
 
         private static string? GetTiaPortalInstallPath()
@@ -56,8 +56,16 @@ namespace TiaMcpServer.Siemens
             using (var regBaseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
             using (var tiaOpnsKey = regBaseKey.OpenSubKey(subKeyName))
             {
-                return tiaOpnsKey?.GetValue("Path")?.ToString();
+                var registryPath = tiaOpnsKey?.GetValue("Path")?.ToString();
+                if (!string.IsNullOrEmpty(registryPath))
+                {
+                    return registryPath;
+                }
             }
+
+            // Same variable the Siemens Openness resolver package uses.
+            var envPath = Environment.GetEnvironmentVariable("TiaPortalLocation");
+            return Directory.Exists(envPath) ? envPath : null;
         }
 
         private static string? FindAssemblyRecursive(string directory, string fileName, IEnumerable<string> excludedTiaMajorVersions)

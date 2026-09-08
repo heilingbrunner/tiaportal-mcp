@@ -4,6 +4,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>Latest</LangVersion>
     <OutputType>Exe</OutputType>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
     <AssemblyVersion>0.1.0</AssemblyVersion>
     <BaseOutputPath>.\bin</BaseOutputPath>
   </PropertyGroup>

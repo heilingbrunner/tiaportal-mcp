@@ -19,14 +19,13 @@ namespace TiaMcpServer
 
             Engineering.TiaMajorVersion = options.TiaMajorVersion ?? 21;
 
-            if (Engineering.TiaMajorVersion < 20)
-            {
-                AppDomain.CurrentDomain.AssemblyResolve += Engineering.Resolver;
-            }
-            else
+            if (Engineering.TiaMajorVersion >= 20)
             {
                 Openness.Initialize(Engineering.TiaMajorVersion);
             }
+
+            // Fallback: the Siemens resolver does not cover every Siemens.Engineering.* satellite assembly.
+            AppDomain.CurrentDomain.AssemblyResolve += Engineering.Resolver;
 
             // Ensure user is in user group 'Siemens TIA Openness'
             if (await Openness.IsUserInGroup())

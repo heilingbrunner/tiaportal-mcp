@@ -1,3 +1,5 @@
 .vs/
-.gemini
-.claude
+export/
+.gemini/
+.claude/
+.github/
