@@ -27,6 +27,14 @@ namespace TiaMcpServer
             // Fallback: the Siemens resolver does not cover every Siemens.Engineering.* satellite assembly.
             AppDomain.CurrentDomain.AssemblyResolve += Engineering.Resolver;
 
+            // '--doctor' only reports the environment - it must run before the user group gate below,
+            // because a missing group membership is one of the things it is meant to diagnose.
+            if (options.Doctor)
+            {
+                RunDoctor();
+                return;
+            }
+
             // Ensure user is in user group 'Siemens TIA Openness'
             if (await Openness.IsUserInGroup())
             {
@@ -35,6 +43,27 @@ namespace TiaMcpServer
             else
             {
                 Console.WriteLine("User is not in the required group. Exiting...");
+            }
+        }
+
+        /// <summary>
+        /// Prints the environment diagnostics of the '--doctor' command. Read-only: it neither
+        /// connects to TIA Portal nor changes user group membership.
+        /// </summary>
+        public static void RunDoctor()
+        {
+            try
+            {
+                // Fully qualified: 'Diagnostics' alone would collide with the System.Diagnostics namespace.
+                var report = TiaMcpServer.Siemens.Diagnostics.Run(new Portal());
+
+                Console.WriteLine(report.Text);
+            }
+            catch (Exception ex)
+            {
+                // A diagnostics command must report a problem, not crash with a stack trace.
+                Console.Error.WriteLine($"Diagnose failed: {ex.Message}");
+                Environment.ExitCode = 1;
             }
         }
 

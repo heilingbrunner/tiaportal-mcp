@@ -13,6 +13,19 @@ Upgrade to the current MCP .NET SDK and adopt the newer protocol surface.
   `McpErrorCode` was removed from all 75 throw sites; error codes now live only on the
   derived `McpProtocolException`, which is reserved for protocol-level faults.
 
+### Added
+
+- Environment diagnostics ('doctor'), available two ways: the `--doctor` command line argument
+  prints a report and exits without starting the MCP server, and the new `Doctor` tool returns the
+  same report plus structured content to MCP clients. Both report the connection state, the open
+  project, the active TIA major version, every installed TIA Portal version >= V21 (with a check
+  that its Openness assemblies and the Portal executable are present), and membership in the
+  `Siemens TIA Openness` user group. Read-only throughout: unlike `Openness.IsUserInGroup`, the
+  new `Openness.CheckUserInGroup` never adds the user to the group.
+- `Engineering.GetTiaPortalInstallPath(int)` resolves the install path of any TIA major version and
+  no longer depends on the `TIAP{version}\TIA_Opns` registry sub key alone - installations that do
+  not write that key are now found via their other product sub keys, which carry the same path.
+
 ### Changed
 
 - Siemens TIA Portal Openness updated to V21. `Siemens.Collaboration.Net.TiaPortal.Packages.Openness` 20.0.1744190253 -> 21.0.1765349347 and

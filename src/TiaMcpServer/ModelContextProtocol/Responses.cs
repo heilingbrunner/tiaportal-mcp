@@ -86,6 +86,25 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? Session { get; set; }
     }
 
+    public class ResponseTiaInstallation
+    {
+        public int MajorVersion { get; set; }
+        public string? InstallPath { get; set; }
+        public bool EngineeringExists { get; set; }
+        public bool PortalExeExists { get; set; }
+    }
+
+    public class ResponseDoctor : ResponseMessage
+    {
+        public string? Report { get; set; }
+        public bool? IsConnected { get; set; }
+        public int? ActiveTiaMajorVersion { get; set; }
+        public string? ProjectName { get; set; }
+        public string? ProjectPath { get; set; }
+        public bool? IsUserInGroup { get; set; }
+        public IEnumerable<ResponseTiaInstallation>? Installations { get; set; }
+    }
+
     public class ResponseGetProjects : ResponseMessage
     {
         public IEnumerable<ResponseProjectInfo>? Items { get; set; }

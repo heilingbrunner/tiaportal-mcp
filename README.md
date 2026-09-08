@@ -15,6 +15,27 @@ A MCP server which connects to Siemens TIA Portal.
 - Check if under `Environment Variables/User variable for user <name>` the variable `TiaPortalLocation` is set to `C:\Program Files\Siemens\Automation\Portal V21`
 - User must be in Windows User Group `Siemens TIA Openness`
 
+### Diagnose the environment
+
+Run the server with `--doctor` to check all of the above without starting the MCP server:
+
+```text
+> TiaMcpServer.exe --doctor
+Diagnose:
+├─ Connected = False
+├─ Project: No project open
+├─ Active Version: V21
+├─ Installed TIA Portal versions:
+│  └─ V21: C:\Program Files\Siemens\Automation\Portal V21
+│     ├─ Engineering: OK
+│     └─ Portal:      OK
+└─ User in 'Siemens TIA Openness' user group: True
+```
+
+The same report is available to MCP clients through the `Doctor` tool, which additionally returns
+the findings as structured content. Both are read-only: they never connect to TIA Portal, open a
+project, or change user group membership.
+
 ## TIA-Portal Versions
 
 - __V21__ is the default version.

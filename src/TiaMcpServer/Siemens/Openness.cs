@@ -21,6 +21,15 @@ namespace TiaMcpServer.Siemens
             Api.Global.Openness().Initialize(tiaMajorVersion: tiaMajorVersion);
         }
 
+        /// <summary>
+        /// Read-only check whether the current user is a member of the 'Siemens TIA Openness' group.
+        /// Unlike <see cref="IsUserInGroup"/> this never tries to add the user to the group.
+        /// </summary>
+        public static bool CheckUserInGroup()
+        {
+            return Api.Global.Openness().IsUserInGroup();
+        }
+
         public static async Task<bool> IsUserInGroup()
         {
             if (Api.Global.Openness().IsUserInGroup())
