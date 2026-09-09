@@ -8,6 +8,12 @@ A MCP server which connects to Siemens TIA Portal.
 - Browse and interact with TIA Portal projects
 - Perform basic project operations from within VS Code
 
+## Resources
+
+- [TIA Portal Openness API Documentation](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows)
+- [TIA Portal Openness API Overview](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows/tia-portal-openness-api)
+- [TIA Portal Openness API Export/Import Documentation](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows/export/import)
+
 ## Requirements
 
 - __.net Framework 4.8__ installed
