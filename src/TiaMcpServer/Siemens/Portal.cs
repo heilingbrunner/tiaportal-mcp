@@ -21,7 +21,7 @@ using System.Text.RegularExpressions;
 
 namespace TiaMcpServer.Siemens
 {
-    public class Portal
+    public partial class Portal
     {
         // closing parantheses for regex characters ommitted, because they are not relevant for regex detection
         private readonly char[] _regexChars = ['.', '^', '$', '*', '+', '?', '(', '[', '{', '\\', '|'];
@@ -774,6 +774,11 @@ namespace TiaMcpServer.Siemens
             return null;
         }
 
+        /// <summary>
+        /// Root-relative path of a block, e.g. "Common/CarrierRegister/GLOBAL_POSITIONING".
+        /// The system group ("Program blocks") is deliberately excluded so the result can be fed
+        /// straight back into GetBlock/ExportBlock as a blockPath.
+        /// </summary>
         public string GetBlockPath(PlcBlock block)
         {
             if (block == null)
@@ -783,11 +788,30 @@ namespace TiaMcpServer.Siemens
 
             if (block.Parent is PlcBlockGroup parentGroup)
             {
-                var groupPath = GetPlcBlockGroupPath(parentGroup);
+                var groupPath = GetPlcBlockGroupPath(parentGroup, includeSystemRoot: false);
                 return string.IsNullOrEmpty(groupPath) ? block.Name : $"{groupPath}/{block.Name}";
             }
 
             return block.Name;
+        }
+
+        /// <summary>
+        /// Root-relative path of a PLC data type, the GetBlockPath counterpart.
+        /// </summary>
+        public string GetTypePath(PlcType type)
+        {
+            if (type == null)
+            {
+                return string.Empty;
+            }
+
+            if (type.Parent is PlcTypeGroup parentGroup)
+            {
+                var groupPath = GetPlcTypeGroupPath(parentGroup, includeSystemRoot: false);
+                return string.IsNullOrEmpty(groupPath) ? type.Name : $"{groupPath}/{type.Name}";
+            }
+
+            return type.Name;
         }
 
         public List<PlcBlock> GetBlocks(string softwarePath, string regexName = "")
@@ -1974,7 +1998,11 @@ namespace TiaMcpServer.Siemens
 
         #region GetSoftwareTree ...
 
-        public string GetSoftwareTree(string softwarePath)
+        /// <param name="sections">
+        /// Comma separated subset of "blocks,types,tags,watch,sources", or "all" (the default).
+        /// Lets a client keep the output small on a large PLC.
+        /// </param>
+        public string GetSoftwareTree(string softwarePath, string sections = "all")
         {
             _logger?.LogInformation("Getting software tree for path: {SoftwarePath}", softwarePath);
 
@@ -1990,38 +2018,31 @@ namespace TiaMcpServer.Siemens
                 {
                     StringBuilder sb = new();
                     sb.AppendLine($"{plcSoftware.Name} [PLC Software]");
-                    
+
+                    var selected = ParseTreeSections(sections);
                     var ancestorStates = new List<bool>();
-                    var sections = new List<Action>();
-                    
-                    var hasBlocks = plcSoftware.BlockGroup != null;
-                    var hasTypes = plcSoftware.TypeGroup != null;
-                    
-                    // Add blocks section
-                    if (hasBlocks)
+
+                    // Every section takes an "is last" flag; that can only be decided once all
+                    // present sections are known, so they are collected before being rendered.
+                    var renderers = new List<Action<bool>>();
+
+                    var blockGroup = plcSoftware.BlockGroup;
+                    if (selected.Contains("blocks") && blockGroup != null)
                     {
-                        var blockGroup = plcSoftware.BlockGroup;
-                        if (blockGroup != null)
-                        {
-                            sections.Add(() => GetSoftwareTreeBlockGroup(sb, blockGroup, ancestorStates, "Program blocks", !hasTypes));
-                        }
+                        renderers.Add(isLast => GetSoftwareTreeBlockGroup(sb, blockGroup, ancestorStates, "Program blocks", isLast));
                     }
-                    
-                    // Add types section
-                    if (hasTypes)
+
+                    var typeGroup = plcSoftware.TypeGroup;
+                    if (selected.Contains("types") && typeGroup != null)
                     {
-                        var typeGroup = plcSoftware.TypeGroup;
-                        if (typeGroup != null)
-                        {
-                            sections.Add(() => GetSoftwareTreeTypeGroup(sb, typeGroup, ancestorStates, "PLC data types", true));
-                        }
+                        renderers.Add(isLast => GetSoftwareTreeTypeGroup(sb, typeGroup, ancestorStates, "PLC data types", isLast));
                     }
-                    
-                    
-                    // Execute sections
-                    for (int i = 0; i < sections.Count; i++)
+
+                    renderers.AddRange(BuildAdditionalTreeSections(plcSoftware, sb, ancestorStates, selected));
+
+                    for (int i = 0; i < renderers.Count; i++)
                     {
-                        sections[i]();
+                        renderers[i](i == renderers.Count - 1);
                     }
 
                     return sb.ToString();
@@ -2445,34 +2466,11 @@ namespace TiaMcpServer.Siemens
                 return null;
             }
 
-            var softwareContainer = GetSoftwareContainer(softwarePath);
-            if (softwareContainer?.Software is PlcSoftware plcSoftware)
-            {
-                if (plcSoftware?.BlockGroup == null)
-                {
-                    return null;
-                }
+            var plcSoftware = (GetSoftwareContainer(softwarePath)?.Software as PlcSoftware);
 
-
-                // Split the path by '/' to get each group name
-                var groupNames = groupPath.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
-
-                PlcBlockGroup? currentGroup = plcSoftware.BlockGroup;
-
-                foreach (var groupName in groupNames)
-                {
-                    currentGroup = currentGroup.Groups.FirstOrDefault(g => g.Name.Equals(groupName, StringComparison.OrdinalIgnoreCase));
-
-                    if (currentGroup == null)
-                    {
-                        return null;
-                    }
-                }
-
-                return currentGroup;
-            }
-
-            return null;
+            return plcSoftware?.BlockGroup == null
+                ? null
+                : WalkGroups<PlcBlockGroup>(plcSoftware.BlockGroup, groupPath, BlockSubgroups, g => g.Name);
         }
 
         private PlcTypeGroup? GetPlcTypeGroupByPath(string softwarePath, string groupPath)
@@ -2482,108 +2480,37 @@ namespace TiaMcpServer.Siemens
                 return null;
             }
 
-            var softwareContainer = GetSoftwareContainer(softwarePath);
-            if (softwareContainer?.Software is PlcSoftware plcSoftware)
-            {
-                if (plcSoftware?.TypeGroup == null)
-                {
-                    return null;
-                }
+            var plcSoftware = (GetSoftwareContainer(softwarePath)?.Software as PlcSoftware);
 
-                var groupNames = groupPath.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
-
-                PlcTypeGroup? currentGroup = plcSoftware.TypeGroup;
-
-                foreach (var groupName in groupNames)
-                {
-                    currentGroup = currentGroup.Groups.FirstOrDefault(g => g.Name.Equals(groupName, StringComparison.OrdinalIgnoreCase));
-
-                    if (currentGroup == null)
-                    {
-                        return null;
-                    }
-                }
-
-                return currentGroup;
-            }
-
-            return null;
+            return plcSoftware?.TypeGroup == null
+                ? null
+                : WalkGroups<PlcTypeGroup>(plcSoftware.TypeGroup, groupPath, TypeSubgroups, g => g.Name);
         }
 
-        private string GetPlcBlockGroupPath(PlcBlockGroup group)
+        /// <param name="includeSystemRoot">
+        /// True (the default) prefixes the system group name, e.g. "Program blocks/1_Tests".
+        /// That is the layout the preservePath exports write and Test_415_ImportBlock reads back.
+        /// False yields "1_Tests", which round-trips into GetPlcBlockGroupByPath.
+        /// </param>
+        private string GetPlcBlockGroupPath(PlcBlockGroup group, bool includeSystemRoot = true)
         {
-            if (group == null)
-            {
-                return string.Empty;
-            }
-
-            PlcBlockGroup? nullableGroup = group;
-            var path = group.Name;
-
-            while (nullableGroup != null && nullableGroup.Parent != null)
-            {
-                try
-                {
-                    //group = (PlcBlockGroup) group.Parent;
-                    if (group is PlcBlockSystemGroup systemGroup)
-                    {
-                        // do not get parent for system group
-                        break;
-                    }
-
-                    nullableGroup = nullableGroup.Parent as PlcBlockGroup;
-                }
-                catch (Exception)
-                {
-                    // Handle any exceptions that may occur while accessing the parent
-                    break;
-                }
-
-                if (nullableGroup != null)
-                {
-                    path = $"{nullableGroup.Name}/{path}";
-                }
-            }
-
-            return path;
+            return BuildGroupPath<PlcBlockGroup>(
+                group,
+                g => g.Parent as PlcBlockGroup,
+                g => g.Name,
+                g => g is PlcBlockSystemGroup,
+                includeSystemRoot);
         }
 
-        private string GetPlcTypeGroupPath(PlcTypeGroup group)
+        /// <param name="includeSystemRoot">See GetPlcBlockGroupPath.</param>
+        private string GetPlcTypeGroupPath(PlcTypeGroup group, bool includeSystemRoot = true)
         {
-            if (group == null)
-            {
-                return string.Empty;
-            }
-
-            PlcTypeGroup? nullableGroup = group;
-            var path = group.Name;
-
-            while (nullableGroup != null && nullableGroup.Parent != null)
-            {
-                try
-                {
-                    //group = (PlcTypeGroup) group.Parent;
-                    if (group is PlcTypeSystemGroup systemGroup)
-                    {
-                        // do not get parent for system group
-                        break;
-                    }
-
-                    nullableGroup = nullableGroup.Parent as PlcTypeGroup;
-                }
-                catch (Exception)
-                {
-                    // Handle any exceptions that may occur while accessing the parent
-                    break;
-                }
-
-                if (nullableGroup != null)
-                {
-                    path = $"{nullableGroup.Name}/{path}";
-                }
-            }
-
-            return path;
+            return BuildGroupPath<PlcTypeGroup>(
+                group,
+                g => g.Parent as PlcTypeGroup,
+                g => g.Name,
+                g => g is PlcTypeSystemGroup,
+                includeSystemRoot);
         }
 
         #endregion
@@ -2627,73 +2554,22 @@ namespace TiaMcpServer.Siemens
 
         private bool GetBlocksRecursive(PlcBlockGroup group, List<PlcBlock> list, string regexName = "")
         {
-            var anySuccess = false;
+            var before = list.Count;
 
-            foreach (var composition in group.Blocks)
-            {
-                if (composition is PlcBlock block)
-                {
-                    try
-                    {
-                        if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(block.Name, regexName, RegexOptions.IgnoreCase))
-                        {
-                            continue; // Skip this block if it doesn't match the pattern
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        // Invalid regex pattern, skip this block
-                        continue;
-                    }
+            WalkRecursive<PlcBlockGroup, PlcBlock>(group, list, g => g.Blocks, BlockSubgroups, b => b.Name, regexName);
 
-                    list.Add(block);
-
-                    anySuccess = true;
-                }
-            }
-
-            foreach (var subgroup in group.Groups)
-            {
-                anySuccess = GetBlocksRecursive(subgroup, list, regexName);
-            }
-
-            return anySuccess;
+            // The previous implementation reported only the last subgroup's outcome; report
+            // whether anything at all was collected.
+            return list.Count > before;
         }
 
         private bool GetTypesRecursive(PlcTypeGroup group, List<PlcType> list, string regexName = "")
         {
-            var anySuccess = false;
+            var before = list.Count;
 
-            foreach (var composition in group.Types)
-            {
-                if (composition is PlcType type)
-                {
-                    try
-                    {
-                        if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(type.Name, regexName, RegexOptions.IgnoreCase))
-                        {
-                            continue; // Skip this block if it doesn't match the pattern
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        // Invalid regex pattern, skip this block
-                        continue;
-                    }
+            WalkRecursive<PlcTypeGroup, PlcType>(group, list, g => g.Types, TypeSubgroups, t => t.Name, regexName);
 
-                    list.Add(type);
-
-                    anySuccess = true;
-                }
-
-            }
-
-            foreach (PlcTypeGroup subgroup in group.Groups)
-            {
-                anySuccess = GetTypesRecursive(subgroup, list, regexName);
-            }
-
-            return anySuccess;
+            return list.Count > before;
         }
 
         #endregion

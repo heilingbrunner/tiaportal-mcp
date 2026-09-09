@@ -19,7 +19,7 @@ using TiaMcpServer.Siemens;
 namespace TiaMcpServer.ModelContextProtocol
 {
     [McpServerToolType]
-    public static class McpServer
+    public static partial class McpServer
     {
         private static IServiceProvider? _services;
         private static Portal? _portal;
@@ -133,6 +133,7 @@ namespace TiaMcpServer.ModelContextProtocol
                         IsConnected = state.IsConnected,
                         Project = state.Project,
                         Session = state.Session,
+                        AllowWrite = WritePolicy.AllowWrite,
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
@@ -657,13 +658,14 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetSoftwareTree", Title = "Get PLC software tree", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get the structure/tree of a given PLC software showing blocks, types, and external sources")]
+        [McpServerTool(Name = "GetSoftwareTree", Title = "Get PLC software tree", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get the structure/tree of a given PLC software showing program blocks, PLC data types, PLC tags, watch and force tables, and external source files")]
         public static ResponseSoftwareTree GetSoftwareTree(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath)
+            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("sections: optional comma separated subset of 'blocks,types,tags,watch,sources' to keep the output small; defaults to 'all'")] string sections = "all")
         {
             try
             {
-                var tree = Portal.GetSoftwareTree(softwarePath);
+                var tree = Portal.GetSoftwareTree(softwarePath, sections);
 
                 if (!string.IsNullOrEmpty(tree))
                 {

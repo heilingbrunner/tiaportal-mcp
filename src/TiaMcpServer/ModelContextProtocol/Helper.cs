@@ -28,6 +28,25 @@ namespace TiaMcpServer.ModelContextProtocol
             return attributes;
         }
 
+        /// <summary>
+        /// First available translation of a MultilingualText (tag and constant comments), or
+        /// null when the text has no items. Openness returns one item per project language.
+        /// </summary>
+        public static string? FirstText(MultilingualText? text)
+        {
+            if (text == null)
+            {
+                return null;
+            }
+
+            foreach (var item in text.Items)
+            {
+                return item.Text;
+            }
+
+            return null;
+        }
+
         public static BlockGroupInfo BuildBlockHierarchy(PlcBlockGroup group)
         {
             var groupInfo = new BlockGroupInfo

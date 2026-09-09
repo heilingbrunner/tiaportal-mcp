@@ -71,6 +71,136 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? Name { get; set; }
     }
 
+    #region PLC tags, constants
+
+    public class ResponseTagTableInfo : ResponseAttributes
+    {
+        /// <summary>Root-relative path, e.g. "TagGroup1/Table1". Feed back into the tag tools.</summary>
+        public string? Path { get; set; }
+        public string? Name { get; set; }
+        public bool? IsDefault { get; set; }
+        public DateTime? ModifiedTimeStamp { get; set; }
+        public int? TagCount { get; set; }
+        public int? UserConstantCount { get; set; }
+        public int? SystemConstantCount { get; set; }
+    }
+
+    public class ResponseTagTables : ResponseMessage
+    {
+        public IEnumerable<ResponseTagTableInfo>? Items { get; set; }
+    }
+
+    public class ResponseTagInfo : ResponseAttributes
+    {
+        public string? Path { get; set; }
+        public string? Name { get; set; }
+        public string? TableName { get; set; }
+        public string? DataTypeName { get; set; }
+        public string? LogicalAddress { get; set; }
+        public string? Comment { get; set; }
+        public bool? ExternalAccessible { get; set; }
+        public bool? ExternalVisible { get; set; }
+        public bool? ExternalWritable { get; set; }
+        public bool? IsSafety { get; set; }
+    }
+
+    public class ResponseTags : ResponseMessage
+    {
+        public IEnumerable<ResponseTagInfo>? Items { get; set; }
+    }
+
+    public class ResponseConstantInfo
+    {
+        public string? Name { get; set; }
+
+        /// <summary>"User" or "System". System constants are read-only in Openness.</summary>
+        public string? Kind { get; set; }
+        public string? DataTypeName { get; set; }
+
+        /// <summary>
+        /// PlcConstant.Value is 'object'; it is stringified so the structured output schema
+        /// stays stable across data types.
+        /// </summary>
+        public string? Value { get; set; }
+        public string? Comment { get; set; }
+    }
+
+    public class ResponseConstants : ResponseMessage
+    {
+        public IEnumerable<ResponseConstantInfo>? Items { get; set; }
+    }
+
+    public class ResponseExportTagTable : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+    }
+
+    #endregion
+
+    #region watch and force tables
+
+    public class ResponseWatchTableInfo : ResponseAttributes
+    {
+        /// <summary>Root-relative path, e.g. "WatchGroup1/WatchTable_1".</summary>
+        public string? Path { get; set; }
+        public string? Name { get; set; }
+
+        /// <summary>"Watch" or "Force".</summary>
+        public string? Kind { get; set; }
+        public bool? IsConsistent { get; set; }
+        public int? EntryCount { get; set; }
+
+        /// <summary>Populated by GetWatchTableInfo / GetForceTable, not by the list tools.</summary>
+        public IEnumerable<TableEntryInfo>? Entries { get; set; }
+    }
+
+    public class ResponseWatchTables : ResponseMessage
+    {
+        public IEnumerable<ResponseWatchTableInfo>? Items { get; set; }
+    }
+
+    public class ResponseExportWatchTable : ResponseMessage
+    {
+        public string? Name { get; set; }
+        public string? Path { get; set; }
+    }
+
+    #endregion
+
+    #region external sources
+
+    public class ResponseExternalSourceInfo : ResponseAttributes
+    {
+        /// <summary>Root-relative path, e.g. "SourceGroup1/Source_1".</summary>
+        public string? Path { get; set; }
+        public string? Name { get; set; }
+    }
+
+    public class ResponseExternalSources : ResponseMessage
+    {
+        public IEnumerable<ResponseExternalSourceInfo>? Items { get; set; }
+    }
+
+    #endregion
+
+    #region cross references
+
+    public class ResponseCrossReferences : ResponseMessage
+    {
+        public IEnumerable<CrossRefSource>? Sources { get; set; }
+        public int? SourceCount { get; set; }
+        public int? ReferenceCount { get; set; }
+
+        /// <summary>
+        /// True when maxDepth cut the result short, so the caller knows to re-query a specific
+        /// object with a higher depth rather than assuming the tree was complete.
+        /// </summary>
+        public bool? Truncated { get; set; }
+    }
+
+    #endregion
+
     public class ResponseConnect : ResponseMessage
     {
     }
@@ -84,6 +214,12 @@ namespace TiaMcpServer.ModelContextProtocol
         public bool? IsConnected { get; set; }
         public string? Project { get; set; }
         public string? Session { get; set; }
+
+        /// <summary>
+        /// Whether the server was started with '--allow-write'. When false the project-mutating
+        /// tools are not registered at all, so a client can tell why they are missing.
+        /// </summary>
+        public bool? AllowWrite { get; set; }
     }
 
     public class ResponseTiaInstallation
