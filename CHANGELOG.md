@@ -65,6 +65,11 @@ surface grows from 31 tools to 44 read tools plus 37 project-mutating tools.
   named paths that could not be used. Path building now takes an `includeSystemRoot` flag:
   suggestions are root-relative and round-trip, while `preservePath` exports keep the existing
   on-disk layout unchanged.
+- `ExportTagTable` with `preservePath` wrote the group structure directly below `exportPath`,
+  while block and type exports place theirs below the system folder (`Program blocks`,
+  `PLC data types`). Tag tables now land in `<exportPath>/PLC tags/...`, using the system group
+  name as TIA Portal reports it in the current interface language. `ImportTagTable` accepts a
+  leading `PLC tags` segment in `groupPath` so the exported layout can be fed straight back.
 - `--doctor --allow-write` reported write mode as disabled. `WritePolicy.AllowWrite` was only
   assigned inside `RunStdioHost`, which `--doctor` returns before reaching; it is now set in
   `Main`.

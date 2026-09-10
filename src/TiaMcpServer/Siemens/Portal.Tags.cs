@@ -16,8 +16,10 @@ namespace TiaMcpServer.Siemens
     /// touches the file system.
     ///
     /// Path shape: tag table paths are root-relative, e.g. "TagGroup1/Table1"; tag paths append
-    /// the tag, e.g. "TagGroup1/Table1/Tag_1". The system root ("PLC tags") is never part of a
-    /// path, so every path here round-trips back into these resolvers.
+    /// the tag, e.g. "TagGroup1/Table1/Tag_1". The system root ("PLC tags", localised by TIA
+    /// Portal) is not part of a reported path, so every path here round-trips back into these
+    /// resolvers. The preservePath export layout does prefix it - the same convention block and
+    /// type exports follow - and the resolvers accept it back as an optional leading segment.
     /// </summary>
     public partial class Portal
     {
@@ -39,13 +41,20 @@ namespace TiaMcpServer.Siemens
 
                     return root == null
                         ? null
-                        : WalkGroups<PlcTagTableGroup>(root, groupPath, g => g.Groups, g => g.Name);
+                        : WalkGroups<PlcTagTableGroup>(
+                            root, StripTagTableSystemRoot(root, groupPath), g => g.Groups, g => g.Name);
                 },
                 ("softwarePath", softwarePath), ("groupPath", groupPath));
         }
 
         /// <summary>Root-relative path of a tag table, e.g. "TagGroup1/Table1".</summary>
-        public string GetTagTablePath(PlcTagTable table)
+        /// <param name="includeSystemRoot">
+        /// True prefixes the system group name as TIA Portal reports it in the current interface
+        /// language (e.g. "PLC tags/TagGroup1/Table1"), which is the layout the preservePath
+        /// exports write, matching the block and type exports. False (the default) yields a path
+        /// that round-trips back into GetTagTable and GetTagTableGroupByPath.
+        /// </param>
+        public string GetTagTablePath(PlcTagTable table, bool includeSystemRoot = false)
         {
             if (table == null)
             {
@@ -59,12 +68,35 @@ namespace TiaMcpServer.Siemens
                     g => g.Parent as PlcTagTableGroup,
                     g => g.Name,
                     g => g is PlcTagTableSystemGroup,
-                    includeSystemRoot: false);
+                    includeSystemRoot);
 
                 return string.IsNullOrEmpty(groupPath) ? table.Name : $"{groupPath}/{table.Name}";
             }
 
             return table.Name;
+        }
+
+        /// <summary>
+        /// Drops a leading system root segment ("PLC tags", or its translation in the current
+        /// TIA Portal interface language) so a group path taken from the export layout resolves
+        /// like the root-relative form.
+        /// </summary>
+        private static string StripTagTableSystemRoot(PlcTagTableSystemGroup root, string groupPath)
+        {
+            if (string.IsNullOrEmpty(groupPath))
+            {
+                return groupPath;
+            }
+
+            var separator = groupPath.IndexOf('/');
+            var head = separator < 0 ? groupPath : groupPath.Substring(0, separator);
+
+            if (!head.Equals(root.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                return groupPath;
+            }
+
+            return separator < 0 ? string.Empty : groupPath.Substring(separator + 1);
         }
 
         #endregion
@@ -104,8 +136,12 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
-        /// Exports one tag table to '&lt;exportPath&gt;/&lt;table&gt;.xml'. Filesystem only - it
-        /// does not modify the project, so it is not gated behind '--allow-write'.
+        /// Exports one tag table to '&lt;exportPath&gt;/&lt;table&gt;.xml', or, with
+        /// <paramref name="preservePath"/>, to
+        /// '&lt;exportPath&gt;/PLC tags/&lt;groups&gt;/&lt;table&gt;.xml' - the system group name
+        /// as TIA Portal reports it in the current interface language, the same way block and
+        /// type exports mirror "Program blocks" and "PLC data types".
+        /// Filesystem only - it does not modify the project, so it is not gated behind '--allow-write'.
         /// </summary>
         public PlcTagTable? ExportTagTable(string softwarePath, string tagTablePath, string exportPath, bool preservePath = false)
         {
@@ -117,7 +153,7 @@ namespace TiaMcpServer.Siemens
                             $"Tag table not found at '{tagTablePath}'. Use 'GetTagTables' to list the available tables.");
 
                     var target = preservePath
-                        ? Path.Combine(exportPath, GetTagTablePath(table).Replace('/', '\\') + ".xml")
+                        ? Path.Combine(exportPath, GetTagTablePath(table, includeSystemRoot: true).Replace('/', '\\') + ".xml")
                         : Path.Combine(exportPath, $"{table.Name}.xml");
 
                     var directory = Path.GetDirectoryName(target);

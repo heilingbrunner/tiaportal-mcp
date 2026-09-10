@@ -182,7 +182,7 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("tagTablePath: root-relative path of the tag table, e.g. 'TagGroup1/Table1'")] string tagTablePath,
             [Description("exportPath: directory on this machine that receives the XML file")] string exportPath,
-            [Description("preservePath: recreate the tag table group structure below exportPath")] bool preservePath = false)
+            [Description("preservePath: recreate the tag table group structure below exportPath, inside the 'PLC tags' system folder as TIA Portal names it in the current interface language")] bool preservePath = false)
         {
             try
             {

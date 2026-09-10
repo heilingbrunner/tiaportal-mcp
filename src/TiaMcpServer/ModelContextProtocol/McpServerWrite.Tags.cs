@@ -89,7 +89,7 @@ namespace TiaMcpServer.ModelContextProtocol
          Description("Import a PLC tag table from an XML file on the file system of the machine running this server")]
         public static ResponseImported ImportTagTable(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("groupPath: root-relative tag table group that receives the table; empty uses the PLC tags root")] string groupPath,
+            [Description("groupPath: root-relative tag table group that receives the table; empty uses the PLC tags root. A leading 'PLC tags' segment, as written by preservePath exports, is accepted and ignored")] string groupPath,
             [Description("importPath: full path of the XML file to import")] string importPath,
             [Description("overwrite: replace an existing tag table of the same name (default true)")] bool overwrite = true)
         {
