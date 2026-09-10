@@ -154,6 +154,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         internal static ResponseTypeInfo ToTypeInfo(PlcType type) => new ResponseTypeInfo
         {
+            Path = Portal.GetTypePath(type),
             Name = type.Name,
             TypeName = type.GetType().Name,
             Namespace = type.Namespace,

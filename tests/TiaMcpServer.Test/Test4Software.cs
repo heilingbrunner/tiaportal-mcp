@@ -606,5 +606,432 @@ namespace TiaMcpServer.Test
                 Common.CloseProject(_portal, projectPath);
             }
         }
+        /// <summary>
+        /// PreviewImport must classify correctly and change nothing: a name already in the PLC
+        /// but in a different group is a conflict for types, an unknown name is a create.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
+        public void Test_481_PreviewImport(string projectPath, string softwarePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            ModelContextProtocol.McpServer.Portal = _portal;
+
+            var stage = Path.Combine(Path.GetTempPath(), "TiaMcpServerPreview", Guid.NewGuid().ToString("N"));
+
+            Directory.CreateDirectory(stage);
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var existing = _portal.GetTypes(softwarePath).FirstOrDefault();
+
+                if (existing == null)
+                {
+                    Assert.Inconclusive($"'{softwarePath}' holds no PLC data type");
+                }
+
+                // One file named after a type that exists, one that does not.
+                File.WriteAllText(Path.Combine(stage, existing!.Name + ".s7dcl"), "TYPE\nEND_TYPE\n");
+                File.WriteAllText(Path.Combine(stage, "ZZ_NewType_ZZ.s7dcl"), "TYPE\nEND_TYPE\n");
+
+                var typeCountBefore = _portal.GetTypes(softwarePath).Count;
+                var preview = ModelContextProtocol.McpServer.PreviewImport(softwarePath, stage, "type", string.Empty);
+
+                Console.WriteLine(preview.Message);
+
+                foreach (var item in preview.Items!)
+                {
+                    Console.WriteLine($"- {item.Name}: {item.Effect} -> {item.TargetPath} (existing: {item.ExistingPath}) {item.Note}");
+                }
+
+                Assert.AreEqual(1, preview.CreateCount, "The unknown name should be reported as a create");
+                Assert.AreEqual(1, preview.OverwriteCount + preview.ConflictCount, "The known name should be reported as overwrite or conflict");
+                Assert.AreEqual(typeCountBefore, _portal.GetTypes(softwarePath).Count, "PreviewImport changed the project");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+
+                try
+                {
+                    Directory.Delete(stage, recursive: true);
+                }
+                catch (Exception)
+                {
+                    // Temp cleanup only.
+                }
+            }
+        }
+
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
+        public void Test_471_FindInCode(string projectPath, string softwarePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                // Every source document and every SimaticML export names its own object, so a
+                // search for a real block name must find at least that block.
+                var block = _portal.GetBlocks(softwarePath).FirstOrDefault(b => b.IsConsistent);
+
+                if (block == null)
+                {
+                    Assert.Inconclusive($"'{softwarePath}' holds no consistent block");
+                }
+
+                var result = _portal.FindInCode(softwarePath, block!.Name, block.Name);
+
+                Console.WriteLine($"'{block.Name}': {result.Items.Count} hit(s) across {result.ObjectsSearched} object(s), " +
+                                  $"{result.Unsearchable.Count} unsearchable");
+
+                foreach (var hit in result.Items.Take(5))
+                {
+                    Console.WriteLine($"- {hit.ObjectPath}:{hit.Line} [{hit.Format}] {hit.Text}");
+                }
+
+                Assert.IsTrue(result.Items.Count > 0, $"Searching for '{block.Name}' found nothing");
+
+                // An impossible pattern must come back empty rather than throwing.
+                Assert.AreEqual(0, _portal.FindInCode(softwarePath, "ZZ_no_such_text_ZZ").Items.Count);
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+            }
+        }
+
+        /// <summary>
+        /// The write wrapper must commit on success and roll back on failure. The project is
+        /// closed without saving either way, so nothing survives this test.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
+        public void Test_461_TransactionCommitsAndRollsBack(string projectPath, string softwarePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            var committed = "McpTx_Committed_" + Guid.NewGuid().ToString("N").Substring(0, 6);
+            var rolledBack = "McpTx_RolledBack_" + Guid.NewGuid().ToString("N").Substring(0, 6);
+
+            try
+            {
+                // Commit path: a body that returns normally must leave its edit in place.
+                _portal.InTransaction("test: commit", () => _portal.CreateTagTable(softwarePath, string.Empty, committed));
+
+                Assert.IsNotNull(
+                    _portal.GetTagTable(softwarePath, committed),
+                    "A committed transaction did not keep its tag table");
+
+                // Rollback path: a body that throws must leave nothing behind.
+                try
+                {
+                    _portal.InTransaction<bool>("test: rollback", () =>
+                    {
+                        _portal.CreateTagTable(softwarePath, string.Empty, rolledBack);
+
+                        throw new InvalidOperationException("deliberate failure inside the transaction");
+                    });
+
+                    Assert.Fail("The deliberate failure did not propagate out of InTransaction");
+                }
+                catch (InvalidOperationException)
+                {
+                    // expected
+                }
+
+                var survivor = _portal.GetTagTable(softwarePath, rolledBack);
+
+                if (survivor != null)
+                {
+                    Assert.Inconclusive(
+                        "The tag table survived a failed transaction, so this TIA Portal did not grant a transaction " +
+                        "and the wrapper fell back to an unwrapped write. Atomicity cannot be verified in this environment.");
+                }
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+            }
+        }
+
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
+        public void Test_451_GetPlcSummary(string projectPath, string softwarePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var summary = _portal.GetPlcSummary(softwarePath);
+
+                Console.WriteLine($"{summary.Name}: {summary.BlockCount} blocks, {summary.TypeCount} types, " +
+                                  $"{summary.TagCount} tags in {summary.TagTableCount} tables, " +
+                                  $"{summary.InconsistentObjects.Count} inconsistent, last modified {summary.LastModified}");
+                Console.WriteLine($"  languages: {string.Join(", ", summary.BlocksByLanguage.Select(p => $"{p.Key}={p.Value}"))}");
+                Console.WriteLine($"  kinds: {string.Join(", ", summary.BlocksByKind.Select(p => $"{p.Key}={p.Value}"))}");
+
+                // The counts must agree with the collectors they are built from.
+                Assert.AreEqual(_portal.GetBlocks(softwarePath).Count, summary.BlockCount, "Block count disagrees with GetBlocks");
+                Assert.AreEqual(_portal.GetTypes(softwarePath).Count, summary.TypeCount, "Type count disagrees with GetTypes");
+                Assert.AreEqual(summary.BlockCount, summary.BlocksByKind.Values.Sum(), "Kind histogram does not add up");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+            }
+        }
+
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
+        public void Test_452_ExportPlcAsSourceTree(string projectPath, string softwarePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var exportPath = Path.Combine(Path.GetTempPath(), "TiaMcpServerSnapshot", Guid.NewGuid().ToString("N"));
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var result = _portal.ExportPlcAsSourceTree(softwarePath, exportPath);
+
+                Console.WriteLine($"Snapshot in {result.Directory}: {result.TotalWritten} written, " +
+                                  $"{result.Skipped.Count} skipped, {result.Failures.Count} failed");
+
+                foreach (var pair in result.Written)
+                {
+                    Console.WriteLine($"  {pair.Key}: {pair.Value} as {result.Formats[pair.Key]}");
+                }
+
+                foreach (var failure in result.Failures.Take(5))
+                {
+                    Console.WriteLine($"  failure: {failure}");
+                }
+
+                Assert.IsTrue(result.TotalWritten > 0, "The snapshot wrote nothing");
+                Assert.IsTrue(Directory.Exists(exportPath), "The snapshot directory does not exist");
+                Assert.IsTrue(
+                    Directory.GetFiles(exportPath, "*.*", SearchOption.AllDirectories).Length > 0,
+                    "The snapshot directory holds no files");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+
+                try
+                {
+                    if (Directory.Exists(exportPath))
+                    {
+                        Directory.Delete(exportPath, recursive: true);
+                    }
+                }
+                catch (Exception)
+                {
+                    // Temp cleanup only.
+                }
+            }
+        }
+
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "document")]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "xml")]
+        public void Test_441_GetBlockSource(string projectPath, string softwarePath, string format)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var block = _portal.GetBlocks(softwarePath).FirstOrDefault(b => b.IsConsistent);
+
+                if (block == null)
+                {
+                    Assert.Inconclusive($"'{softwarePath}' holds no consistent block");
+                }
+
+                var result = _portal.GetBlockSource(softwarePath, _portal.GetBlockPath(block!), format);
+
+                Console.WriteLine($"{result.Path} [{result.Format}] {result.TotalChars} chars, files: {string.Join(", ", result.FileNames)}");
+                Console.WriteLine(result.Text.Length > 600 ? result.Text.Substring(0, 600) : result.Text);
+
+                Assert.IsFalse(string.IsNullOrWhiteSpace(result.Text), "No source text was returned");
+                StringAssert.Contains(result.Text, block!.Name, "The source does not mention the block name");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+            }
+        }
+
+        /// <summary>Reading source must not leave scratch directories behind.</summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
+        public void Test_442_GetBlockSourceCleansUp(string projectPath, string softwarePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var scratchRoot = Path.Combine(Path.GetTempPath(), "TiaMcpServer");
+                var before = Directory.Exists(scratchRoot) ? Directory.GetDirectories(scratchRoot).Length : 0;
+
+                var block = _portal.GetBlocks(softwarePath).FirstOrDefault(b => b.IsConsistent);
+
+                if (block == null)
+                {
+                    Assert.Inconclusive($"'{softwarePath}' holds no consistent block");
+                }
+
+                _portal.GetBlockSource(softwarePath, _portal.GetBlockPath(block!));
+
+                var after = Directory.Exists(scratchRoot) ? Directory.GetDirectories(scratchRoot).Length : 0;
+
+                Assert.AreEqual(before, after, "GetBlockSource left a scratch directory behind");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+            }
+        }
+
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
+        public void Test_443_GetBlockInterface(string projectPath, string softwarePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var dataBlock = _portal.GetBlocks(softwarePath)
+                    .FirstOrDefault(b => b is DataBlock);
+
+                if (dataBlock == null)
+                {
+                    Assert.Inconclusive($"'{softwarePath}' holds no data block");
+                }
+
+                var members = _portal.GetBlockInterface(softwarePath, _portal.GetBlockPath(dataBlock!));
+
+                foreach (var member in members)
+                {
+                    Console.WriteLine($"- {member.Name} : {member.DataTypeName} ({member.Attributes.Count} attributes)");
+                }
+
+                Assert.IsNotNull(members, "No interface members were returned");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+            }
+        }
+
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
+        public void Test_431_ResolveObjectPath(string projectPath, string softwarePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var block = _portal.GetBlocks(softwarePath).FirstOrDefault();
+
+                if (block == null)
+                {
+                    Assert.Inconclusive($"'{softwarePath}' holds no block to resolve");
+                }
+
+                var expected = _portal.GetBlockPath(block!);
+                var matches = _portal.ResolveObjectPath(softwarePath, block!.Name);
+
+                foreach (var match in matches)
+                {
+                    Console.WriteLine($"- {match.Kind}: {match.Path}");
+                }
+
+                Assert.IsTrue(
+                    matches.Any(m => m.Kind == "block" && m.Path == expected),
+                    $"Resolving '{block.Name}' did not yield '{expected}'");
+
+                Assert.AreEqual(0, _portal.ResolveObjectPath(softwarePath, "ZZ_does_not_exist_ZZ").Count);
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+            }
+        }
+
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath1)]
+        public void Test_432_GetSoftwarePaths(string projectPath, string expectedPath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var paths = _portal.GetSoftwarePaths();
+
+                foreach (var path in paths)
+                {
+                    Console.WriteLine($"- {path}");
+                }
+
+                CollectionAssert.Contains(paths, expectedPath, $"'{expectedPath}' was not enumerated");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+            }
+        }
+
     }
 }

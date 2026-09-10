@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using Siemens.Engineering.Compiler;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
 using System;
@@ -628,7 +629,8 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "CompileSoftware", Title = "Compile PLC software", Destructive = false, Idempotent = true, OpenWorld = false), Description("Compile the plc software")]
+        [McpServerTool(Name = "CompileSoftware", Title = "Compile PLC software", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Compile the plc software and report every compiler message with the object it belongs to, so errors can be fixed without re-reading the whole PLC. Warnings are reported as a successful compile with detail; only errors fail the call")]
         public static ResponseCompileSoftware CompileSoftware(
             [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
             [Description("password: the password to access adminsitration, default: no password")] string password = "")
@@ -636,26 +638,92 @@ namespace TiaMcpServer.ModelContextProtocol
             try
             {
                 var result = Portal.CompileSoftware(softwarePath, password);
-                if (result != null && !result.State.ToString().Equals("Error"))
+
+                if (result == null)
                 {
-                    return new ResponseCompileSoftware
+                    throw new McpException(
+                        $"Failed compiling software '{softwarePath}'. Check that the path names a PLC software " +
+                        "('GetProjectTree' lists them) and, for a safety program, that 'password' is correct.");
+                }
+
+                var messages = FlattenCompilerMessages(result.Messages, 0).ToList();
+                var state = result.State.ToString();
+                var failed = result.State == CompilerResultState.Error;
+
+                var response = new ResponseCompileSoftware
+                {
+                    Message = $"Compiling '{softwarePath}' finished with state '{state}': " +
+                              $"{result.ErrorCount} error(s), {result.WarningCount} warning(s)",
+                    State = state,
+                    ErrorCount = result.ErrorCount,
+                    WarningCount = result.WarningCount,
+                    Messages = messages,
+                    Meta = new JsonObject
                     {
-                        Message = $"Software '{softwarePath}' compiled with {result}",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = !failed,
+                        ["state"] = state,
+                        ["errorCount"] = result.ErrorCount,
+                        ["warningCount"] = result.WarningCount,
+                        ["messageCount"] = messages.Count
+                    }
+                };
+
+                if (failed)
                 {
-                    throw new McpException($"Failed compiling software '{softwarePath}': {result}");
+                    // The message text is what a client surfaces, so name the first few offenders
+                    // rather than making the caller re-query to find out what broke.
+                    var offenders = messages
+                        .Where(m => string.Equals(m.State, nameof(CompilerResultState.Error), StringComparison.OrdinalIgnoreCase))
+                        .Take(5)
+                        .Select(m => $"{m.Path}: {m.Description}");
+
+                    throw new McpException(
+                        $"Compiling '{softwarePath}' failed with {result.ErrorCount} error(s). " +
+                        string.Join(" | ", offenders));
                 }
+
+                return response;
             }
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error compiling software '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Walks the recursive CompilerResultMessage tree depth-first. Openness nests messages
+        /// per object and then per detail, and the previous implementation discarded all of it
+        /// in favour of CompilerResult.ToString().
+        /// </summary>
+        private static IEnumerable<CompileMessage> FlattenCompilerMessages(CompilerResultMessageComposition? messages, int depth)
+        {
+            if (messages == null)
+            {
+                yield break;
+            }
+
+            foreach (var message in messages)
+            {
+                if (message == null)
+                {
+                    continue;
+                }
+
+                yield return new CompileMessage
+                {
+                    Path = message.Path,
+                    State = message.State.ToString(),
+                    Description = message.Description,
+                    ErrorCount = message.ErrorCount,
+                    WarningCount = message.WarningCount,
+                    Depth = depth
+                };
+
+                foreach (var child in FlattenCompilerMessages(message.Messages, depth + 1))
+                {
+                    yield return child;
+                }
             }
         }
 
@@ -710,6 +778,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                     return new ResponseBlockInfo
                     {
+                        Path = Portal.GetBlockPath(block),
                         Message = $"Block info retrieved from '{blockPath}' in '{softwarePath}'",
                         Name = block.Name,
                         TypeName = block.GetType().Name,
@@ -758,6 +827,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                         responseList.Add(new ResponseBlockInfo
                         {
+                            Path = Portal.GetBlockPath(block),
                             Name = block.Name,
                             TypeName = block.GetType().Name,
                             Namespace = block.Namespace,
@@ -806,7 +876,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 var rootGroup = Portal.GetBlockRootGroup(softwarePath);
                 if (rootGroup != null)
                 {
-                    var hierarchy = Helper.BuildBlockHierarchy(rootGroup);
+                    var hierarchy = Helper.BuildBlockHierarchy(rootGroup, Portal);
                     return new ResponseBlocksWithHierarchy
                     {
                         Message = $"Block hierarchy retrieved from '{softwarePath}'",
@@ -1056,6 +1126,7 @@ namespace TiaMcpServer.ModelContextProtocol
                             var attrs = Helper.GetAttributeList(b);
                             inconsistentInfos.Add(new ResponseBlockInfo
                             {
+                                Path = Portal.GetBlockPath(b),
                                 Name = b.Name,
                                 TypeName = b.GetType().Name,
                                 Namespace = b.Namespace,
@@ -1092,6 +1163,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                             responseList.Add(new ResponseBlockInfo
                             {
+                                Path = Portal.GetBlockPath(block),
                                 Name = block.Name,
                                 TypeName = block.GetType().Name,
                                 Namespace = block.Namespace,
@@ -1163,6 +1235,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                     return new ResponseTypeInfo
                     {
+                        Path = Portal.GetTypePath(type),
                         Message = $"Type info retrieved from '{typePath}' in '{softwarePath}'",
                         Name = type.Name,
                         TypeName = type.GetType().Name,
@@ -1208,6 +1281,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                         responseList.Add(new ResponseTypeInfo
                         {
+                            Path = Portal.GetTypePath(type),
                             Name = type.Name,
                             TypeName = type.GetType().Name,
                             Namespace = type.Namespace,
@@ -1383,6 +1457,7 @@ namespace TiaMcpServer.ModelContextProtocol
                             var attrs = Helper.GetAttributeList(t);
                             inconsistentTypeInfos.Add(new ResponseTypeInfo
                             {
+                                Path = Portal.GetTypePath(t),
                                 Name = t.Name,
                                 TypeName = t.GetType().Name,
                                 Namespace = t.Namespace,
@@ -1416,6 +1491,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                             responseList.Add(new ResponseTypeInfo
                             {
+                                Path = Portal.GetTypePath(type),
                                 Name = type.Name,
                                 TypeName = type.GetType().Name,
                                 Namespace = type.Namespace,
@@ -1573,6 +1649,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                             responseList.Add(new ResponseBlockInfo
                             {
+                                Path = Portal.GetBlockPath(block),
                                 Name = block.Name,
                                 TypeName = block.GetType().Name,
                                 Namespace = block.Namespace,
@@ -1754,6 +1831,7 @@ namespace TiaMcpServer.ModelContextProtocol
                             var attributes = Helper.GetAttributeList(block);
                             responseList.Add(new ResponseBlockInfo
                             {
+                                Path = Portal.GetBlockPath(block),
                                 Name = block.Name,
                                 TypeName = block.GetType().Name,
                                 Namespace = block.Namespace,

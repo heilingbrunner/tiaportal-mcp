@@ -46,7 +46,12 @@ namespace TiaMcpServer.ModelContextProtocol
 
             try
             {
-                return body();
+                // One transaction per tool call: the edits commit together or not at all, and
+                // the operator sees a single named entry in the TIA Portal undo stack instead of
+                // an unlabelled pile of steps. Falls back to an unwrapped write when TIA Portal
+                // refuses exclusive access, so this can never turn a working write into a
+                // failure - see Portal.Transactions.cs.
+                return Portal.InTransaction($"MCP: {toolName}", body);
             }
             catch (PortalException pex)
             {

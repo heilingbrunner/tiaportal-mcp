@@ -60,6 +60,37 @@ surface grows from 31 tools to 44 read tools plus 37 project-mutating tools.
   `ImportFromDocuments` and `ImportBlocksFromDocuments` remain ungated, which is a known
   inconsistency in those block tools rather than a pattern the new tools follow.
 
+- __Ten comfort tools__ that shorten the path between a question and an answer. All read-only
+  except where noted, and none change an existing tool's contract.
+  - `GetBlockSource` / `GetTypeSource` return an object's source text inline instead of making
+    the caller export a file and open it. Openness has no in-memory block body, so the readers
+    export into a temp scratch directory and remove it again. STL and mixed-language blocks
+    have no SIMATIC Source Document at all, so those fall back to XML and say so in `Format`.
+  - `GetBlockInterface` lists a data block's members from `DataBlock.Interface` without any
+    export, and works on inconsistent blocks. Data blocks only - V21 Openness offers no
+    interface accessor for FB, FC or OB.
+  - `FindInCode` searches the program text with a regular expression. Every other filter in the
+    server matches object names only.
+  - `CompileSoftware` now returns the whole `CompilerResult.Messages` tree flattened to
+    `{path, state, description}` with error and warning counts, instead of one stringified
+    sentence. Warnings are a successful compile with detail; only errors fail the call.
+  - `GetPlcSummary` replaces six discovery calls: counts per area, a programming-language
+    histogram, and the inconsistent and know-how-protected objects.
+  - `WhereUsed` answers "what uses this?" from a bare name, flattening the cross-reference tree.
+  - `ResolveObjectPath` turns a bare or partial name into the root-relative path the other tools
+    need, across all six object areas. The `Path` property is also no longer commented out on
+    `ResponseBlockInfo` and `ResponseTypeInfo`, so `GetBlocks` and `GetTypes` finally return
+    round-trippable paths - exporting one type is now one call instead of three.
+  - `OpenTiaProject` connects, opens and returns the device and PLC software paths in one call.
+  - `ExportPlcAsSourceTree` snapshots a whole PLC to a git-ready folder tree in one call.
+  - `PreviewImport` reports what an import would create, overwrite or collide with, without
+    touching the project - including the PLC-global data type name rule.
+- __Atomic, undoable writes.__ Every one of the write tools now runs inside
+  `ExclusiveAccess.Transaction`, so a tool call commits as a unit and appears in the TIA Portal
+  undo stack as one named entry. A body that throws rolls back instead of leaving the project
+  half-edited (verified against a live V21). If TIA Portal refuses exclusive access the write
+  still runs unwrapped, so this can never turn a working write into a failure.
+
 ### Changed
 
 - `GetSoftwareTree` renders three further sections - PLC tags, watch and force tables, and
