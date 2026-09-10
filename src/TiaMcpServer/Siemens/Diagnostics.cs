@@ -26,6 +26,9 @@ namespace TiaMcpServer.Siemens
         public string? ProjectName { get; set; }
         public string? ProjectPath { get; set; }
         public bool IsUserInGroup { get; set; }
+
+        /// <summary>Whether the server was started with --allow-write.</summary>
+        public bool AllowWrite { get; set; }
         public IReadOnlyList<TiaInstallation> Installations { get; set; } = new List<TiaInstallation>();
         public string? Text { get; set; }
     }
@@ -55,7 +58,7 @@ namespace TiaMcpServer.Siemens
             "Portal.exe"
         };
 
-        public static DiagnosticsReport Run(Portal portal)
+        public static DiagnosticsReport Run(Portal portal, bool allowWrite = false)
         {
             if (portal == null)
             {
@@ -100,7 +103,8 @@ namespace TiaMcpServer.Siemens
                 status += $"\n├─ Installed TIA Portal versions: none found (>= V{MinTiaMajorVersion})";
             }
 
-            status += $"\n└─ User in 'Siemens TIA Openness' user group: {userInGroup}";
+            status += $"\n├─ User in 'Siemens TIA Openness' user group: {userInGroup}";
+            status += $"\n└─ Write mode (--allow-write): {(allowWrite ? "enabled" : "disabled, read-only tools only")}";
 
             return new DiagnosticsReport
             {
@@ -109,6 +113,7 @@ namespace TiaMcpServer.Siemens
                 ProjectName = projectName,
                 ProjectPath = projectPath,
                 IsUserInGroup = userInGroup,
+                AllowWrite = allowWrite,
                 Installations = installations,
                 Text = status
             };

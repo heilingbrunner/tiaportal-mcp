@@ -238,6 +238,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? ProjectName { get; set; }
         public string? ProjectPath { get; set; }
         public bool? IsUserInGroup { get; set; }
+        public bool? AllowWrite { get; set; }
         public IEnumerable<ResponseTiaInstallation>? Installations { get; set; }
     }
 

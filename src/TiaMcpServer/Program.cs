@@ -19,6 +19,10 @@ namespace TiaMcpServer
 
             Engineering.TiaMajorVersion = options.TiaMajorVersion ?? 21;
 
+            // Set before the --doctor branch below, which reports the write mode, and before the
+            // host registers its tool types.
+            WritePolicy.AllowWrite = options.AllowWrite;
+
             if (Engineering.TiaMajorVersion >= 20)
             {
                 Openness.Initialize(Engineering.TiaMajorVersion);
@@ -55,7 +59,7 @@ namespace TiaMcpServer
             try
             {
                 // Fully qualified: 'Diagnostics' alone would collide with the System.Diagnostics namespace.
-                var report = TiaMcpServer.Siemens.Diagnostics.Run(new Portal());
+                var report = TiaMcpServer.Siemens.Diagnostics.Run(new Portal(), WritePolicy.AllowWrite);
 
                 Console.WriteLine(report.Text);
             }
@@ -86,9 +90,6 @@ namespace TiaMcpServer
 
         public static async Task RunStdioHost(CliOptions? options)
         {
-            // Must be set before the tools are registered below and before any tool runs.
-            WritePolicy.AllowWrite = options?.AllowWrite ?? false;
-
             var builder = Host.CreateEmptyApplicationBuilder(settings: null);
             if (builder != null)
             {
