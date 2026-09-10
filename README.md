@@ -42,7 +42,7 @@ To enable write mode, add the argument to your client configuration, for example
 
 ## Tools
 
-Read-only tools (44) are always available.
+Read-only tools (46) are always available.
 
 | Area | Tools |
 | --- | --- |
@@ -56,9 +56,10 @@ Read-only tools (44) are always available.
 | Watch and force tables | `GetWatchTables`, `GetWatchTableInfo`, `GetForceTables`, `ExportWatchTable` |
 | External sources | `GetExternalSources`, `GetExternalSourceInfo` |
 | Cross references | `GetCrossReferences` |
-| Documents (V20+) | `ExportAsDocuments`, `ExportBlocksAsDocuments`, `ImportFromDocuments`, `ImportBlocksFromDocuments` |
+| Block documents (V20+) | `ExportAsDocuments`, `ExportBlocksAsDocuments`, `ImportFromDocuments`, `ImportBlocksFromDocuments` |
+| Type documents (V21+) | `ExportTypeAsDocuments`, `ExportTypesAsDocuments` |
 
-Write tools (37) require `--allow-write`.
+Write tools (39) require `--allow-write`.
 
 | Area | Tools |
 | --- | --- |
@@ -69,6 +70,7 @@ Write tools (37) require `--allow-write`.
 | Tags and constants | `CreateTag`, `UpdateTag`, `DeleteTag`, `CreateUserConstant`, `UpdateUserConstant`, `DeleteUserConstant` |
 | Watch tables | `CreateWatchTable`, `RenameWatchTable`, `DeleteWatchTable`, `CreateWatchTableGroup`, `DeleteWatchTableGroup`, `ImportWatchTable` |
 | External sources | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `GenerateBlocksFromSource` |
+| Type documents (V21+) | `ImportTypeFromDocuments`, `ImportTypesFromDocuments` |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
 `blocks,types,tags,watch,sources`, default `all` - to keep the output small on a large PLC.
@@ -81,7 +83,8 @@ Paths used by these tools are **root-relative**: `1_Tests/FC_Block_1`, not
 
 - [TIA Portal Openness API Documentation](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows)
 - [TIA Portal Openness API Overview](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows/tia-portal-openness-api)
-- [TIA Portal Openness API Export/Import Documentation](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows/export/import)
+- [TIA Portal Openness API for automation of engineering workflows](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows)
+- [TIA Portal Openness API for automation of engineering workflows - Export/Import Documentation](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows/export/import)
 
 ## Requirements
 
@@ -118,6 +121,33 @@ project, or change user group membership.
 - Previous versions are also supported, but must use the `--tia-major-version` argument to specify the version.
 - Export as documents (.s7dcl/.s7res) via `ExportAsDocuments`/`ExportBlocksAsDocuments` requires TIA Portal V20 or newer.
 - Import from documents (.s7dcl/.s7res) via `ImportFromDocuments`/`ImportBlocksFromDocuments` also requires TIA Portal V20 or newer.
+- The same for PLC data types - `ExportTypeAsDocuments`, `ExportTypesAsDocuments`,
+  `ImportTypeFromDocuments`, `ImportTypesFromDocuments` - requires TIA Portal **V21** or newer:
+  Openness only added `PlcType.ExportAsDocuments` and `PlcTypeComposition.ImportFromDocuments`
+  in V21.
+
+## SIMATIC Source Documents
+
+A source document is the readable, git-diffable form of an object: `<Name>.s7dcl` holds the
+declaration and body as SCL/LAD/STL text, the optional `<Name>.s7res` holds comments and
+language resources. Every other export in this server writes SimaticML XML instead, which
+diffs poorly.
+
+The file names come from TIA Portal, not from this server: an export response lists the files
+that were actually written, and a batch import discovers a document set by base name rather
+than assuming one extension. Tag tables and watch tables have no document API in Openness V21
+and remain XML-only.
+
+With `preservePath` the export mirrors the project tree below the system folder - `Program
+blocks` for blocks, `PLC data types` for types - using the folder name as TIA Portal reports it
+in the current interface language. `ImportTypeFromDocuments` and `ImportTypesFromDocuments`
+accept that folder name back as a leading segment of `groupPath`, so an export can be fed
+straight back in.
+
+A PLC data type name is unique across the whole PLC, not just within its group. Importing a
+name that already exists into a *different* group therefore fails with "an object with the name
+... already exists in the plc", even with `importOption: Override`; point `groupPath` at the
+group the type already lives in to replace it.
 
 ## Known Limitations
 

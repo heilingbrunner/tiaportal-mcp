@@ -1800,7 +1800,8 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        private static ImportDocumentOptions ParseImportDocumentOption(string option)
+        /// <summary>Internal, not private: McpServerWrite.Documents.cs parses the same option.</summary>
+        internal static ImportDocumentOptions ParseImportDocumentOption(string option)
         {
             if (string.IsNullOrWhiteSpace(option)) return ImportDocumentOptions.Override;
 
@@ -1832,7 +1833,8 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        private static List<string> GetResMissingEnUsIds(string directory, string baseName)
+        /// <summary>Internal, not private: the type document imports run the same pre-check.</summary>
+        internal static List<string> GetResMissingEnUsIds(string directory, string baseName)
         {
             var resPath = Path.Combine(directory, baseName + ".s7res");
             var missing = new List<string>();

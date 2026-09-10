@@ -2,6 +2,8 @@
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
 using System;
+using System.IO;
+using System.Linq;
 using TiaMcpServer.Siemens;
 
 namespace TiaMcpServer.Test
@@ -455,6 +457,154 @@ namespace TiaMcpServer.Test
             success &= Common.CloseProject(_portal, projectPath);
 
             Assert.IsTrue(success, "Failed to export blocks as documents");
+        }
+
+        /// <summary>
+        /// Exports the first consistent PLC data type as a SIMATIC source document set. The type
+        /// is discovered rather than hardcoded so the test survives edits to the sample project.
+        /// Asserts on the reported files, not on a '.s7dcl' name: Openness decides the names.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, true)]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, false)]
+        public void Test_423_ExportTypeAsDocuments(string projectPath, string softwarePath, string exportPath, bool preservePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var candidate = _portal.GetTypes(softwarePath).FirstOrDefault(t => t.IsConsistent);
+
+                if (candidate == null)
+                {
+                    Assert.Inconclusive($"'{softwarePath}' holds no consistent PLC data type to export");
+                }
+
+                var typePath = _portal.GetTypePath(candidate!);
+                var info = _portal.ExportTypeAsDocuments(softwarePath, typePath, exportPath, preservePath);
+
+                Console.WriteLine($"Exported '{typePath}' as documents, state '{info.State}':");
+
+                foreach (var file in info.Files)
+                {
+                    Console.WriteLine($"- {file}");
+                    Assert.IsTrue(File.Exists(file), $"Reported document '{file}' does not exist");
+                }
+
+                Assert.AreNotEqual(0, info.Files.Count, "The export reported no document files");
+
+                if (preservePath)
+                {
+                    StringAssert.Contains(
+                        info.Directory,
+                        "PLC data types",
+                        "preservePath must place documents below the 'PLC data types' system folder");
+                }
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+            }
+        }
+
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "", true)]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "", false)]
+        public void Test_424_ExportTypesAsDocuments(string projectPath, string softwarePath, string exportPath, string regexName, bool preservePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var outcome = _portal.ExportTypesAsDocuments(softwarePath, exportPath, regexName, preservePath);
+
+                Console.WriteLine($"Exported {outcome.Exported.Count} types as documents, " +
+                                  $"{outcome.Inconsistent.Count} inconsistent, {outcome.Failures.Count} failed.");
+
+                foreach (var failure in outcome.Failures)
+                {
+                    Console.WriteLine($"- failure: {failure}");
+                }
+
+                foreach (var export in outcome.Exported)
+                {
+                    Console.WriteLine($"- {export.Type?.Name}: {string.Join(", ", export.Documents.Files)}");
+                }
+
+                if (outcome.Exported.Count == 0 && outcome.Failures.Count == 0)
+                {
+                    Assert.Inconclusive($"'{softwarePath}' holds no PLC data type that can be exported as documents");
+                }
+
+                Assert.AreEqual(0, outcome.Failures.Count, "Some PLC data types failed to export as documents");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+            }
+        }
+
+        /// <summary>
+        /// Round-trips one PLC data type: export as documents, then import the same set back with
+        /// Override. Closes the project without saving, so the sample project is left untouched.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0)]
+        public void Test_425_TypeDocumentRoundTrip(string projectPath, string softwarePath, string exportPath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var candidate = _portal.GetTypes(softwarePath).FirstOrDefault(t => t.IsConsistent);
+
+                if (candidate == null)
+                {
+                    Assert.Inconclusive($"'{softwarePath}' holds no consistent PLC data type to round-trip");
+                }
+
+                var name = candidate!.Name;
+                var typePath = _portal.GetTypePath(candidate);
+                var info = _portal.ExportTypeAsDocuments(softwarePath, typePath, exportPath);
+
+                Assert.AreNotEqual(0, info.Files.Count, "The export reported no document files");
+
+                // A UDT name is unique across the whole PLC, not just within its group, so the
+                // import has to target the group the type came from. Importing the same name
+                // into another group collides even with ImportDocumentOptions.Override.
+                var groupPath = typePath.Contains("/")
+                    ? typePath.Substring(0, typePath.LastIndexOf('/'))
+                    : string.Empty;
+
+                var imported = _portal.ImportTypeFromDocuments(
+                    softwarePath, groupPath, info.Directory, name, ImportDocumentOptions.Override);
+
+                Console.WriteLine($"Round-tripped '{name}': imported {imported.Count} type(s).");
+
+                Assert.AreNotEqual(0, imported.Count, "The import returned no PLC data type");
+                Assert.IsTrue(
+                    imported.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)),
+                    $"The imported types do not contain '{name}'");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+            }
         }
     }
 }

@@ -342,4 +342,53 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         public IEnumerable<ResponseBlockInfo>? Items { get; set; }
     }
+
+    /// <summary>
+    /// Files one source document export produced. The list comes from TIA Portal rather than
+    /// from an assumed '.s7dcl' name, so the caller learns what is actually on disk.
+    /// </summary>
+    public class ResponseDocumentFiles
+    {
+        public string? Name { get; set; }
+
+        public string? Directory { get; set; }
+
+        public IEnumerable<string>? Files { get; set; }
+
+        /// <summary>Openness messages, present when the export was not a plain success.</summary>
+        public IEnumerable<string>? Messages { get; set; }
+
+        /// <summary>Success, PartialSuccess or Failure.</summary>
+        public string? State { get; set; }
+    }
+
+    public class ResponseExportTypeAsDocuments : ResponseMessage
+    {
+        public ResponseTypeInfo? Item { get; set; }
+
+        public ResponseDocumentFiles? Documents { get; set; }
+    }
+
+    public class ResponseExportTypesAsDocuments : ResponseMessage
+    {
+        public IEnumerable<ResponseTypeInfo>? Items { get; set; }
+
+        public IEnumerable<ResponseDocumentFiles>? Documents { get; set; }
+
+        /// <summary>Types skipped because TIA Portal does not export inconsistent objects.</summary>
+        public IEnumerable<ResponseTypeInfo>? Inconsistent { get; set; }
+
+        /// <summary>Types that failed to export, one entry per type, with the reason.</summary>
+        public IEnumerable<string>? Failures { get; set; }
+    }
+
+    public class ResponseImportTypeFromDocuments : ResponseMessage
+    {
+        public IEnumerable<ResponseTypeInfo>? Items { get; set; }
+    }
+
+    public class ResponseImportTypesFromDocuments : ResponseMessage
+    {
+        public IEnumerable<ResponseTypeInfo>? Items { get; set; }
+    }
 }

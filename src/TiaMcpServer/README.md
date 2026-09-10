@@ -57,6 +57,7 @@ The TiaMcpServer project provides the following functionality:
 *   **Working with types:** The `GetTypeInfo`, `GetTypes`, `ExportType`, `ImportType`, and `ExportTypes` tools allow the LLM to work with types.
 *   **Exporting blocks as documents (V20+):** The `ExportAsDocuments` and `ExportBlocksAsDocuments` tools export blocks as SIMATIC SD documents (.s7dcl/.s7res). Requires TIA Portal V20 or newer.
 *   **Importing blocks from documents (V20+):** The `ImportFromDocuments` and `ImportBlocksFromDocuments` tools import blocks from SIMATIC SD documents into PLC software. Requires TIA Portal V20 or newer.
+*   **PLC data types as documents (V21+):** `ExportTypeAsDocuments` and `ExportTypesAsDocuments` write a type as a SIMATIC Source Document set instead of XML; `ImportTypeFromDocuments` and `ImportTypesFromDocuments` read one back (both `--allow-write` only). Openness only offers `PlcType.ExportAsDocuments` from V21 on. The export response lists the files TIA Portal actually wrote rather than assuming a `.s7dcl` name.
 *   **Working with PLC tags and constants:** `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants` and `ExportTagTable`.
 *   **Working with watch and force tables:** `GetWatchTables`, `GetWatchTableInfo` (including entries), `GetForceTables` and `ExportWatchTable`.
 *   **Working with external source files:** `GetExternalSources` and `GetExternalSourceInfo`.

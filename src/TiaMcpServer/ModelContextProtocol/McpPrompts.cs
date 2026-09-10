@@ -202,6 +202,33 @@ Use the ExportBlocksAsDocuments tool with these parameters:
             return ExportBlocksAsDocuments(softwarePath, exportPath, "", "true");
         }
 
+        [McpServerPrompt(Name = "ExportTypesAsDocuments"), Description("Export PLC data types as SIMATIC Source Documents (V21+)")]
+        public static string ExportTypesAsDocuments(string softwarePath, string exportPath, string regexName = "", string preservePath = "false")
+        {
+            return $@"Export PLC data types (UDTs) as SIMATIC Source Documents instead of XML.
+The documents are readable text that git can diff. Requires TIA Portal V21 or newer.
+
+Common parameter values:
+- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- exportPath: '${{workspacefolder}}/export/Plc' is a good default
+- regexName: Use empty string """" for all types, or patterns like ""UDT_.*""
+- preservePath: Use false for flat export, true to mirror the project tree below the 'PLC data types' folder
+
+The response lists the files TIA Portal actually wrote, so do not assume an extension.
+
+Use the ExportTypesAsDocuments tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}
+- regexName: {regexName}
+- preservePath: {NormalizeBool(preservePath)}";
+        }
+
+        [McpServerPrompt(Name = "ExportAllTypesAsDocumentsStructured"), Description("Export all PLC data types as documents from PLC software (structured)")]
+        public static string ExportAllTypesAsDocumentsStructured(string softwarePath, string exportPath)
+        {
+            return ExportTypesAsDocuments(softwarePath, exportPath, "", "true");
+        }
+
         #endregion
 
         #region Import From Documents Templates
@@ -225,6 +252,28 @@ Use the ImportFromDocuments tool with these parameters:
 - groupPath: {groupPath}
 - importPath: {importPath}
 - fileNameWithoutExtension: {fileNameWithoutExtension}
+- importOption: {importOption}";
+        }
+
+        [McpServerPrompt(Name = "ImportTypesFromDocuments"), Description("Import PLC data types from SIMATIC Source Documents (V21+)")]
+        public static string ImportTypesFromDocuments(string softwarePath, string importPath, string groupPath = "", string regexName = "", string importOption = "Override")
+        {
+            return $@"Import PLC data types (UDTs) from SIMATIC Source Documents into PLC software (requires TIA Portal V21 or newer and the server started with '--allow-write').
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC
+- groupPath: optional target group, empty for the 'PLC data types' root. A leading 'PLC data types' segment from a preservePath export is accepted
+- importPath: folder holding the document files
+- regexName: empty for all, or e.g. 'UDT_.*'
+- importOption: 'Override' (default), 'None', 'SkipInactiveCultures', 'ActivateInactiveCultures'
+
+Use ImportTypeFromDocuments instead when you want a single named document set.
+
+Use the ImportTypesFromDocuments tool with these parameters:
+- softwarePath: {softwarePath}
+- groupPath: {groupPath}
+- importPath: {importPath}
+- regexName: {regexName}
 - importOption: {importOption}";
         }
 

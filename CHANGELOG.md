@@ -41,6 +41,25 @@ surface grows from 31 tools to 44 read tools plus 37 project-mutating tools.
 - `PortalErrorCode` gains `ImportFailed`, `CreateFailed`, `DeleteFailed`, `RenameFailed`,
   `NotSupported` and `WriteDisabled`. Existing members keep their order and values.
 
+- __PLC data types as SIMATIC Source Documents__ (TIA Portal V21+): `ExportTypeAsDocuments` and
+  `ExportTypesAsDocuments`, plus the write-gated `ImportTypeFromDocuments` and
+  `ImportTypesFromDocuments`. Until now only program blocks could be written as documents - the
+  readable, git-diffable form where `<Name>.s7dcl` holds the SCL/LAD source text and the
+  optional `<Name>.s7res` the comments; every other export produced SimaticML XML. Openness only
+  added `PlcType.ExportAsDocuments` and `PlcTypeComposition.ImportFromDocuments` in V21, hence
+  the higher version gate than the V20 block tools. Tag tables and watch tables have no document
+  API in V21 and remain XML-only.
+  File names come from TIA Portal rather than from a hardcoded extension: an export reports the
+  files it actually wrote (`DocumentExportResult.ExportedDocuments`, unioned with what is on
+  disk) and a batch import discovers a document set by base name across a known extension set.
+  Deleting a previous export stays restricted to `.s7dcl`/`.s7res`, so a hand-written `.scl` or
+  `.udt` in the same directory is never removed.
+  Unlike `ExportBlocksAsDocuments`, which only logs its failures, the bulk type export returns
+  its inconsistent and failed types so the response can name them. The two type import tools sit
+  in the `--allow-write` surface, where project-mutating tools belong; the older
+  `ImportFromDocuments` and `ImportBlocksFromDocuments` remain ungated, which is a known
+  inconsistency in those block tools rather than a pattern the new tools follow.
+
 ### Changed
 
 - `GetSoftwareTree` renders three further sections - PLC tags, watch and force tables, and
