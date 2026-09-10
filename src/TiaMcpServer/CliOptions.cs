@@ -5,6 +5,7 @@
         public int? TiaMajorVersion { get; set; }
         public int? Logging { get; set; } // "stdio" or "http"
         public bool Doctor { get; set; } // print environment diagnostics and exit
+        public bool AllowWrite { get; set; } // register the project-mutating tools
 
         public static CliOptions ParseArgs(string[] args)
         {
@@ -25,6 +26,11 @@
                     case "-doctor":
                     case "--doctor":
                         options.Doctor = true;
+                        break;
+
+                    case "-allow-write":
+                    case "--allow-write":
+                        options.AllowWrite = true;
                         break;
 
                     case "-logging":

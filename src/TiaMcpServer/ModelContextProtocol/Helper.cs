@@ -28,7 +28,26 @@ namespace TiaMcpServer.ModelContextProtocol
             return attributes;
         }
 
-        public static BlockGroupInfo BuildBlockHierarchy(PlcBlockGroup group)
+        /// <summary>
+        /// First available translation of a MultilingualText (tag and constant comments), or
+        /// null when the text has no items. Openness returns one item per project language.
+        /// </summary>
+        public static string? FirstText(MultilingualText? text)
+        {
+            if (text == null)
+            {
+                return null;
+            }
+
+            foreach (var item in text.Items)
+            {
+                return item.Text;
+            }
+
+            return null;
+        }
+
+        public static BlockGroupInfo BuildBlockHierarchy(PlcBlockGroup group, TiaMcpServer.Siemens.Portal? portal = null)
         {
             var groupInfo = new BlockGroupInfo
             {
@@ -41,6 +60,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 var attributes = Helper.GetAttributeList(block);
                 blockList.Add(new ResponseBlockInfo
                 {
+                    Path = portal == null ? null : portal.GetBlockPath(block),
                     Name = block.Name,
                     TypeName = block.GetType().Name,
                     Namespace = block.Namespace,
@@ -59,7 +79,7 @@ namespace TiaMcpServer.ModelContextProtocol
             var groupList = new List<BlockGroupInfo>();
             foreach (var subGroup in group.Groups)
             {
-                groupList.Add(BuildBlockHierarchy(subGroup));
+                groupList.Add(BuildBlockHierarchy(subGroup, portal));
             }
             groupInfo.Groups = groupList;
 

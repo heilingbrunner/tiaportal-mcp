@@ -1,5 +1,141 @@
 # Change Log
 
+## [0.2.0] - 2026-09-10
+
+Complete the PLC software area of the Openness API: tags, constants, watch and force tables,
+external sources, cross references, and create/rename/delete/move for blocks and types. The tool
+surface grows from 31 tools to 44 read tools plus 37 project-mutating tools.
+
+### Added
+
+- __Write mode__, opt-in through the new `--allow-write` command line argument. The 37
+  project-mutating tools live in a separate `McpServerWrite` tool type that is only registered
+  when the flag is present, so without it they are absent from `tools/list` rather than merely
+  refused when called. `WritePolicy.EnsureEnabled` additionally guards every write tool at
+  runtime, because these are `public static` methods that the test suite invokes directly and
+  that path bypasses tool registration. Filesystem-only exports are deliberately not gated: they
+  never modify the project. Both `GetState` and the `--doctor` report now show `AllowWrite`.
+- __PLC tags and constants__: `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`,
+  `GetConstants` (user and/or system) and `ExportTagTable`. Write side: `CreateTagTable`,
+  `DeleteTagTable`, `RenameTagTable`, `CreateTagTableGroup`, `DeleteTagTableGroup`,
+  `ImportTagTable`, `CreateTag`, `UpdateTag`, `DeleteTag`, `CreateUserConstant`,
+  `UpdateUserConstant`, `DeleteUserConstant`.
+- __Watch and force tables__: `GetWatchTables`, `GetWatchTableInfo` (including entries),
+  `GetForceTables` and `ExportWatchTable`. Write side: `CreateWatchTable`, `RenameWatchTable`,
+  `DeleteWatchTable`, `CreateWatchTableGroup`, `DeleteWatchTableGroup`, `ImportWatchTable`.
+- __External source files__: `GetExternalSources`, `GetExternalSourceInfo`,
+  `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`,
+  `DeleteExternalSourceGroup` and `GenerateBlocksFromSource`.
+- __Cross references__: `GetCrossReferences` for a whole PLC software or for one block, type,
+  tag table, tag or block group. Because `Sources -> References -> Locations` nests three deep
+  and source children recurse, the tool takes `maxDepth` (default 1, maximum 3) and reports a
+  `Truncated` flag with counts instead of returning megabytes.
+- __Blocks and types__: `CreateBlockGroup`, `DeleteBlockGroup`, `CreateTypeGroup`,
+  `DeleteTypeGroup`, `DeleteBlock`, `RenameBlock`, `DeleteType`, `RenameType`, `CreateFB`,
+  `CreateInstanceDB`, plus `CopyBlock`, `MoveBlock`, `CopyType` and `MoveType`.
+- `Portal.GetTypePath(PlcType)`, the counterpart to `GetBlockPath(PlcBlock)`.
+- `Operation.Run`, the single exception-decoration point that `docs/error-model.md` prescribes.
+  It wraps a non-`PortalException` into one, stamps context into `Exception.Data`, logs once
+  (nested calls do not re-log) and rethrows. It also serializes all Openness traffic behind a
+  `Monitor`; a `SemaphoreSlim` would self-deadlock, because portal methods call one another.
+- `PortalErrorCode` gains `ImportFailed`, `CreateFailed`, `DeleteFailed`, `RenameFailed`,
+  `NotSupported` and `WriteDisabled`. Existing members keep their order and values.
+
+- __PLC data types as SIMATIC Source Documents__ (TIA Portal V21+): `ExportTypeAsDocuments` and
+  `ExportTypesAsDocuments`, plus the write-gated `ImportTypeFromDocuments` and
+  `ImportTypesFromDocuments`. Until now only program blocks could be written as documents - the
+  readable, git-diffable form where `<Name>.s7dcl` holds the SCL/LAD source text and the
+  optional `<Name>.s7res` the comments; every other export produced SimaticML XML. Openness only
+  added `PlcType.ExportAsDocuments` and `PlcTypeComposition.ImportFromDocuments` in V21, hence
+  the higher version gate than the V20 block tools. Tag tables and watch tables have no document
+  API in V21 and remain XML-only.
+  File names come from TIA Portal rather than from a hardcoded extension: an export reports the
+  files it actually wrote (`DocumentExportResult.ExportedDocuments`, unioned with what is on
+  disk) and a batch import discovers a document set by base name across a known extension set.
+  Deleting a previous export stays restricted to `.s7dcl`/`.s7res`, so a hand-written `.scl` or
+  `.udt` in the same directory is never removed.
+  Unlike `ExportBlocksAsDocuments`, which only logs its failures, the bulk type export returns
+  its inconsistent and failed types so the response can name them. The two type import tools sit
+  in the `--allow-write` surface, where project-mutating tools belong; the older
+  `ImportFromDocuments` and `ImportBlocksFromDocuments` remain ungated, which is a known
+  inconsistency in those block tools rather than a pattern the new tools follow.
+
+- __Ten comfort tools__ that shorten the path between a question and an answer. All read-only
+  except where noted, and none change an existing tool's contract.
+  - `GetBlockSource` / `GetTypeSource` return an object's source text inline instead of making
+    the caller export a file and open it. Openness has no in-memory block body, so the readers
+    export into a temp scratch directory and remove it again. STL and mixed-language blocks
+    have no SIMATIC Source Document at all, so those fall back to XML and say so in `Format`.
+  - `GetBlockInterface` lists a data block's members from `DataBlock.Interface` without any
+    export, and works on inconsistent blocks. Data blocks only - V21 Openness offers no
+    interface accessor for FB, FC or OB.
+  - `FindInCode` searches the program text with a regular expression. Every other filter in the
+    server matches object names only.
+  - `CompileSoftware` now returns the whole `CompilerResult.Messages` tree flattened to
+    `{path, state, description}` with error and warning counts, instead of one stringified
+    sentence. Warnings are a successful compile with detail; only errors fail the call.
+  - `GetPlcSummary` replaces six discovery calls: counts per area, a programming-language
+    histogram, and the inconsistent and know-how-protected objects.
+  - `WhereUsed` answers "what uses this?" from a bare name, flattening the cross-reference tree.
+  - `ResolveObjectPath` turns a bare or partial name into the root-relative path the other tools
+    need, across all six object areas. The `Path` property is also no longer commented out on
+    `ResponseBlockInfo` and `ResponseTypeInfo`, so `GetBlocks` and `GetTypes` finally return
+    round-trippable paths - exporting one type is now one call instead of three.
+  - `OpenTiaProject` connects, opens and returns the device and PLC software paths in one call.
+  - `ExportPlcAsSourceTree` snapshots a whole PLC to a git-ready folder tree in one call.
+  - `PreviewImport` reports what an import would create, overwrite or collide with, without
+    touching the project - including the PLC-global data type name rule.
+- __Atomic, undoable writes.__ Every one of the write tools now runs inside
+  `ExclusiveAccess.Transaction`, so a tool call commits as a unit and appears in the TIA Portal
+  undo stack as one named entry. A body that throws rolls back instead of leaving the project
+  half-edited (verified against a live V21). If TIA Portal refuses exclusive access the write
+  still runs unwrapped, so this can never turn a working write into a failure.
+
+### Changed
+
+- `GetSoftwareTree` renders three further sections - PLC tags, watch and force tables, and
+  external source files - and takes a `sections` argument accepting any comma separated subset
+  of `blocks,types,tags,watch,sources` (default `all`) so the output stays manageable on a large
+  PLC. Existing single-argument callers are unaffected.
+- `Portal` and `McpServer` are now `partial` and split by area (`Portal.Tags.cs`,
+  `Portal.WatchTables.cs`, `Portal.MoveCopy.cs`, `McpServer.Tags.cs`, ...). The generic path
+  helpers in `Portal.Resolve.cs` (`WalkGroups`, `BuildGroupPath`, `WalkRecursive`) now back the
+  existing block and type resolvers as well, so all five group hierarchies share one traversal.
+- `Diagnostics.Run` takes an optional `bool allowWrite`. The flag is passed in rather than read
+  from `WritePolicy`, so the Siemens layer keeps no dependency on the MCP layer.
+- 27 read tools and all 37 write tools publish an `outputSchema` and return `structuredContent`
+  (previously 13).
+
+### Fixed
+
+- The software tree omitted external source files even though the `GetSoftwareTree` description
+  had always promised them.
+- `GetBlockPath` returned paths prefixed with the `Program blocks` system group, which
+  `GetBlock` then rejected - so the "Did you mean ...?" suggestions on a failed `ExportBlock`
+  named paths that could not be used. Path building now takes an `includeSystemRoot` flag:
+  suggestions are root-relative and round-trip, while `preservePath` exports keep the existing
+  on-disk layout unchanged.
+- `ExportTagTable` with `preservePath` wrote the group structure directly below `exportPath`,
+  while block and type exports place theirs below the system folder (`Program blocks`,
+  `PLC data types`). Tag tables now land in `<exportPath>/PLC tags/...`, using the system group
+  name as TIA Portal reports it in the current interface language. `ImportTagTable` accepts a
+  leading `PLC tags` segment in `groupPath` so the exported layout can be fed straight back.
+- `--doctor --allow-write` reported write mode as disabled. `WritePolicy.AllowWrite` was only
+  assigned inside `RunStdioHost`, which `--doctor` returns before reaching; it is now set in
+  `Main`.
+
+### Known gaps
+
+- `CreateWatchTableEntry` and `DeleteWatchTableEntry` are not implemented. `PlcWatchTable.Entries`
+  is a `PlcTableCommentEntryComposition` whose only typed creator produces a comment row; a real
+  entry requires the untyped `IEngineeringComposition.Create(typeof(PlcWatchTableEntry), ...)`
+  path, whose required attribute names must first be read from `GetCreationInfos()` against a
+  live project rather than guessed.
+- Openness offers no move or copy operation for blocks and types, so `CopyBlock`, `MoveBlock`,
+  `CopyType` and `MoveType` are composed from export, import and - for a move - deleting the
+  source after the import succeeds. Two consequences are visible to callers: the object must be
+  consistent, and its block number travels with it, so importing into the same PLC can collide.
+
 ## [0.1.0] - 2026-09-07
 
 Upgrade to the current MCP .NET SDK and adopt the newer protocol surface.

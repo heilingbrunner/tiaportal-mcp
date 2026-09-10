@@ -19,6 +19,10 @@ namespace TiaMcpServer
 
             Engineering.TiaMajorVersion = options.TiaMajorVersion ?? 21;
 
+            // Set before the --doctor branch below, which reports the write mode, and before the
+            // host registers its tool types.
+            WritePolicy.AllowWrite = options.AllowWrite;
+
             if (Engineering.TiaMajorVersion >= 20)
             {
                 Openness.Initialize(Engineering.TiaMajorVersion);
@@ -55,7 +59,7 @@ namespace TiaMcpServer
             try
             {
                 // Fully qualified: 'Diagnostics' alone would collide with the System.Diagnostics namespace.
-                var report = TiaMcpServer.Siemens.Diagnostics.Run(new Portal());
+                var report = TiaMcpServer.Siemens.Diagnostics.Run(new Portal(), WritePolicy.AllowWrite);
 
                 Console.WriteLine(report.Text);
             }
@@ -65,6 +69,23 @@ namespace TiaMcpServer
                 Console.Error.WriteLine($"Diagnose failed: {ex.Message}");
                 Environment.ExitCode = 1;
             }
+        }
+
+        /// <summary>
+        /// The read-only tools are always registered. The project-mutating tools live in a
+        /// separate tool type that is only registered with '--allow-write', which is what keeps
+        /// them out of 'tools/list' rather than merely refusing them when called.
+        /// </summary>
+        private static IEnumerable<Type> BuildToolTypes()
+        {
+            var toolTypes = new List<Type> { typeof(McpServer) };
+
+            if (WritePolicy.AllowWrite)
+            {
+                toolTypes.Add(typeof(McpServerWrite));
+            }
+
+            return toolTypes;
         }
 
         public static async Task RunStdioHost(CliOptions? options)
@@ -120,10 +141,14 @@ namespace TiaMcpServer
                             "Exposes Siemens TIA Portal via Openness. Call 'Connect' first, then 'OpenProject' with an " +
                             "absolute .apXX project or .alsXX session path. Use 'GetProjectTree' or 'GetSoftwareTree' to " +
                             "discover the path strings that the other tools expect. Export and import tools operate on " +
-                            "the local file system of the machine running this server.";
+                            "the local file system of the machine running this server." +
+                            (WritePolicy.AllowWrite
+                                ? " Write mode is enabled: tools that create, rename or delete project objects are " +
+                                  "available. Their changes stay in memory until 'SaveProject' (or 'SaveSession')."
+                                : string.Empty);
                     })
                     .WithStdioServerTransport()
-                    .WithTools((IEnumerable<Type>)new[] { typeof(McpServer) })
+                    .WithTools(BuildToolTypes())
                     .WithPrompts((IEnumerable<Type>)new[] { typeof(McpPrompts) });
 
                 // Register the Portal service for dependency injection

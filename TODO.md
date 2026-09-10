@@ -3,7 +3,7 @@
 Centralized list of actionable improvements gathered from initial repo review. Use this to track, prioritize, and reference across PRs. See file paths in backticks.
 
 ## Documentation
-- [ ] Add a "CLI Options" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.
+- [x] Added a "Command Line Arguments" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.
 - [ ] Add a "Build and Run" section to `README.md` showing `dotnet build`, `dotnet run --project src/TiaMcpServer/TiaMcpServer.csproj`, and running compiled `TiaMcpServer.exe`.
 - [ ] Add a "Testing" section to `README.md` summarizing prerequisites (TIA Portal V20, `.NET Framework 4.8`, env var `TiaPortalLocation`, Windows group membership "Siemens TIA Openness"), how to run `dotnet test`, and expected limitations if environment is not present. Link to `tests/TiaMcpServer.Test/README.md` and mention manual multi-user session creation.
 - [ ] Cross-link the `samples/` directory from `README.md`; reference `samples/vscode/mcp.json` and `samples/claude/claude_desktop_config.json`.
@@ -43,9 +43,41 @@ host is retired — it would not be spec-compliant Streamable HTTP.
 - [ ] Documentation
   - Keep the "Transports" and "MCP Protocol" sections in both READMEs in sync with whatever is chosen
 
+## Openness API Coverage Roadmap
+
+Version 0.2.0 completed the __PLC software__ area: tags and constants, watch and force tables,
+external source files, cross references, and create/rename/delete/copy/move for blocks, types
+and their groups. The areas below are still entirely uncovered - no design work done, listed so
+the gap is explicit rather than implied.
+
+- [ ] __Online and device operations__: go online/offline, download, upload, online diagnostics
+  and module state, PLCSIM simulation. Needs real hardware or a simulator to test.
+- [ ] __Hardware and network configuration__: create and delete devices, GSD import, plug and
+  unplug modules, subnets, nodes, IO systems, connections.
+- [ ] __Libraries__: project and global libraries, master copies, library types and versioning,
+  `UpdateProject`. Note that `CreateFrom(MasterCopy)` already exists on several compositions, so
+  this would also unlock a native copy path for blocks and types.
+- [ ] __HMI__: screens, HMI tags, text lists, cycles, connections. Today `HmiTarget` and
+  `HmiSoftware` are only printed by name in the project tree.
+- [ ] __Project infrastructure__: language settings, project-wide settings, CAx import/export,
+  compare (offline/online and project), multiuser server projects and check-in/check-out.
+- [ ] __Watch and force table entries__: blocked on reading the required attribute names from
+  `GetCreationInfos()` against a live project; see the 0.2.0 "Known gaps" entry in `CHANGELOG.md`.
+
+### Verification debt from 0.2.0
+
+- [ ] The live MSTest suite last passed in full (79/79) against the Phase 0 refactor only. The
+  tag, watch table, external source, cross reference and write features have compile-time and
+  MCP smoke verification (`tools/list` gating probed in both modes) but no test coverage yet.
+- [ ] Two attempts to re-run the suite hung with TIA Portal open and idle; investigate whether a
+  modal Portal dialog blocks the run, since `ConnectPortal` uses `TiaPortalMode.WithUserInterface`.
+- [ ] Add the test classes and fixture objects planned for the new areas: a user tag table group
+  with tags and user constants, a watch table with entries, an external source with a small
+  `.scl`, and blocks that reference each other so cross references are non-empty.
+
 ## Siemens Wrappers Refactor (Duplication/Exceptions)
 
-- [ ] Centralize exception handling in Siemens wrappers
+- [x] Centralize exception handling in Siemens wrappers (0.2.0: `Siemens/Operation.cs`. New portal methods route through it; the pre-0.2.0 export/import methods still carry the hand-written block.)
   Reasoning: `Portal.cs` contains many `try/catch (Exception)` blocks that return `false`/`null` without consistent logging or context. A small helper reduces boilerplate and improves observability.
   Excerpt (today):
   ```csharp
@@ -69,7 +101,7 @@ host is retired — it would not be spec-compliant Streamable HTTP.
   });
   ```
 
-- [ ] Add guard + not-found helpers for Siemens entities
+- [x] Add guard + not-found helpers for Siemens entities (0.2.0: `GetPlcSoftwareOrThrow`, `RequireTagTable`, `RequireWatchTable`, `RequireUserConstant`, `EnsureUserGroup`, `EnsureValidName`, `EnsureNotKnowHowProtected`, `EnsureConsistent`.)
   Reasoning: Repeated null checks (GetDevice/GetType/GetBlock, etc.) and ad-hoc error messages create inconsistencies. A guard establishes consistent messages and reduces lines.
   Excerpt (today):
   ```csharp
@@ -85,7 +117,7 @@ host is retired — it would not be spec-compliant Streamable HTTP.
       () => McpErrors.NotFound("Device", devicePath));
   ```
 
-- [ ] Introduce DTO mappers for attributes → response objects
+- [x] Introduce DTO mappers for attributes → response objects (0.2.0: `ToTagTableInfo`, `ToTagInfo`, `ToWatchTableInfo`, `ToForceTableInfo`, `ToEntryList`, `ToExternalSourceInfo`, `ToSource`, `ToLocation`, plus `Helper.FirstText`.)
   Reasoning: Mapping attributes and common fields is repeated across blocks/types/devices. Central mappers keep shape changes consistent.
   Excerpt (today):
   ```csharp
@@ -104,7 +136,7 @@ host is retired — it would not be spec-compliant Streamable HTTP.
   - Attach context in `Exception.Data` in a single catch per portal method, just before rethrow (see docs/error-model.md)
   - Preserve `InnerException` for operation failures and log once with structured fields
 
-- [ ] Add helpers for path resolution parity
+- [x] Add helpers for path resolution parity (0.2.0: `GetTypePath`, plus `GetTagTablePath`, `GetWatchTablePath`, `GetForceTablePath`, `GetExternalSourcePath`. `GetBlockPath` now returns a root-relative path that round-trips into `GetBlock`.)
   - `GetTypePath(PlcType)` analogous to `GetBlockPath(PlcBlock)` for building fully-qualified paths.
   - Use these from MCP when building “Did you mean…” suggestions.
 
