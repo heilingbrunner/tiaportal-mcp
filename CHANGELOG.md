@@ -1,5 +1,86 @@
 # Change Log
 
+## [0.2.0] - 2026-09-10
+
+Complete the PLC software area of the Openness API: tags, constants, watch and force tables,
+external sources, cross references, and create/rename/delete/move for blocks and types. The tool
+surface grows from 31 tools to 44 read tools plus 37 project-mutating tools.
+
+### Added
+
+- __Write mode__, opt-in through the new `--allow-write` command line argument. The 37
+  project-mutating tools live in a separate `McpServerWrite` tool type that is only registered
+  when the flag is present, so without it they are absent from `tools/list` rather than merely
+  refused when called. `WritePolicy.EnsureEnabled` additionally guards every write tool at
+  runtime, because these are `public static` methods that the test suite invokes directly and
+  that path bypasses tool registration. Filesystem-only exports are deliberately not gated: they
+  never modify the project. Both `GetState` and the `--doctor` report now show `AllowWrite`.
+- __PLC tags and constants__: `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`,
+  `GetConstants` (user and/or system) and `ExportTagTable`. Write side: `CreateTagTable`,
+  `DeleteTagTable`, `RenameTagTable`, `CreateTagTableGroup`, `DeleteTagTableGroup`,
+  `ImportTagTable`, `CreateTag`, `UpdateTag`, `DeleteTag`, `CreateUserConstant`,
+  `UpdateUserConstant`, `DeleteUserConstant`.
+- __Watch and force tables__: `GetWatchTables`, `GetWatchTableInfo` (including entries),
+  `GetForceTables` and `ExportWatchTable`. Write side: `CreateWatchTable`, `RenameWatchTable`,
+  `DeleteWatchTable`, `CreateWatchTableGroup`, `DeleteWatchTableGroup`, `ImportWatchTable`.
+- __External source files__: `GetExternalSources`, `GetExternalSourceInfo`,
+  `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`,
+  `DeleteExternalSourceGroup` and `GenerateBlocksFromSource`.
+- __Cross references__: `GetCrossReferences` for a whole PLC software or for one block, type,
+  tag table, tag or block group. Because `Sources -> References -> Locations` nests three deep
+  and source children recurse, the tool takes `maxDepth` (default 1, maximum 3) and reports a
+  `Truncated` flag with counts instead of returning megabytes.
+- __Blocks and types__: `CreateBlockGroup`, `DeleteBlockGroup`, `CreateTypeGroup`,
+  `DeleteTypeGroup`, `DeleteBlock`, `RenameBlock`, `DeleteType`, `RenameType`, `CreateFB`,
+  `CreateInstanceDB`, plus `CopyBlock`, `MoveBlock`, `CopyType` and `MoveType`.
+- `Portal.GetTypePath(PlcType)`, the counterpart to `GetBlockPath(PlcBlock)`.
+- `Operation.Run`, the single exception-decoration point that `docs/error-model.md` prescribes.
+  It wraps a non-`PortalException` into one, stamps context into `Exception.Data`, logs once
+  (nested calls do not re-log) and rethrows. It also serializes all Openness traffic behind a
+  `Monitor`; a `SemaphoreSlim` would self-deadlock, because portal methods call one another.
+- `PortalErrorCode` gains `ImportFailed`, `CreateFailed`, `DeleteFailed`, `RenameFailed`,
+  `NotSupported` and `WriteDisabled`. Existing members keep their order and values.
+
+### Changed
+
+- `GetSoftwareTree` renders three further sections - PLC tags, watch and force tables, and
+  external source files - and takes a `sections` argument accepting any comma separated subset
+  of `blocks,types,tags,watch,sources` (default `all`) so the output stays manageable on a large
+  PLC. Existing single-argument callers are unaffected.
+- `Portal` and `McpServer` are now `partial` and split by area (`Portal.Tags.cs`,
+  `Portal.WatchTables.cs`, `Portal.MoveCopy.cs`, `McpServer.Tags.cs`, ...). The generic path
+  helpers in `Portal.Resolve.cs` (`WalkGroups`, `BuildGroupPath`, `WalkRecursive`) now back the
+  existing block and type resolvers as well, so all five group hierarchies share one traversal.
+- `Diagnostics.Run` takes an optional `bool allowWrite`. The flag is passed in rather than read
+  from `WritePolicy`, so the Siemens layer keeps no dependency on the MCP layer.
+- 27 read tools and all 37 write tools publish an `outputSchema` and return `structuredContent`
+  (previously 13).
+
+### Fixed
+
+- The software tree omitted external source files even though the `GetSoftwareTree` description
+  had always promised them.
+- `GetBlockPath` returned paths prefixed with the `Program blocks` system group, which
+  `GetBlock` then rejected - so the "Did you mean ...?" suggestions on a failed `ExportBlock`
+  named paths that could not be used. Path building now takes an `includeSystemRoot` flag:
+  suggestions are root-relative and round-trip, while `preservePath` exports keep the existing
+  on-disk layout unchanged.
+- `--doctor --allow-write` reported write mode as disabled. `WritePolicy.AllowWrite` was only
+  assigned inside `RunStdioHost`, which `--doctor` returns before reaching; it is now set in
+  `Main`.
+
+### Known gaps
+
+- `CreateWatchTableEntry` and `DeleteWatchTableEntry` are not implemented. `PlcWatchTable.Entries`
+  is a `PlcTableCommentEntryComposition` whose only typed creator produces a comment row; a real
+  entry requires the untyped `IEngineeringComposition.Create(typeof(PlcWatchTableEntry), ...)`
+  path, whose required attribute names must first be read from `GetCreationInfos()` against a
+  live project rather than guessed.
+- Openness offers no move or copy operation for blocks and types, so `CopyBlock`, `MoveBlock`,
+  `CopyType` and `MoveType` are composed from export, import and - for a move - deleting the
+  source after the import succeeds. Two consequences are visible to callers: the object must be
+  consistent, and its block number travels with it, so importing into the same PLC can collide.
+
 ## [0.1.0] - 2026-09-07
 
 Upgrade to the current MCP .NET SDK and adopt the newer protocol surface.

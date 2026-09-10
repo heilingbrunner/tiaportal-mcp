@@ -13,16 +13,27 @@ The TiaMcpServer project is a .NET 4.8 console application that enables communic
 
 The project is organized into the following directories:
 
+Both `Portal` and `McpServer` are `partial` classes split by functional area, so no single file
+carries the whole surface.
+
 *   **`ModelContextProtocol/`**: This directory contains the implementation of the MCP server.
-    *   `McpServer.cs`: This file defines the MCP tools that can be called by the LLM.
+    *   `McpServer.cs` and `McpServer.{Tags,WatchTables,ExternalSources,CrossReferences}.cs`: the read-only tools, as partials of one `McpServer` type.
+    *   `McpServerWrite.cs` and `McpServerWrite.{Blocks,Tags,Tables,MoveCopy}.cs`: the project-mutating tools, a separate tool type registered only under `--allow-write`. `McpServerWrite.cs` itself holds no tools, only the shared `Guarded` wrapper and response builders.
+    *   `WritePolicy.cs`: the `--allow-write` gate.
     *   `McpPrompts.cs`: This file contains the prompts that are used to guide the LLM.
-    *   `Responses.cs`: This file defines the response objects that are returned by the MCP tools.
+    *   `Responses.cs` / `Responses.Write.cs`: the response objects returned by the tools. The write side shares `ResponseCreated`, `ResponseDeleted`, `ResponseRenamed`, `ResponseImported` and `ResponseGenerateBlocks` across all 37 tools rather than minting one DTO per operation.
     *   `Types.cs`: This file defines the data types that are used by the MCP server.
+    *   `Helper.cs`: `GetAttributeList(IEngineeringObject)` reflects over any Openness object's attributes, so each new `Get*Info` tool is a few typed fields plus that call.
 *   **`Siemens/`**: This directory contains the implementation of the TIA Portal interfacing API.
-    *   `Portal.cs`: This file provides a high-level API for interacting with the TIA Portal.
+    *   `Portal.cs`: connection, project and session lifecycle, devices, blocks and types.
+    *   `Portal.Resolve.cs`: the generic path helpers (`WalkGroups`, `BuildGroupPath`, `WalkRecursive`). `PlcSoftware` exposes five look-alike group hierarchies - blocks, types, tag tables, watch and force tables, external sources - that share no common base type, so the shape is captured with generics plus selector delegates instead of inheritance.
+    *   `Portal.Tree.cs`: the software tree sections.
+    *   `Portal.{Tags,WatchTables,ExternalSources,CrossReferences}.cs`: the read side per area.
+    *   `Portal.{BlockCrud,Write,MoveCopy}.cs`: the write side.
+    *   `Operation.cs`: the single exception-decoration point (see `docs/error-model.md`), which also serializes all Openness traffic behind a reentrant lock.
     *   `State.cs`: This file defines the `State` class, which represents the state of the TIA Portal.
     *   `Openness.cs`: This file provides a wrapper around the Siemens TIA Portal Openness API.
-*   **`Properties/`**: This directory contains the project's properties, such as the assembly information and launch settings.
+    *   `Diagnostics.cs`: the environment report behind `--doctor` and the `Doctor` tool.
 
 ## 3. Architecture
 
@@ -38,14 +49,19 @@ The TiaMcpServer project provides the following functionality:
 
 *   **Connecting and disconnecting from the TIA Portal:** The `Connect` and `Disconnect` tools allow the LLM to connect to and disconnect from the TIA Portal.
 *   **Getting the state of the TIA Portal:** The `GetState` tool allows the LLM to get the current state of the TIA Portal, such as whether it is connected to a project and the name of the project.
-*   **Working with projects and sessions:** The `GetOpenProjects`, `OpenProject`, `SaveProject`, `SaveAsProject`, and `CloseProject` tools allow the LLM to work with TIA Portal projects and sessions.
-*   **Working with devices:** The `GetStructure`, `GetDeviceInfo`, `GetDeviceItemInfo`, and `GetDevices` tools allow the LLM to get information about the devices in a project.
-*   **Working with PLC software:** The `GetSoftwareInfo` and `CompileSoftware` tools allow the LLM to get information about and compile PLC software.
+*   **Working with projects and sessions:** The `GetProject`, `OpenProject`, `SaveProject`, `SaveAsProject`, and `CloseProject` tools allow the LLM to work with TIA Portal projects and sessions.
+*   **Working with devices:** The `GetProjectTree`, `GetDeviceInfo`, `GetDeviceItemInfo`, and `GetDevices` tools allow the LLM to get information about the devices in a project.
+*   **Working with PLC software:** The `GetSoftwareInfo` and `CompileSoftware` tools allow the LLM to get information about and compile PLC software. `GetSoftwareTree` renders the whole PLC software - program blocks, PLC data types, PLC tags, watch and force tables and external source files - and takes a `sections` argument to narrow the output.
 *   **Working with blocks:** The `GetBlockInfo`, `GetBlocks`, `GetBlocksWithHierarchy`, `ExportBlock`, `ImportBlock`, and `ExportBlocks` tools allow the LLM to work with blocks.
     - `ExportBlock` expects `blockPath` to be a fully qualified path like `Group/Subgroup/Name`. Passing just a name is ambiguous; the tool fails with an error result and may suggest likely full paths based on project contents.
 *   **Working with types:** The `GetTypeInfo`, `GetTypes`, `ExportType`, `ImportType`, and `ExportTypes` tools allow the LLM to work with types.
 *   **Exporting blocks as documents (V20+):** The `ExportAsDocuments` and `ExportBlocksAsDocuments` tools export blocks as SIMATIC SD documents (.s7dcl/.s7res). Requires TIA Portal V20 or newer.
 *   **Importing blocks from documents (V20+):** The `ImportFromDocuments` and `ImportBlocksFromDocuments` tools import blocks from SIMATIC SD documents into PLC software. Requires TIA Portal V20 or newer.
+*   **Working with PLC tags and constants:** `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants` and `ExportTagTable`.
+*   **Working with watch and force tables:** `GetWatchTables`, `GetWatchTableInfo` (including entries), `GetForceTables` and `ExportWatchTable`.
+*   **Working with external source files:** `GetExternalSources` and `GetExternalSourceInfo`.
+*   **Cross references:** `GetCrossReferences` for a PLC software or a single block, type, tag table, tag or block group, with `maxDepth` to bound the result size.
+*   **Modifying the project (`--allow-write` only):** 37 tools that create, rename, delete, import, copy and move blocks, types, groups, tag tables, tags, user constants, watch tables and external sources. See the root `README.md` section "Write mode" for the gating rules and the API limits that shape them.
 
 ## 5. Conclusion
 
