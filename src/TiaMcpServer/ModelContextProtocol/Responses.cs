@@ -571,6 +571,57 @@ namespace TiaMcpServer.ModelContextProtocol
         public IEnumerable<string>? Failures { get; set; }
     }
 
+    /// <summary>One external source file written by a Generate* tool.</summary>
+    public class ResponseGeneratedSourceItem
+    {
+        public string? Name { get; set; }
+
+        /// <summary>Root-relative path of the object in the project.</summary>
+        public string? Path { get; set; }
+
+        /// <summary>Absolute path of the file on the machine running the server.</summary>
+        public string? File { get; set; }
+
+        /// <summary>The extension Openness demanded: '.db', '.awl', '.scl' or '.udt'.</summary>
+        public string? Format { get; set; }
+
+        /// <summary>Programming language of the block, or 'UDT' for a PLC data type.</summary>
+        public string? Language { get; set; }
+
+        public long? Size { get; set; }
+    }
+
+    public class ResponseGeneratedSource : ResponseMessage
+    {
+        public string? Name { get; set; }
+
+        public string? Path { get; set; }
+
+        public string? File { get; set; }
+
+        public string? Format { get; set; }
+
+        public string? Language { get; set; }
+
+        public long? Size { get; set; }
+    }
+
+    public class ResponseGeneratedSources : ResponseMessage
+    {
+        public string? Directory { get; set; }
+
+        /// <summary>Files written per area: blocks, types.</summary>
+        public IDictionary<string, int>? Written { get; set; }
+
+        public IEnumerable<ResponseGeneratedSourceItem>? Items { get; set; }
+
+        /// <summary>Objects deliberately left out, with the reason.</summary>
+        public IEnumerable<string>? Skipped { get; set; }
+
+        /// <summary>Objects that failed to generate, with the reason.</summary>
+        public IEnumerable<string>? Failures { get; set; }
+    }
+
     public class ResponsePlcSummary : ResponseMessage
     {
         public string? Name { get; set; }

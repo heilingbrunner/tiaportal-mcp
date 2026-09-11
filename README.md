@@ -42,7 +42,7 @@ To enable write mode, add the argument to your client configuration, for example
 
 ## Tools
 
-Read-only tools (56) are always available.
+Read-only tools (59) are always available.
 
 | Area | Tools |
 | --- | --- |
@@ -54,11 +54,11 @@ Read-only tools (56) are always available.
 | Types | `GetTypes`, `GetTypeInfo`, `ExportType`, `ExportTypes`, `ImportType` |
 | Tags and constants | `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants`, `ExportTagTable` |
 | Watch and force tables | `GetWatchTables`, `GetWatchTableInfo`, `GetForceTables`, `ExportWatchTable` |
-| External sources | `GetExternalSources`, `GetExternalSourceInfo` |
+| External sources | `GetExternalSources`, `GetExternalSourceInfo`, `GenerateBlockSource`, `GenerateTypeSource` |
 | Cross references | `GetCrossReferences` |
 | Block documents (V20+) | `ExportAsDocuments`, `ExportBlocksAsDocuments`, `ImportFromDocuments`, `ImportBlocksFromDocuments` |
 | Type documents (V21+) | `ExportTypeAsDocuments`, `ExportTypesAsDocuments` |
-| Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsSourceTree` |
+| Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsSourceTree`, `GenerateSources` |
 
 Write tools (39) require `--allow-write`.
 

@@ -1,5 +1,48 @@
 # Change Log
 
+## [0.3.0] - 2026-09-11
+
+Generate TIA Portal external source files - the format the compiler reads back - from blocks and
+PLC data types. The read tool surface grows from 56 to 59.
+
+### Added
+
+- __`GenerateBlockSource`__: writes one program block as an external source file. The extension
+  is dictated by the object, not chosen by the caller: `.db` for data blocks, `.awl` for STL
+  blocks, `.scl` for SCL blocks. Openness throws on a mismatch, so the mapping is derived rather
+  than passed in. Data blocks are recognised by type instead of by `ProgrammingLanguage`, because
+  the DB family spans several language values (`DB`, `CPU_DB`, `F_DB`, `Motion_DB`) that all
+  write `.db`.
+- __`GenerateTypeSource`__: writes one PLC data type as a `*.udt` external source file. Unlike
+  `GetTypeSource` and `ExportTypeAsDocuments` this needs no TIA Portal V21, and the result can be
+  imported again.
+- __`GenerateSources`__: the comfort function - writes every block and PLC data type of one PLC
+  software into a folder tree that mirrors the project groups, `<exportPath>/Program blocks/...`
+  and `<exportPath>/PLC data types/...`, one file per object. Accepts `regexName` to narrow the
+  set. This is the compilable counterpart to `ExportPlcAsSourceTree`, which snapshots the same
+  tree as source documents and XML.
+- All three take `withDependencies`, which maps to `GenerateOptions.WithDependencies` and pulls
+  every object the subject uses - called blocks, instance DBs, UDTs - into the same file, so it
+  compiles on its own. Off by default, which keeps one object per file and therefore a tree that
+  diffs cleanly.
+
+### Notes
+
+- Openness generates sources only from data blocks and STL or SCL blocks. LAD, FBD, GRAPH and the
+  rest have no textual form: the single-object tools reject them with the reason and a pointer to
+  `ExportBlock` or `ExportAsDocuments`, and `GenerateSources` reports them in `Skipped` rather
+  than failing the whole run. Inconsistent and know-how protected objects are handled the same
+  way.
+- Openness treats an existing file at the target path as an error, not an overwrite. Every other
+  exporter in this server overwrites, so the target file is deleted first and a second run
+  succeeds instead of failing.
+- Filesystem only: generating a source does not modify the project, so these tools are not gated
+  behind `--allow-write`. They are marked destructive, like the `Export*` tools, because they
+  overwrite files.
+- New files: `Siemens/Portal.GenerateSource.cs` and
+  `ModelContextProtocol/McpServer.GenerateSource.cs`, kept apart from the `*.Source.cs` pair,
+  which deals in source documents and SimaticML rather than in compilable sources.
+
 ## [0.2.0] - 2026-09-10
 
 Complete the PLC software area of the Openness API: tags, constants, watch and force tables,

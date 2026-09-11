@@ -17,7 +17,7 @@ Both `Portal` and `McpServer` are `partial` classes split by functional area, so
 carries the whole surface.
 
 *   **`ModelContextProtocol/`**: This directory contains the implementation of the MCP server.
-    *   `McpServer.cs` and `McpServer.{Tags,WatchTables,ExternalSources,CrossReferences}.cs`: the read-only tools, as partials of one `McpServer` type.
+    *   `McpServer.cs` and `McpServer.{Tags,WatchTables,ExternalSources,CrossReferences,Source,GenerateSource}.cs`: the read-only tools, as partials of one `McpServer` type. `McpServer.GenerateSource.cs` holds the three external-source generators; they write files but never touch the project, so they stay on this side of the `--allow-write` gate.
     *   `McpServerWrite.cs` and `McpServerWrite.{Blocks,Tags,Tables,MoveCopy}.cs`: the project-mutating tools, a separate tool type registered only under `--allow-write`. `McpServerWrite.cs` itself holds no tools, only the shared `Guarded` wrapper and response builders.
     *   `WritePolicy.cs`: the `--allow-write` gate.
     *   `McpPrompts.cs`: This file contains the prompts that are used to guide the LLM.
@@ -29,6 +29,7 @@ carries the whole surface.
     *   `Portal.Resolve.cs`: the generic path helpers (`WalkGroups`, `BuildGroupPath`, `WalkRecursive`). `PlcSoftware` exposes five look-alike group hierarchies - blocks, types, tag tables, watch and force tables, external sources - that share no common base type, so the shape is captured with generics plus selector delegates instead of inheritance.
     *   `Portal.Tree.cs`: the software tree sections.
     *   `Portal.{Tags,WatchTables,ExternalSources,CrossReferences}.cs`: the read side per area.
+    *   `Portal.GenerateSource.cs`: `PlcExternalSourceSystemGroup.GenerateSource`, which writes the `.scl`/`.db`/`.awl`/`.udt` files TIA Portal can compile back into blocks. Separate from `Portal.Source.cs`, which reads text and writes source documents and SimaticML.
     *   `Portal.{BlockCrud,Write,MoveCopy}.cs`: the write side.
     *   `Operation.cs`: the single exception-decoration point (see `docs/error-model.md`), which also serializes all Openness traffic behind a reentrant lock.
     *   `State.cs`: This file defines the `State` class, which represents the state of the TIA Portal.
@@ -124,6 +125,9 @@ duplicated. Every one is verified against a live TIA Portal V21.
 | `OpenTiaProject`        | Connects if needed, opens the project, and returns the device and PLC software paths                                | `Connect` then `OpenProject` then `GetProjectTree`   | Marked destructive like `OpenProject`, because it closes whatever is open.                                                                                                                                                                            |
 | `ExportPlcAsSourceTree` | Snapshots a whole PLC to a git-ready folder tree                                                                    | Four bulk exports with matching `preservePath` flags | Blocks and types as source documents where supported, tag and watch tables as XML. Objects that cannot be exported are reported, not fatal.                                                                                                           |
 | `PreviewImport`         | Reports what an import would create, overwrite or collide with                                                      | Finding out by failing                               | Infers the object name from the file name, which is how every exporter here names its output. Changes nothing.                                                                                                                                        |
+| `GenerateBlockSource`   | Writes one block as the external source file the compiler reads back (`.db`, `.scl`, `.awl`)                        | Exporting SimaticML that cannot be compiled again    | Openness generates sources only from data blocks and STL or SCL blocks; LAD, FBD and GRAPH are rejected with the reason. The extension is not a choice - Openness throws on a mismatch.                                                              |
+| `GenerateTypeSource`    | Writes one PLC data type as a `*.udt` external source file                                                          | `ExportTypeAsDocuments`, which needs V21             | Works on every supported version, and the result can be imported again.                                                                                                                                                                              |
+| `GenerateSources`       | Writes every block and type of a PLC as sources into a tree mirroring the project groups                            | One `GenerateBlockSource` call per object            | The compilable counterpart to `ExportPlcAsSourceTree`. Objects with no source form, inconsistent ones and know-how protected ones land in `Skipped` rather than failing the run.                                                                      |
 
 `GetBlocks` and `GetTypes` now also return `Path`, which had been commented out on
 `ResponseBlockInfo` and `ResponseTypeInfo`. Exporting one type is a single call again instead of
@@ -205,6 +209,7 @@ capability is not listed here, it is not wired up yet.
 | `PlcSoftware.WatchAndForceTableGroup`, `PlcWatchTable`, `PlcForceTable`, `.Entries`   | The watch and force table tools                                                           |
 | `PlcSoftware.ExternalSourceGroup`, `ExternalSources.CreateFromFile` / `.Find`         | `GetExternalSources`, `CreateExternalSourceFromFile`                                      |
 | `PlcExternalSourceSystemGroup.GenerateBlocksFromSource`                               | `GenerateBlocksFromSource`                                                                |
+| `PlcExternalSourceSystemGroup.GenerateSource(IEnumerable<IGenerateSource>, FileInfo, GenerateOptions)`, `IGenerateSource`, `GenerateOptions` | `GenerateBlockSource`, `GenerateTypeSource`, `GenerateSources`                            |
 
 ### Compile and cross references
 
@@ -235,7 +240,6 @@ Recorded so the same research is not repeated.
 | `FingerprintProvider.GetFingerprints()`, `PlcBlock.CodeModifiedDate` / `.CompileDate`         | No change-detection tool yet; this is the natural cache key for `FindInCode`                                                                                                |
 | `ProjectBase.HistoryEntries`, `.IsModified`, `.LastModified`                                  | No project history tool yet                                                                                                                                                 |
 | `ProjectLibrary`, `GlobalLibraries`, `MasterCopy`, `LibraryTypeVersion.FindInstances`         | Libraries are unimplemented; `CreateFrom(MasterCopy)` would also give a native copy path, replacing the export-import-delete composition behind `CopyBlock` and `MoveBlock` |
-| `PlcExternalSourceSystemGroup.GenerateSource(...)`                                            | A lighter way to read code than XML export; the document exporters cover this today                                                                                         |
 | `PlcBlockProtectionProvider.Protect` / `.Unprotect`                                           | Know-how protection is reported but never changed                                                                                                                           |
 | `IEngineeringObject.GetInvocationInfos()` / `Invoke(...)`                                     | A generic escape hatch to any Openness member - rejected, because it would bypass the `--allow-write` gate                                                                  |
 | `PlcSimulationSettingsProvider`, `VirtualPlcSettingsProvider`                                 | Compilation settings only; Openness has no PLCSIM start or stop API                                                                                                         |
