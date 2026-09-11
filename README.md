@@ -60,7 +60,7 @@ Read-only tools (59) are always available.
 | Type documents (V21+) | `ExportTypeAsDocuments`, `ExportTypesAsDocuments` |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsSourceTree`, `GenerateSources` |
 
-Write tools (39) require `--allow-write`.
+Write tools (40) require `--allow-write`.
 
 | Area | Tools |
 | --- | --- |
@@ -70,7 +70,7 @@ Write tools (39) require `--allow-write`.
 | Tag tables | `CreateTagTable`, `DeleteTagTable`, `RenameTagTable`, `CreateTagTableGroup`, `DeleteTagTableGroup`, `ImportTagTable` |
 | Tags and constants | `CreateTag`, `UpdateTag`, `DeleteTag`, `CreateUserConstant`, `UpdateUserConstant`, `DeleteUserConstant` |
 | Watch tables | `CreateWatchTable`, `RenameWatchTable`, `DeleteWatchTable`, `CreateWatchTableGroup`, `DeleteWatchTableGroup`, `ImportWatchTable` |
-| External sources | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `GenerateBlocksFromSource` |
+| External sources | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `GenerateBlocksFromSource`, `ImportSources` |
 | Type documents (V21+) | `ImportTypeFromDocuments`, `ImportTypesFromDocuments` |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of

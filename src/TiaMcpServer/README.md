@@ -18,7 +18,7 @@ carries the whole surface.
 
 *   **`ModelContextProtocol/`**: This directory contains the implementation of the MCP server.
     *   `McpServer.cs` and `McpServer.{Tags,WatchTables,ExternalSources,CrossReferences,Source,GenerateSource}.cs`: the read-only tools, as partials of one `McpServer` type. `McpServer.GenerateSource.cs` holds the three external-source generators; they write files but never touch the project, so they stay on this side of the `--allow-write` gate.
-    *   `McpServerWrite.cs` and `McpServerWrite.{Blocks,Tags,Tables,MoveCopy}.cs`: the project-mutating tools, a separate tool type registered only under `--allow-write`. `McpServerWrite.cs` itself holds no tools, only the shared `Guarded` wrapper and response builders.
+    *   `McpServerWrite.cs` and `McpServerWrite.{Blocks,Tags,Tables,MoveCopy,ImportSources}.cs`: the project-mutating tools, a separate tool type registered only under `--allow-write`. `McpServerWrite.cs` itself holds no tools, only the shared `Guarded` wrapper and response builders. `McpServerWrite.ImportSources.cs` is the bulk-import counterpart to `McpServer.GenerateSource.cs`.
     *   `WritePolicy.cs`: the `--allow-write` gate.
     *   `McpPrompts.cs`: This file contains the prompts that are used to guide the LLM.
     *   `Responses.cs` / `Responses.Write.cs`: the response objects returned by the tools. The write side shares `ResponseCreated`, `ResponseDeleted`, `ResponseRenamed`, `ResponseImported` and `ResponseGenerateBlocks` across all 37 tools rather than minting one DTO per operation.
@@ -30,6 +30,7 @@ carries the whole surface.
     *   `Portal.Tree.cs`: the software tree sections.
     *   `Portal.{Tags,WatchTables,ExternalSources,CrossReferences}.cs`: the read side per area.
     *   `Portal.GenerateSource.cs`: `PlcExternalSourceSystemGroup.GenerateSource`, which writes the `.scl`/`.db`/`.awl`/`.udt` files TIA Portal can compile back into blocks. Separate from `Portal.Source.cs`, which reads text and writes source documents and SimaticML.
+    *   `Portal.ImportSources.cs`: the write side counterpart - registers each file as a scratch `PlcExternalSource` via `CreateExternalSourceFromFile`, compiles it with `PlcExternalSource.GenerateBlocksFromSource`, then deletes the scratch source again.
     *   `Portal.{BlockCrud,Write,MoveCopy}.cs`: the write side.
     *   `Operation.cs`: the single exception-decoration point (see `docs/error-model.md`), which also serializes all Openness traffic behind a reentrant lock.
     *   `State.cs`: This file defines the `State` class, which represents the state of the TIA Portal.
@@ -133,6 +134,12 @@ duplicated. Every one is verified against a live TIA Portal V21.
 `ResponseBlockInfo` and `ResponseTypeInfo`. Exporting one type is a single call again instead of
 list, then build the path, then export.
 
+`GenerateSources`' write-side counterpart, `ImportSources`, lives under `--allow-write` rather
+than in the table above because it mutates the project: it walks a tree of `.db`/`.awl`/`.scl`/
+`.udt` files - typically one `GenerateSources` just wrote - and compiles each back into a block
+or PLC data type, in the group its folder path implies. See the External sources row of the
+write tool table below.
+
 ### Write safety
 
 Every project-mutating tool now runs inside `ExclusiveAccess.Transaction`, applied once in the
@@ -210,6 +217,7 @@ capability is not listed here, it is not wired up yet.
 | `PlcSoftware.ExternalSourceGroup`, `ExternalSources.CreateFromFile` / `.Find`         | `GetExternalSources`, `CreateExternalSourceFromFile`                                      |
 | `PlcExternalSourceSystemGroup.GenerateBlocksFromSource`                               | `GenerateBlocksFromSource`                                                                |
 | `PlcExternalSourceSystemGroup.GenerateSource(IEnumerable<IGenerateSource>, FileInfo, GenerateOptions)`, `IGenerateSource`, `GenerateOptions` | `GenerateBlockSource`, `GenerateTypeSource`, `GenerateSources`                            |
+| `PlcExternalSource.GenerateBlocksFromSource(PlcBlockUserGroup, GenerateBlockOption)`, `PlcExternalSource.GenerateBlocksFromSource(PlcTypeUserGroup, GenerateBlockOption)` | `ImportSources` - one call compiles a source into either kind, chosen by the file's own content |
 
 ### Compile and cross references
 

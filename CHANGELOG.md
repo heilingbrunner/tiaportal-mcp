@@ -43,6 +43,30 @@ PLC data types. The read tool surface grows from 56 to 59.
   `ModelContextProtocol/McpServer.GenerateSource.cs`, kept apart from the `*.Source.cs` pair,
   which deals in source documents and SimaticML rather than in compilable sources.
 
+### Added (write side)
+
+- __`ImportSources`__: the bulk-import counterpart to `GenerateSources`. Walks a folder tree of
+  `.db`/`.awl`/`.scl`/`.udt` files and compiles each back into a block or PLC data type, placed
+  into the group its folder path implies - the same layout `GenerateSources` writes. Requires
+  `--allow-write`, since unlike the `Generate*` tools this mutates the project.
+- Each file goes through the two Openness steps there is no shortcut around: register it as a
+  scratch `PlcExternalSource` (reusing the existing `CreateExternalSourceFromFile`), call
+  `PlcExternalSource.GenerateBlocksFromSource` - which returns a mix of `PlcBlock` and `PlcType`
+  objects from a single file, since the source's own content decides what comes out - then
+  delete the scratch source again (reusing `DeleteExternalSource`), regardless of outcome.
+- `keepOnError` maps to `GenerateBlockOption.KeepOnError`: successfully generated objects from a
+  file are kept even when others in the same file fail. Openness gives up per-object
+  success/failure reporting in that mode, which is a limitation of the underlying API, not of
+  this wrapper.
+- A folder whose implied group does not exist in the project fails that one file (reported in
+  `Failures`) rather than being created automatically; the group structure is expected to
+  already exist, since these files were themselves generated from objects that lived in it.
+- New files: `Siemens/Portal.ImportSources.cs` and
+  `ModelContextProtocol/McpServerWrite.ImportSources.cs`. Reuses
+  `GetPlcBlockGroupByPath`/`GetPlcTypeGroupByPath` and the private `StripSystemRootSegment`
+  helper (`Portal.Documents.cs`) rather than re-deriving the same "does this folder name match
+  the localized system root" logic a third time.
+
 ## [0.2.0] - 2026-09-10
 
 Complete the PLC software area of the Openness API: tags, constants, watch and force tables,
