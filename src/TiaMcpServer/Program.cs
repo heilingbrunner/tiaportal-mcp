@@ -156,6 +156,7 @@ namespace TiaMcpServer
                     {
                         filters.AddCallToolFilter(PortalSelection.Filter);
                         filters.AddListToolsFilter(ToolOrdering.Filter);
+                        filters.AddGetPromptFilter(PromptArguments.Filter);
                     })
                     .WithTools(BuildTools(WritePolicy.AllowWrite))
                     .WithPrompts((IEnumerable<Type>)new[] { typeof(McpPrompts) });

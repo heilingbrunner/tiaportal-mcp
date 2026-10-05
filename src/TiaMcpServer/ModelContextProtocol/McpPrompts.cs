@@ -114,7 +114,7 @@ The hierarchical tree will display:
 - Hierarchical organization with proper tree formatting
 
 Common parameter values:
-- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes, e.g. ""PC-System_1/Software PLC_1""
 - sections: optional comma separated subset of 'blocks,types,tags,watch,sources' to keep the output small; leave empty for all
 
 Use the GetSoftwareTree tool with these parameters:
@@ -131,7 +131,7 @@ Use the GetSoftwareTree tool with these parameters:
             return $@"Export blocks from PLC software.
 
 Common parameter values:
-- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes, e.g. ""PC-System_1/Software PLC_1""
 - exportPath: '${{workspacefolder}}/export/Program blocks' is a good default
 - regexName: Use empty string """" for all blocks, or patterns like ""FB_.*"" for function blocks
 - preservePath: Use false for flat export, true to maintain folder structure
@@ -149,7 +149,7 @@ Use the ExportXmlBlocks tool with these parameters:
             return $@"Export user-defined types from PLC software.
 
 Common parameter values:
-- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes, e.g. ""PC-System_1/Software PLC_1""
 - exportPath: '${{workspacefolder}}/export/Plc data types' is a good default
 - regexName: Use empty string """" for all types, or patterns like ""Typ_.*""
 - preservePath: Use false for flat export, true to maintain folder structure
@@ -168,7 +168,7 @@ Use the ExportXmlTypes tool with these parameters:
 Requires TIA Portal V20 or newer.
 
 Common parameter values:
-- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes, e.g. ""PC-System_1/Software PLC_1""
 - exportPath: '${{workspacefolder}}/export/Plc' is a good default
 - regexName: Use empty string """" for all blocks, or patterns like ""FB_.*""
 - preservePath: Use false for flat export, true to maintain folder structure
@@ -186,7 +186,7 @@ Use the ExportBlocksAsDocuments tool with these parameters:
             return $@"Export a PLC tag table from PLC software to an XML file.
 
 Common parameter values:
-- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes, e.g. ""PC-System_1/Software PLC_1""
 - tagTablePath: root-relative path of the tag table, e.g. 'TagGroup1/Table1'. Use the GetTagTables tool to list the tag tables of a PLC software
 - exportPath: '${{workspacefolder}}/export/PLC tags' is a good default
 - preservePath: Use false for a flat export, true to maintain the tag table group structure
@@ -204,7 +204,7 @@ Use the ExportXmlTagTable tool with these parameters:
             return $@"Export one program block from PLC software as a TIA Portal external source file, in the format the compiler reads back.
 
 Common parameter values:
-- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes, e.g. ""PC-System_1/Software PLC_1""
 - blockPath: root-relative path of the block, e.g. '0_OBs/Main'. Use the ResolveObjectPath tool if you only know the name
 - exportPath: '${{workspacefolder}}/export/Sources' is a good default
 - withDependencies: Use true to also write called blocks, instance DBs and UDTs into the same file so it compiles on its own, false for one file per object
@@ -226,7 +226,7 @@ Use the ExportSourceBlock tool with these parameters:
             return $@"Export one PLC data type from PLC software as a '.udt' TIA Portal external source file, in the format the compiler reads back.
 
 Common parameter values:
-- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes, e.g. ""PC-System_1/Software PLC_1""
 - typePath: root-relative path of the PLC data type, e.g. 'Common/BtnTyp_X'. Use the ResolveObjectPath tool if you only know the name
 - exportPath: '${{workspacefolder}}/export/Sources' is a good default
 - withDependencies: Use true to also write every data type this one uses into the same file, false for one file per type
@@ -287,7 +287,7 @@ Use the ExportSourceType tool with these parameters:
 The documents are readable text that git can diff. Requires TIA Portal V21 or newer.
 
 Common parameter values:
-- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes, e.g. ""PC-System_1/Software PLC_1""
 - exportPath: '${{workspacefolder}}/export/Plc' is a good default
 - regexName: Use empty string """" for all types, or patterns like ""UDT_.*""
 - preservePath: Use false for flat export, true to mirror the project tree below the 'PLC data types' folder

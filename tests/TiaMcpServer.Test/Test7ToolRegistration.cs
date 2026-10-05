@@ -288,6 +288,87 @@ namespace TiaMcpServer.Test
             Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
         }
 
+        private static readonly string[] _exportNames = { "softwarePath", "exportPath", "regexName", "preservePath" };
+
+        [TestMethod]
+        public void Test_712_PromptArguments_JoinsAQuotedValueThatClaudeCodeCutAtTheSpace()
+        {
+            // Arrange: /ExportXmlBlocks "PC-System_1/Software PLC_1" D:\export  arrives as three pieces
+            var arguments = new Dictionary<string, string>
+            {
+                ["softwarePath"] = "\"PC-System_1/Software",
+                ["exportPath"] = "PLC_1\"",
+                ["regexName"] = @"D:\export"
+            };
+
+            // Act
+            var result = PromptArguments.Requote(_exportNames, arguments);
+
+            // Assert: the value keeps its space, the later values move back to their own arguments
+            Assert.IsNotNull(result);
+            Assert.AreEqual("PC-System_1/Software PLC_1", result!["softwarePath"]);
+            Assert.AreEqual(@"D:\export", result["exportPath"]);
+            Assert.AreEqual(2, result.Count, "Arguments that were not typed must stay absent so their defaults apply");
+        }
+
+        [TestMethod]
+        public void Test_713_PromptArguments_HandlesSeveralQuotedValuesAndEmptyQuotes()
+        {
+            // Arrange: "PC-System_1/Software PLC_1" "D:\My Export" "" true
+            var arguments = new Dictionary<string, string>
+            {
+                ["softwarePath"] = "\"PC-System_1/Software",
+                ["exportPath"] = "PLC_1\"",
+                ["regexName"] = "\"D:\\My",
+                ["preservePath"] = "Export\""
+            };
+
+            // Act
+            var result = PromptArguments.Requote(_exportNames, arguments);
+            var withEmpty = PromptArguments.SplitQuoted("\"PC-System_1/Software PLC_1\" \"D:\\My Export\" \"\" true");
+
+            // Assert
+            Assert.IsNotNull(result);
+            Assert.AreEqual("PC-System_1/Software PLC_1", result!["softwarePath"]);
+            Assert.AreEqual(@"D:\My Export", result["exportPath"]);
+            CollectionAssert.AreEqual(
+                new[] { "PC-System_1/Software PLC_1", @"D:\My Export", string.Empty, "true" },
+                withEmpty);
+        }
+
+        [TestMethod]
+        public void Test_714_PromptArguments_RemovesQuotesAroundAValueWithoutSpaces()
+        {
+            // Arrange
+            var arguments = new Dictionary<string, string> { ["softwarePath"] = "\"PLC_0\"", ["exportPath"] = "\"D:\\export\"" };
+
+            // Act
+            var result = PromptArguments.Requote(_exportNames, arguments);
+
+            // Assert
+            Assert.IsNotNull(result);
+            Assert.AreEqual("PLC_0", result!["softwarePath"]);
+            Assert.AreEqual(@"D:\export", result["exportPath"]);
+        }
+
+        [TestMethod]
+        public void Test_715_PromptArguments_LeavesEverythingElseAlone()
+        {
+            // Arrange / Act / Assert
+            Assert.IsNull(
+                PromptArguments.Requote(_exportNames, new Dictionary<string, string> { ["softwarePath"] = "PLC_0", ["exportPath"] = @"D:\export" }),
+                "No quote: nothing to do");
+            Assert.IsNull(
+                PromptArguments.Requote(_exportNames, new Dictionary<string, string> { ["softwarePath"] = "\"PC-System_1/Software" }),
+                "Unbalanced quote (the rest was dropped by the client): leave as typed so the failure stays visible");
+            Assert.IsNull(
+                PromptArguments.Requote(_exportNames, new Dictionary<string, string> { ["exportPath"] = "\"D:\\x\"" }),
+                "Arguments that are not the first ones in order come from a client that names them itself");
+            Assert.IsNull(
+                PromptArguments.Requote(_exportNames, new Dictionary<string, string> { ["softwarePath"] = "A\"B C\"D" }),
+                "A quote inside a value is not at the edge of an argument");
+        }
+
         private static List<(string Name, MethodInfo Method, string? Title)> ToolMethods()
         {
             var result = new List<(string Name, MethodInfo Method, string? Title)>();

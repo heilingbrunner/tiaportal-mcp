@@ -80,6 +80,28 @@ Write tools (40) require `--allow-write`.
 Paths used by these tools are **root-relative**: `1_Tests/FC_Block_1`, not
 `Program blocks/1_Tests/FC_Block_1`. Use `GetProjectTree` and `GetSoftwareTree` to discover them.
 
+## Prompts (slash commands)
+
+Every tool has a prompt of the same name that you can start as a slash command, for example
+`/mcp__tia-mcp-server__OpenProject D:\Siemens\Test\TestProject1_V21.ap21`. The part after `mcp__` is
+the server name from your MCP configuration. Claude Code shows the prompt description and the
+argument names, matches the typed values to the arguments by position and requires every argument
+without a default. A prompt only sends text to the model, which then calls the tool.
+
+A value with spaces goes in **double quotes**, for example a PC based PLC software or an export
+folder:
+
+```
+/mcp__tia-mcp-server__ExportXmlBlocks "PC-System_1/Software PLC_1" "D:\My Export"
+```
+
+Claude Code itself splits the text at every space and drops the words beyond the last argument. The
+server joins the pieces of a quoted value again, so the value reaches the tool unchanged; `""`
+passes an empty value. All typed words together must not exceed the number of arguments of the
+prompt, so a prompt with few arguments (for example `GetSoftwareInfo`, which only has
+`softwarePath`) cannot take a value of several words: write a normal request instead of the slash
+command.
+
 ## Resources
 
 - [TIA Portal Openness API Documentation](https://docs.tia.siemens.cloud/r/en-us/v21/tia-portal-openness-api-for-automation-of-engineering-workflows)
