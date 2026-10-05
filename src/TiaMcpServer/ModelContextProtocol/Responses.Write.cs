@@ -3,9 +3,9 @@ using System.Collections.Generic;
 namespace TiaMcpServer.ModelContextProtocol
 {
     /// <summary>
-    /// Shared response shapes for the project-mutating tools in McpServerWrite.
+    /// Shared response shapes for the project-mutating tools in McpServer (the [WriteTool] methods).
     ///
-    /// Callers: every tool in McpServerWrite.cs. Affected API: additive only - new DTOs, no
+    /// Callers: every [WriteTool] tool in McpServer. Affected API: additive only - new DTOs, no
     /// existing response changed. Data: serialized into MCP structuredContent; all fields are
     /// nullable strings or string collections, no dates. No file I/O.
     ///

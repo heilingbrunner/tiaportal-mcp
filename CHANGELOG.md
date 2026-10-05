@@ -1,5 +1,68 @@
 # Change Log
 
+## [Unreleased]
+
+### Changed
+
+- __`Portal` partial classes consolidated__: the 18 `Portal.*.cs` files are now `Portal.cs`,
+  `Portal.Blocks.cs`, `Portal.Types.cs`, `Portal.Tags.cs` and `Portal.Devices.cs`, plus two folders:
+  `Siemens/Documents/` (`Portal.Documents.*.cs`, six files) and `Siemens/Software/`
+  (`Portal.Software.*.cs`, seven files). Members were moved verbatim; no signature, visibility or
+  behaviour changes. The class-level notes of the retired files are kept as comments above their
+  former sections.
+
+- __`McpServer` partial classes follow the same layout__: the ten `McpServer.*.cs` partials are now
+  `McpServer.cs`, `McpServer.Devices.cs`, `McpServer.Blocks.cs`, `McpServer.Types.cs` and
+  `McpServer.Tags.cs`, plus `ModelContextProtocol/Documents/` (`McpServer.Documents.*.cs`) and
+  `ModelContextProtocol/Software/` (`McpServer.Software.*.cs`). Tool names, attributes and behaviour are
+  unchanged.
+- __Document and source methods regrouped__: `Portal` and `McpServer` now have `Portal.Documents.cs` /
+  `McpServer.Documents.cs` (the `...AsDocuments` exports and the `...FromDocuments` imports) and
+  `Portal.Sources.cs` / `McpServer.Sources.cs` (every source file method, including `GetBlockSource` and
+  `GetTypeSource`, which moved out of the Blocks/Types partials). The `Documents/` subfolders are gone.
+  Members were moved verbatim.
+- __`McpServerWrite` merged into `McpServer`__: the project-mutating tools now live in the matching
+  `McpServer` partials (`McpServer.Blocks.cs`, `.Types.cs`, `.Tags.cs`, `Documents/McpServer.Documents.*.cs`),
+  and the shared write plumbing (`Guarded`, `SaveHint`, response builders) in `McpServer.cs`. Tool
+  names, attributes and behaviour are unchanged. The `--allow-write` gate is preserved: the 40 write tools
+  carry the new `[WriteTool]` attribute and `Program.BuildTools` registers them only under
+  `--allow-write`, so they stay out of `tools/list` as before. `WritePolicy.EnsureEnabled` still runs
+  first in every write tool. The write-side `Join` helper is now `JoinPath` (it does not trim a
+  trailing slash, unlike the preview `Join`). New tests: `Test7ToolRegistration`.
+- __Breaking: XML tools renamed__. The tools and the `Portal` methods that read and write TIA Portal
+  XML files now say so in their name: `ExportBlock` to `ExportXmlBlock`, `ExportBlocks` to
+  `ExportXmlBlocks`, `ImportBlock` to `ImportXmlBlock`, `ExportType` to `ExportXmlType`, `ExportTypes` to
+  `ExportXmlTypes` and `ImportType` to `ImportXmlType`. Parameters and results are unchanged. MCP clients,
+  prompts and permission allow-lists that name the old tools must be updated. The prompts
+  `ExportBlocks` and `ExportTypes` are renamed to `ExportXmlBlocks` and `ExportXmlTypes` as well.
+  Likewise the source file exports follow the Export naming: `GenerateBlockSource` to
+  `ExportSourceBlock`, `GenerateTypeSource` to `ExportSourceType` and `GenerateSources` to
+  `ExportSources` (tools, prompts and `Portal` methods; `ImportSources` keeps its name; the
+  tool title is now "Export sources"). `GenerateBlocksFromSource` is now
+  `ImportExternalSource` (tool, prompt and `Portal` method; the Siemens API method of the same name is
+  unaffected). It compiles a source that is already registered in the project; the name `ImportSourceBlocks`
+  now belongs to the new folder import described under Added.
+  The tag and watch table exports follow suit: `ExportTagTable` is now `ExportXmlTagTable` and
+  `ExportWatchTable` is now `ExportXmlWatchTable` (tool, response type, `Portal` method and
+  prompt).
+
+### Added
+
+- __Source file imports that mirror the exports__: `ImportSourceBlock`, `ImportSourceType`,
+  `ImportSourceBlocks` and `ImportSourceTypes` (tools, prompts and `Portal` methods) complete the set next to
+  the existing `ImportSources`, one to one with `ExportSourceBlock`, `ExportSourceType`,
+  `ExportSourceBlocks`, `ExportSourceTypes` and `ExportSources`. The single-file tools take a target group and the
+  file path, like `ImportXmlBlock` and `ImportXmlType`; the folder tools take a group, a folder, an optional
+  `regexName` and `preservePath`, which reads the subfolders into the matching subgroups. All of them take
+  `keepOnError`, return the same result as `ImportSources` and are `[WriteTool]`s. `ImportSources` now shares
+  its walk with them; its behaviour is unchanged. New tests: `Test_495` to `Test_499` in `Test4Software`.
+- __`ExportXmlTagTable` prompt__: a prompt template for exporting a PLC tag table to XML through the
+  `ExportXmlTagTable` tool, next to the existing block and type export prompts. Likewise prompts for the source
+  file tools: `ExportSourceBlock`, `ExportSourceType`, `ImportSources` and `ImportExternalSource`, plus the
+  convenience prompts `ImportAllSources` and `ImportAllSourcesKeepOnError`. Every other tool now has a prompt
+  of the same name as well (80 prompts, generated from the tool descriptions and parameter descriptions), so
+  all 99 tools are reachable as prompts.
+
 ## [0.3.0] - 2026-09-11
 
 Generate TIA Portal external source files - the format the compiler reads back - from blocks and

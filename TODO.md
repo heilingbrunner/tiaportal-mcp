@@ -78,7 +78,7 @@ the gap is explicit rather than implied.
 ## Siemens Wrappers Refactor (Duplication/Exceptions)
 
 - [x] Centralize exception handling in Siemens wrappers (0.2.0: `Siemens/Operation.cs`. New portal methods route through it; the pre-0.2.0 export/import methods still carry the hand-written block.)
-  Reasoning: `Portal.cs` contains many `try/catch (Exception)` blocks that return `false`/`null` without consistent logging or context. A small helper reduces boilerplate and improves observability.
+  Reasoning: `Portal*.cs` contains many `try/catch (Exception)` blocks that return `false`/`null` without consistent logging or context. A small helper reduces boilerplate and improves observability.
   Excerpt (today):
   ```csharp
   try
@@ -129,8 +129,8 @@ the gap is explicit rather than implied.
   var dto = DtoMapper.ToBlockInfo(block);
   ```
 
-- [ ] Roll out PortalException + context enrichment pattern beyond ExportBlock
-  Affected: `ImportBlock`, `ExportBlocks`, `ExportType`, `ImportType`, `ExportBlocksAsDocuments`, `ImportFromDocuments`, etc.
+- [ ] Roll out PortalException + context enrichment pattern beyond ExportXmlBlock
+  Affected: `ImportXmlBlock`, `ExportXmlBlocks`, `ExportXmlType`, `ImportXmlType`, `ExportBlocksAsDocuments`, `ImportFromDocuments`, etc.
   Rules:
   - Short messages + `PortalErrorCode` only (no param echoing in message)
   - Attach context in `Exception.Data` in a single catch per portal method, just before rethrow (see docs/error-model.md)
@@ -183,7 +183,7 @@ the gap is explicit rather than implied.
   ```
 
 - [ ] Consolidate progress reporting for export/import operations
-  Reasoning: ExportBlocks/ExportTypes/ExportBlocksAsDocuments share progress calculations and error notifications. A wrapper reduces scattered try/catch and progress-token checks.
+  Reasoning: ExportXmlBlocks/ExportXmlTypes/ExportBlocksAsDocuments share progress calculations and error notifications. A wrapper reduces scattered try/catch and progress-token checks.
   Excerpt (today):
   ```csharp
   // compute totals, send start; for each item send progress; on error send error progress
@@ -193,7 +193,7 @@ the gap is explicit rather than implied.
   await ProgressRunner.Run(total, progressToken, onStart, onItem, onComplete, onError);
   ```
 
-- [ ] Address nullable warnings in `Portal.cs` with guards
+- [ ] Address nullable warnings in `Portal*.cs` with guards
   Reasoning: Build shows nullability warnings for software tree groups; explicit guards make intent clear and avoid runtime NREs.
   Excerpt (warnings):
   - CS8602: Dereference of a possibly null reference.
@@ -212,7 +212,7 @@ the gap is explicit rather than implied.
   Each should include: Overview, Preconditions, Parameters (names/types/defaults), Order of operations (numbered), Error model, Examples (request/response for MCP), Troubleshooting, Performance/limits. Include a Mermaid sequence diagram for call flow.
 - [ ] Define a shared error mapping in `docs/error-model.md` (validation → `InvalidParams`, not found → `NotFound`, Openness API → `OpennessError` with native code; guidance for partial vs. overall failure).
 - [ ] Add a "Tools" section to `README.md` linking to `docs/tools/` and `docs/error-model.md`; reference `samples/` configs.
-- [ ] Add XML documentation comments to export/import methods in `ModelContextProtocol/McpServer.cs` and corresponding Siemens wrappers (e.g., `Siemens/Portal.cs`, `Siemens/Openness.cs`). Cover summary, pre/postconditions, ordered steps, params/returns, exceptions, thread-safety/cancellation, and `<seealso>` links to tool docs.
+- [ ] Add XML documentation comments to export/import methods in `ModelContextProtocol/McpServer.cs` and corresponding Siemens wrappers (e.g., `Siemens/Portal*.cs`, `Siemens/Openness.cs`). Cover summary, pre/postconditions, ordered steps, params/returns, exceptions, thread-safety/cancellation, and `<seealso>` links to tool docs.
 - [ ] Enable XML documentation file generation in `src/TiaMcpServer/TiaMcpServer.csproj` (set `DocumentationFile` for `net48`) so IDE tooltips and doc generation work.
 - [ ] Add usage recipes under `docs/recipes/` (e.g., export only FBs matching `FB_Prod.*`, import with overwrite/skip, preservePath false) with minimal and full payloads and expected responses.
 

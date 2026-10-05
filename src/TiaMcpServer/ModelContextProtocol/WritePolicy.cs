@@ -1,16 +1,27 @@
 using ModelContextProtocol;
+using System;
 
 namespace TiaMcpServer.ModelContextProtocol
 {
     /// <summary>
+    /// Marks a tool method that modifies the TIA Portal project. Program.cs leaves marked tools
+    /// out of the registered tool list unless '--allow-write' was passed, which keeps them out of
+    /// 'tools/list' entirely even though they share the McpServer class with the read-only tools.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
+    public sealed class WriteToolAttribute : System.Attribute
+    {
+    }
+
+    /// <summary>
     /// Gates the project-mutating tools behind the '--allow-write' command line flag.
     ///
     /// Callers: Program.cs (sets AllowWrite from CliOptions and conditionally registers the
-    /// write tool type) and every tool in McpServerWrite.cs. Affected API: none existing - this
+    /// write tools) and every [WriteTool] tool in McpServer. Affected API: none existing - this
     /// is a new type and changes no current signature. Reads/writes no data files.
     ///
     /// Two mechanisms guard writes, deliberately:
-    ///  - Program.cs registers the McpServerWrite tool type only when AllowWrite is set, which
+    ///  - Program.cs registers the [WriteTool] tools only when AllowWrite is set, which
     ///    is what keeps the destructive tools out of 'tools/list' entirely.
     ///  - EnsureEnabled is the first statement of every write tool, because those tools are
     ///    public static methods that the MSTest suite invokes directly, bypassing registration.

@@ -1,10 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
-using Siemens.Engineering.Compiler;
-using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
 using System;
 using System.Collections.Generic;
@@ -13,8 +10,8 @@ using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 using TiaMcpServer.Siemens;
 
 namespace TiaMcpServer.ModelContextProtocol
@@ -23,6 +20,7 @@ namespace TiaMcpServer.ModelContextProtocol
     public static partial class McpServer
     {
         private static IServiceProvider? _services;
+
         private static Portal? _portal;
 
         public static ILogger? Logger { get; set; }
@@ -57,29 +55,31 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region portal
 
-        [McpServerTool(Name = "Connect", Title = "Connect to TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false), Description("Connect to TIA-Portal")]
-        public static ResponseConnect Connect()
+        [McpServerTool(Name = "Connect", Title = "Connect to TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false),
+         Description("Connect to TIA Portal and return its 'portalId'. Without 'portalId' it attaches to the only running instance, or starts one if none is running; with several running it fails and lists them")]
+        public static ResponseConnect Connect(
+            [Description("portalId: process id of the TIA Portal instance to attach to (see 'GetPortals'). Leave empty when at most one instance is running")] int? portalId = null)
         {
             Logger?.LogInformation("Connecting to TIA Portal...");
 
             try
             {
-                if (Portal.ConnectPortal())
+                var attachedId = Portal.AttachPortal(portalId);
+
+                return new ResponseConnect
                 {
-                    return new ResponseConnect
+                    Message = $"Connected to TIA-Portal instance {attachedId}",
+                    PortalId = attachedId,
+                    Meta = new JsonObject
                     {
-                        Message = "Connected to TIA-Portal",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException("Failed to connect to TIA-Portal");
-                }
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(PortalSelection.Describe(pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
@@ -87,7 +87,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "Disconnect", Title = "Disconnect from TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false), Description("Disconnect from TIA-Portal")]
+        [McpServerTool(Name = "Disconnect", Title = "Disconnect from TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false), Description("Disconnect from a TIA Portal instance (the one named by portalId, or the only attached one). Other attached instances stay connected")]
         public static ResponseDisconnect Disconnect()
         {
             try
@@ -115,11 +115,43 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
+        [PortalIndependent]
+        [McpServerTool(Name = "GetPortals", Title = "Get portals", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+         Description("List the running TIA Portal instances with their 'portalId', open project path and whether this server is attached. The top-level 'portalId' is the attached instance tools use by default (empty when none or several are attached). Use it to choose the 'portalId' when more than one instance is running")]
+        public static ResponsePortals GetPortals()
+        {
+            try
+            {
+                var portals = Portal.GetPortals();
+
+                // the one instance tools use without 'portalId'; none or several attached: no default
+                var attached = portals.Where(p => p.IsAttached).Select(p => p.PortalId).ToList();
+                int? portalId = attached.Count == 1 ? attached[0] : null;
+
+                return new ResponsePortals
+                {
+                    Message = $"{portals.Count} TIA-Portal instance(s) running" +
+                              (portalId is int id ? $", attached to {id}" : attached.Count > 1 ? $", {attached.Count} attached" : ", none attached"),
+                    PortalId = portalId,
+                    Portals = portals,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error listing TIA-Portal instances: {ex.Message}", ex);
+            }
+        }
+
         #endregion
 
         #region state
 
-        [McpServerTool(Name = "GetState", Title = "Get server state", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get the state of the TIA-Portal MCP server")]
+        [McpServerTool(Name = "GetState", Title = "Get server state", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show the portalId this server is attached to, whether it is connected, the open project and session, and whether write mode (--allow-write) is enabled")]
         public static ResponseState GetState()
         {
             try
@@ -131,6 +163,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     return new ResponseState
                     {
                         Message = "TIA-Portal MCP server state retrieved",
+                        PortalId = state.PortalId,
                         IsConnected = state.IsConnected,
                         Project = state.Project,
                         Session = state.Session,
@@ -155,10 +188,10 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "Doctor", Title = "Diagnose the TIA Portal environment", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Diagnose the TIA-Portal environment: connection, open project, active and installed TIA-Portal versions, Openness user group membership")]
+        [McpServerTool(Name = "Doctor", Title = "Run Doctor diagnostics", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Diagnose the TIA Portal environment: server version, connection, open project, active and installed TIA Portal versions, Openness user group membership")]
         public static ResponseDoctor Doctor()
         {
-            Logger?.LogInformation("Running TIA Portal diagnostics...");
+            Logger?.LogInformation("Running doctor diagnostics...");
 
             try
             {
@@ -169,6 +202,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     Message = "TIA-Portal environment diagnosed",
                     Report = report.Text,
+                    ServerVersion = report.ServerVersion,
                     IsConnected = report.IsConnected,
                     ActiveTiaMajorVersion = report.ActiveTiaMajorVersion,
                     ProjectName = report.ProjectName,
@@ -201,7 +235,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region project/session
 
-        [McpServerTool(Name = "GetProject", Title = "Get open project", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get open local project/session")]
+        [McpServerTool(Name = "GetProject", Title = "Get open project", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List the projects and local sessions open in the connected TIA Portal, with name and path")]
         public static ResponseGetProjects GetProjects()
         {
             try
@@ -242,9 +276,9 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "OpenProject", Title = "Open project or session", Destructive = false, Idempotent = true, OpenWorld = false), Description("Open a TIA-Portal local project/session")]
+        [McpServerTool(Name = "OpenProject", Title = "Open project/session", Destructive = true, Idempotent = true, OpenWorld = false), Description("Open a local project (.apXX) or local session (.alsXX) in the connected TIA Portal and make it the current project. Closes the project or session that is open first. Needs a prior Connect; OpenTiaProject connects and opens in one call")]
         public static ResponseOpenProject OpenProject(
-            [Description("path: defines the path where to the project/session")] string path)
+            [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path)
         {
             try
             {
@@ -294,7 +328,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "SaveProject", Title = "Save project", Destructive = true, Idempotent = true, OpenWorld = false), Description("Save the current TIA-Portal local project/session")]
+        [McpServerTool(Name = "SaveProject", Title = "Save project", Destructive = true, Idempotent = true, OpenWorld = false), Description("Save the current local project or local session")]
         public static ResponseSaveProject SaveProject()
         {
             try
@@ -344,9 +378,9 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "SaveAsProject", Title = "Save project as", Destructive = true, Idempotent = true, OpenWorld = false), Description("Save current TIA-Portal project/session with a new name")]
+        [McpServerTool(Name = "SaveAsProject", Title = "Save project as", Destructive = true, Idempotent = true, OpenWorld = false), Description("Save the current local project to a new location. Not possible for local sessions")]
         public static ResponseSaveAsProject SaveAsProject(
-            [Description("newProjectPath: defines the new path where to save the project")] string newProjectPath)
+            [Description("newProjectPath: target directory on the machine running this server that receives the saved project")] string newProjectPath)
         {
             try
             {
@@ -381,7 +415,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "CloseProject", Title = "Close project", Destructive = true, Idempotent = true, OpenWorld = false), Description("Close the current TIA-Portal project/session")]
+        [McpServerTool(Name = "CloseProject", Title = "Close project", Destructive = true, Idempotent = true, OpenWorld = false), Description("Close the current local project or local session. Save first to keep changes")]
         public static ResponseCloseProject CloseProject()
         {
             try
@@ -440,7 +474,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region devices
 
-        [McpServerTool(Name = "GetProjectTree", Title = "Get project tree", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get project structure as a tree view on current local project/session")]
+        [McpServerTool(Name = "GetProjectTree", Title = "Get project tree", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show the structure of the current project or session as a tree of devices, device items, groups and PLC/HMI software. Use it to find the device and software paths other tools expect")]
         public static ResponseProjectTree GetProjectTree()
         {
             try
@@ -471,1471 +505,327 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetDeviceInfo", Title = "Get device info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get info from a device from the current project/session")]
-        public static ResponseDeviceInfo GetDeviceInfo(
-            [Description("devicePath: defines the path in the project structure to the device")] string devicePath)
+        #endregion
+
+        #region lookup
+
+        [McpServerTool(Name = "OpenTiaProject", Title = "Connect/open a project", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Connect to TIA Portal if not already connected, open the given project or session, and return the 'portalId' plus the device and PLC software paths the other tools need. Replaces the Connect then OpenProject then GetProjectTree sequence")]
+        public static async Task<ResponseOpenTiaProject> OpenTiaProject(
+            [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path,
+            [Description("portalId: process id of the TIA Portal instance to open it in (see 'GetPortals'). Leave empty when at most one instance is running")] int? portalId = null,
+            CancellationToken cancellationToken = default)
         {
             try
             {
-                var device = Portal.GetDevice(devicePath);
+                int attachedId;
+                bool wasAttached;
 
-                if (device != null)
+                try
                 {
-                    var attributes = Helper.GetAttributeList(device);
+                    // Attaching is unscoped, as in 'Connect': the instance may not be attached yet,
+                    // which is why this tool declares 'portalId' itself and bypasses the filter.
+                    attachedId = Portal.AttachPortal(portalId, out wasAttached);
+                }
+                catch (Exception ex) when (ex is not PortalException)
+                {
+                    throw new McpException(
+                        "Failed to connect to TIA Portal. Run the 'Doctor' tool to check the installation and user group membership.", ex);
+                }
 
-                    return new ResponseDeviceInfo
-                    {
-                        Message = $"Device info retrieved from '{devicePath}'",
-                        Name = device.Name,
-                        Attributes = attributes,
-                        Description = device.ToString(),
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Device not found at '{devicePath}'");
-                }
+                // Everything after attaching runs scoped to that instance and under its lock.
+                return await Portal.RunScopedAsync(
+                    attachedId,
+                    () => new ValueTask<ResponseOpenTiaProject>(OpenAndDescribe(path, attachedId, wasAttached)),
+                    cancellationToken);
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(PortalSelection.Describe(pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving device info from '{devicePath}': {ex.Message}", ex);
+                throw new McpException($"Unexpected error opening '{path}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "GetDeviceItemInfo", Title = "Get device item info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get info from a device item from the current project/session")]
-        public static ResponseDeviceItemInfo GetDeviceItemInfo(
-            [Description("deviceItemPath: defines the path in the project structure to the device item")] string deviceItemPath)
+        private static ResponseOpenTiaProject OpenAndDescribe(string path, int portalId, bool wasAttached)
         {
-            try
+            // Reuse the existing tool rather than duplicating its extension validation and
+            // project/session branching; it also closes whatever was open first.
+            var opened = OpenProject(path);
+
+            var softwarePaths = CollectSoftwarePaths();
+
+            return new ResponseOpenTiaProject
             {
-                var deviceItem = Portal.GetDeviceItem(deviceItemPath);
-
-                if (deviceItem != null)
-                {
-                    var attributes = Helper.GetAttributeList(deviceItem);
-
-                    return new ResponseDeviceItemInfo
-                    {
-                        Message = $"Device item info retrieved from '{deviceItemPath}'",
-                        Name = deviceItem.Name,
-                        Attributes = attributes,
-                        Description = deviceItem.ToString(),
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Device item not found at '{deviceItemPath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error retrieving device item info from '{deviceItemPath}': {ex.Message}", ex);
-            }
-        }
-
-        [McpServerTool(Name = "GetDevices", Title = "Get devices", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of all devices in the project/session")]
-        public static ResponseDevices GetDevices()
-        {
-            try
-            {
-                var list = Portal.GetDevices();
-                var responseList = new List<ResponseDeviceInfo>();
-
-                if (list != null)
-                {
-                    foreach (var device in list)
-                    {
-                        if (device != null)
-                        {
-                            var attributes = Helper.GetAttributeList(device);
-                            responseList.Add(new ResponseDeviceInfo
-                            {
-                                Name = device.Name,
-                                Attributes = attributes,
-                                Description = device.ToString()
-                            });
-                        }
-                    }
-
-                    return new ResponseDevices
-                    {
-                        Message = "Devices retrieved",
-                        Items = responseList,
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed retrieving devices");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error retrieving devices: {ex.Message}", ex);
-            }
+                Message = $"{opened.Message} in TIA-Portal instance {portalId}. PLC software: " +
+                          (softwarePaths.Count > 0 ? string.Join(", ", softwarePaths) : "none found"),
+                PortalId = portalId,
+                ProjectPath = path,
+                WasAlreadyConnected = wasAttached,
+                SoftwarePaths = softwarePaths,
+                Tree = Portal.GetProjectTree(),
+                Meta = Ok(new JsonObject { ["softwareCount"] = softwarePaths.Count })
+            };
         }
 
         #endregion
 
-        #region plc software
+        // From the former McpServer.Preview.cs:
+        // Looking before writing.
+        //
+        // Callers: the MCP host, through tool registration. Affected API: none - PreviewImport is
+        // new and no write tool changed. File I/O: reads the caller's import directory; writes
+        // nothing, and never touches the project.
+        //
+        // This is the read-only half of write safety; the other half is the transaction wrapper in
+        // Portal.cs (InTransaction), which every write tool now runs inside. It is one tool rather
+        // than a 'dryRun' flag on all 39 write tools: the flag would have changed the execution
+        // path of every write for a report that only imports really need, and imports are where
+        // the collisions actually happen.
+        //
+        // What it can and cannot know: the object name is taken from the file name, which is how
+        // every exporter in this server names its output. A hand-edited file whose content
+        // declares a different name than its file name would be reported under the file name.
 
-        [McpServerTool(Name = "GetSoftwareInfo", Title = "Get PLC software info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get plc software info")]
-        public static ResponseSoftwareInfo GetSoftwareInfo(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath)
+        #region preview
+
+        [McpServerTool(Name = "PreviewImport", Title = "Preview import", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Report what importing a directory would create, overwrite or collide with, without touching the project. Checks each file against the objects already in the PLC, including the rule that a PLC data type name must be unique across the whole PLC - importing an existing type name into a different group fails even with importOption 'Override'")]
+        public static ResponseImportPreview PreviewImport(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("importPath: directory holding the files to import (.s7dcl source documents or .xml)")] string importPath,
+            [Description("kind: what the files contain - 'type' for PLC data types, 'block' for program blocks")] string kind,
+            [Description("groupPath: the group the import would target; empty means the root of that area. A leading system folder segment is accepted")] string groupPath = "")
         {
             try
             {
-                var software = Portal.GetPlcSoftware(softwarePath);
-                if (software != null)
+                if (!Directory.Exists(importPath))
                 {
+                    throw new McpException($"Import directory '{importPath}' does not exist.");
+                }
 
-                    var attributes = Helper.GetAttributeList(software);
+                var isType = kind.Equals("type", StringComparison.OrdinalIgnoreCase);
 
-                    return new ResponseSoftwareInfo
+                if (!isType && !kind.Equals("block", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new McpException($"Unknown kind '{kind}'. Use 'type' or 'block'.");
+                }
+
+                var names = Directory
+                    .GetFiles(importPath, "*.*", SearchOption.TopDirectoryOnly)
+                    .Where(f => PreviewExtensions.Contains(Path.GetExtension(f)))
+                    .Select(f => Path.GetFileNameWithoutExtension(f))
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var target = string.IsNullOrEmpty(groupPath) ? "the root" : groupPath;
+                var items = new List<ResponseImportPreviewItem>();
+
+                foreach (var name in names)
+                {
+                    var existing = Portal.ResolveObjectPath(softwarePath, name, isType ? "type" : "block")
+                        .FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase));
+
+                    if (existing == null)
                     {
-                        Message = $"Software info retrieved from '{softwarePath}'",
-                        Name = software.Name,
-                        Attributes = attributes,
-                        Description = software.ToString(),
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
+                        items.Add(new ResponseImportPreviewItem { Name = name, Effect = "create", TargetPath = Join(groupPath, name) });
+
+                        continue;
+                    }
+
+                    var sameGroup = string.Equals(
+                        Parent(existing.Path),
+                        StripLeadingSystemFolder(groupPath),
+                        StringComparison.OrdinalIgnoreCase);
+
+                    items.Add(new ResponseImportPreviewItem
+                    {
+                        Name = name,
+                        Effect = sameGroup ? "overwrite" : (isType ? "conflict" : "overwrite-elsewhere"),
+                        TargetPath = Join(groupPath, name),
+                        ExistingPath = existing.Path,
+                        Note = sameGroup
+                            ? "Already exists in the target group; importOption 'Override' replaces it."
+                            : isType
+                                ? "A PLC data type name must be unique across the whole PLC. This import fails even with " +
+                                  $"'Override' - target '{Parent(existing.Path)}' instead, or rename the type."
+                                : $"A block of this name already exists at '{existing.Path}'; importing here may collide on the block number."
+                    });
                 }
-                else
+
+                var creates = items.Count(i => i.Effect == "create");
+                var overwrites = items.Count(i => i.Effect == "overwrite");
+                var conflicts = items.Count(i => i.Effect == "conflict" || i.Effect == "overwrite-elsewhere");
+
+                return new ResponseImportPreview
                 {
-                    throw new McpException($"Software not found at '{softwarePath}'");
-                }
+                    Message = $"Importing '{importPath}' into {target} would create {creates}, overwrite {overwrites}, " +
+                              $"and hit {conflicts} conflict(s). Nothing was changed.",
+                    Items = items,
+                    CreateCount = creates,
+                    OverwriteCount = overwrites,
+                    ConflictCount = conflicts,
+                    Meta = Ok(new JsonObject
+                    {
+                        ["files"] = names.Count,
+                        ["create"] = creates,
+                        ["overwrite"] = overwrites,
+                        ["conflict"] = conflicts
+                    })
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving software info from '{softwarePath}': {ex.Message}", ex);
+                throw new McpException($"Unexpected error previewing the import of '{importPath}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "CompileSoftware", Title = "Compile PLC software", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile the plc software and report every compiler message with the object it belongs to, so errors can be fixed without re-reading the whole PLC. Warnings are reported as a successful compile with detail; only errors fail the call")]
-        public static ResponseCompileSoftware CompileSoftware(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("password: the password to access adminsitration, default: no password")] string password = "")
+        /// <summary>File kinds an export of this server produces, and therefore an import consumes.</summary>
+        private static readonly HashSet<string> PreviewExtensions =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".s7dcl", ".xml" };
+
+        private static string Join(string groupPath, string name) =>
+            string.IsNullOrEmpty(groupPath) ? name : $"{groupPath.TrimEnd('/')}/{name}";
+
+        private static string Parent(string path)
         {
-            try
-            {
-                var result = Portal.CompileSoftware(softwarePath, password);
+            var slash = path.LastIndexOf('/');
 
-                if (result == null)
-                {
-                    throw new McpException(
-                        $"Failed compiling software '{softwarePath}'. Check that the path names a PLC software " +
-                        "('GetProjectTree' lists them) and, for a safety program, that 'password' is correct.");
-                }
-
-                var messages = FlattenCompilerMessages(result.Messages, 0).ToList();
-                var state = result.State.ToString();
-                var failed = result.State == CompilerResultState.Error;
-
-                var response = new ResponseCompileSoftware
-                {
-                    Message = $"Compiling '{softwarePath}' finished with state '{state}': " +
-                              $"{result.ErrorCount} error(s), {result.WarningCount} warning(s)",
-                    State = state,
-                    ErrorCount = result.ErrorCount,
-                    WarningCount = result.WarningCount,
-                    Messages = messages,
-                    Meta = new JsonObject
-                    {
-                        ["timestamp"] = DateTime.Now,
-                        ["success"] = !failed,
-                        ["state"] = state,
-                        ["errorCount"] = result.ErrorCount,
-                        ["warningCount"] = result.WarningCount,
-                        ["messageCount"] = messages.Count
-                    }
-                };
-
-                if (failed)
-                {
-                    // The message text is what a client surfaces, so name the first few offenders
-                    // rather than making the caller re-query to find out what broke.
-                    var offenders = messages
-                        .Where(m => string.Equals(m.State, nameof(CompilerResultState.Error), StringComparison.OrdinalIgnoreCase))
-                        .Take(5)
-                        .Select(m => $"{m.Path}: {m.Description}");
-
-                    throw new McpException(
-                        $"Compiling '{softwarePath}' failed with {result.ErrorCount} error(s). " +
-                        string.Join(" | ", offenders));
-                }
-
-                return response;
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error compiling software '{softwarePath}': {ex.Message}", ex);
-            }
+            return slash < 0 ? string.Empty : path.Substring(0, slash);
         }
 
         /// <summary>
-        /// Walks the recursive CompilerResultMessage tree depth-first. Openness nests messages
-        /// per object and then per detail, and the previous implementation discarded all of it
-        /// in favour of CompilerResult.ToString().
+        /// A groupPath copied from a preservePath export starts with the localised system folder
+        /// ('PLC data types', 'Program blocks'), which the resolved paths do not carry.
         /// </summary>
-        private static IEnumerable<CompileMessage> FlattenCompilerMessages(CompilerResultMessageComposition? messages, int depth)
+        private static string StripLeadingSystemFolder(string groupPath)
         {
-            if (messages == null)
+            if (string.IsNullOrEmpty(groupPath) || !groupPath.Contains("/"))
             {
-                yield break;
+                return string.Empty;
             }
 
-            foreach (var message in messages)
-            {
-                if (message == null)
-                {
-                    continue;
-                }
-
-                yield return new CompileMessage
-                {
-                    Path = message.Path,
-                    State = message.State.ToString(),
-                    Description = message.Description,
-                    ErrorCount = message.ErrorCount,
-                    WarningCount = message.WarningCount,
-                    Depth = depth
-                };
-
-                foreach (var child in FlattenCompilerMessages(message.Messages, depth + 1))
-                {
-                    yield return child;
-                }
-            }
-        }
-
-        [McpServerTool(Name = "GetSoftwareTree", Title = "Get PLC software tree", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get the structure/tree of a given PLC software showing program blocks, PLC data types, PLC tags, watch and force tables, and external source files")]
-        public static ResponseSoftwareTree GetSoftwareTree(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("sections: optional comma separated subset of 'blocks,types,tags,watch,sources' to keep the output small; defaults to 'all'")] string sections = "all")
-        {
-            try
-            {
-                var tree = Portal.GetSoftwareTree(softwarePath, sections);
-
-                if (!string.IsNullOrEmpty(tree))
-                {
-                    return new ResponseSoftwareTree
-                    {
-                        Message = $"Software tree retrieved from '{softwarePath}'",
-                        Tree = "```\n" + tree + "\n```",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed retrieving software tree from '{softwarePath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error retrieving software tree from '{softwarePath}': {ex.Message}", ex);
-            }
+            return groupPath.Substring(groupPath.IndexOf('/') + 1);
         }
 
         #endregion
 
-        #region blocks
+        // From the former McpServerWrite.cs:
+        // The project-mutating MCP tools (create, rename, delete, import into the project).
+        //
+        // Callers: registered by Program.BuildTools() only when '--allow-write' was passed, and
+        // invoked directly by the write test classes. Affected API: none existing. Data: returns the
+        // shared ResponseCreated / ResponseDeleted / ResponseRenamed / ResponseImported /
+        // ResponseGenerateBlocks DTOs. The import tools read a caller-supplied file; nothing here
+        // writes files. Project changes live in memory until SaveProject (or SaveSession).
+        //
+        // Conventions, enforced by the Guarded helper below:
+        // - WritePolicy.EnsureEnabled runs first, because these are public static methods that the
+        // MSTest suite calls directly, bypassing tool registration.
+        // - A PortalException is surfaced with its own guidance message; anything else is wrapped.
+        // - Destructive = true; Idempotent = true only for renames and deletes-by-name.
+        //
+        // Filesystem-only exports stay in McpServer: they never modify the project.
 
-        [McpServerTool(Name = "GetBlockInfo", Title = "Get block info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a block info, which is located in the plc software")]
-        public static ResponseBlockInfo GetBlockInfo(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("blockPath: defines the path in the project structure to the block")] string blockPath)
+        #region plumbing (write)
+
+        /// <summary>
+        /// Reminds the caller that Openness edits are in-memory, naming the right save tool for
+        /// the current mode: a multiuser local session saves through SaveSession, not SaveProject.
+        /// </summary>
+        private static string SaveHint =>
+            Portal.IsLocalSession
+                ? "The change is in memory; call 'SaveSession' to persist it."
+                : "The change is in memory; call 'SaveProject' to persist it.";
+
+        private static T Guarded<T>(string toolName, Func<T> body)
         {
+            WritePolicy.EnsureEnabled(toolName);
+
             try
             {
-                var block = Portal.GetBlock(softwarePath, blockPath);
-                if (block != null)
-                {
-                    var attributes = Helper.GetAttributeList(block);
-
-                    return new ResponseBlockInfo
-                    {
-                        Path = Portal.GetBlockPath(block),
-                        Message = $"Block info retrieved from '{blockPath}' in '{softwarePath}'",
-                        Name = block.Name,
-                        TypeName = block.GetType().Name,
-                        Namespace = block.Namespace,
-                        ProgrammingLanguage = Enum.GetName(typeof(ProgrammingLanguage),block.ProgrammingLanguage),
-                        MemoryLayout = Enum.GetName(typeof(MemoryLayout), block.MemoryLayout),
-                        IsConsistent = block.IsConsistent,
-                        HeaderName = block.HeaderName,
-                        ModifiedDate = block.ModifiedDate,
-                        IsKnowHowProtected = block.IsKnowHowProtected,
-                        Attributes = attributes,
-                        Description = block.ToString(),
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Block not found at '{blockPath}' in '{softwarePath}'");
-                }
+                // One transaction per tool call: the edits commit together or not at all, and
+                // the operator sees a single named entry in the TIA Portal undo stack instead of
+                // an unlabelled pile of steps. Falls back to an unwrapped write when TIA Portal
+                // refuses exclusive access, so this can never turn a working write into a
+                // failure - see Portal.InTransaction in Portal.cs.
+                return Portal.InTransaction($"MCP: {toolName}", body);
+            }
+            catch (PortalException pex)
+            {
+                // PortalException messages are already written for the caller (what went wrong
+                // and which tool lists the valid paths), so they pass through unchanged.
+                throw new McpException(pex.Message, pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving block info from '{blockPath}' in '{softwarePath}': {ex.Message}", ex);
+                throw new McpException($"Unexpected error in '{toolName}': {ex.Message}", ex);
             }
         }
 
-        [McpServerTool(Name = "GetBlocks", Title = "Get blocks", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of blocks, which are located in plc software")]
-        public static ResponseBlocks GetBlocks(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "")
+        private static JsonObject OkMeta() => new JsonObject
         {
-            try
-            {
-                var list = Portal.GetBlocks(softwarePath, regexName);
+            ["timestamp"] = DateTime.Now,
+            ["success"] = true,
+            ["pendingSave"] = true
+        };
 
-                var responseList = new List<ResponseBlockInfo>();
-                foreach (var block in list)
-                {
-                    if (block != null)
-                    {
-                        var attributes = Helper.GetAttributeList(block);
-
-                        responseList.Add(new ResponseBlockInfo
-                        {
-                            Path = Portal.GetBlockPath(block),
-                            Name = block.Name,
-                            TypeName = block.GetType().Name,
-                            Namespace = block.Namespace,
-                            ProgrammingLanguage = Enum.GetName(typeof(ProgrammingLanguage), block.ProgrammingLanguage),
-                            MemoryLayout = Enum.GetName(typeof(MemoryLayout), block.MemoryLayout),
-                            IsConsistent = block.IsConsistent,
-                            HeaderName = block.HeaderName,
-                            ModifiedDate = block.ModifiedDate,
-                            IsKnowHowProtected = block.IsKnowHowProtected,
-                            Attributes = attributes,
-                            Description = block.ToString()
-                        });
-                    }
-                }
-
-                if (list != null)
-                {
-                    return new ResponseBlocks
-                    {
-                        Message = $"Blocks with regex '{regexName}' retrieved from '{softwarePath}'",
-                        Items = responseList,
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed retrieving blocks with regex '{regexName}' in '{softwarePath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error retrieving blocks with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
-            }
-        }
-
-        [McpServerTool(Name = "GetBlocksWithHierarchy", Title = "Get blocks with hierarchy", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of all blocks with their group hierarchy from the plc software.")]
-        public static ResponseBlocksWithHierarchy GetBlocksWithHierarchy(
-        [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath)
+        private static ResponseCreated Created(string kind, string name, string path) => new ResponseCreated
         {
-            try
-            {
-                var rootGroup = Portal.GetBlockRootGroup(softwarePath);
-                if (rootGroup != null)
-                {
-                    var hierarchy = Helper.BuildBlockHierarchy(rootGroup, Portal);
-                    return new ResponseBlocksWithHierarchy
-                    {
-                        Message = $"Block hierarchy retrieved from '{softwarePath}'",
-                        Root = hierarchy,
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    // Specific failure: root group could not be resolved
-                    throw new McpException($"Block root group not found for '{softwarePath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                // Generic unexpected failure wrapper
-                throw new McpException($"Unexpected error retrieving block hierarchy for '{softwarePath}': {ex.Message}", ex);
-            }
-        }
+            Kind = kind,
+            Name = name,
+            Path = path,
+            Message = $"{kind} '{name}' created. {SaveHint}",
+            Meta = OkMeta()
+        };
 
-
-
-        [McpServerTool(Name = "ExportBlock", Title = "Export block to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export a block from plc software to file")]
-        public static ResponseExportBlock ExportBlock(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("blockPath: full path to the block in the project structure, e.g. 'Group/Subgroup/Name' (single names are ambiguous)")] string blockPath,
-            [Description("exportPath: defines the path where to export the block")] string exportPath,
-            [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
+        private static ResponseDeleted Deleted(string kind, string path) => new ResponseDeleted
         {
-            try
-            {
-                var block = Portal.ExportBlock(softwarePath, blockPath, exportPath, preservePath);
-                if (block != null)
-                {
-                    return new ResponseExportBlock
-                    {
-                        Message = $"Block exported from '{blockPath}' to '{exportPath}'",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                // Should not be reachable because Portal.ExportBlock throws on failure
-                throw new McpException($"Failed exporting block from '{blockPath}' to '{exportPath}'");
-            }
-            catch (TiaMcpServer.Siemens.PortalException pex)
-            {
-                // Map known portal errors to sharper MCP errors and messages.
-                switch (pex.Code)
-                {
-                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
-                        {
-                            var suggestionNote = string.Empty;
-                            // If the path has no '/', it may be incomplete; build suggestions using Portal's regex search and path resolver
-                            if (!string.IsNullOrEmpty(blockPath) && !blockPath.Contains('/'))
-                            {
-                                try
-                                {
-                                    var escaped = Regex.Escape(blockPath);
-                                    var blocks = Portal.GetBlocks(softwarePath, $"^{escaped}$");
-                                    if (blocks == null || blocks.Count == 0)
-                                    {
-                                        blocks = Portal.GetBlocks(softwarePath, escaped);
-                                    }
+            Kind = kind,
+            Path = path,
+            Message = $"{kind} '{path}' deleted. {SaveHint}",
+            Meta = OkMeta()
+        };
 
-                                    var candidates = blocks
-                                        .Take(10)
-                                        .Select(b => Portal.GetBlockPath(b))
-                                        .Where(p => !string.IsNullOrWhiteSpace(p))
-                                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                                        .ToList();
-
-                                    if (candidates.Count > 0)
-                                    {
-                                        suggestionNote = $" Did you mean: {string.Join(", ", candidates)}?";
-                                    }
-                                }
-                                catch
-                                {
-                                    // Best-effort suggestions only
-                                }
-                            }
-
-                            var msg = $"Block not found.{suggestionNote}".Trim();
-                            throw new McpException(msg);
-                        }
-
-                    case TiaMcpServer.Siemens.PortalErrorCode.ExportFailed:
-                        {
-                            // Relay underlying portal error with concise reason; log full details
-                            var reason = pex.InnerException?.Message?.Trim();
-                            var msg = "Failed to export block.";
-                            if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
-
-                            Logger?.LogError(pex, "MCP ExportBlock failed for {SoftwarePath} {BlockPath} -> {ExportPath}",
-                                pex.Data?["softwarePath"], pex.Data?["blockPath"], pex.Data?["exportPath"]);
-
-                            throw new McpException(msg);
-                        }
-
-                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
-                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
-                        {
-                            throw new McpException(pex.Message);
-                        }
-                }
-
-                // Fallback
-                throw new McpException(pex.Message);
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error exporting block from '{blockPath}' to '{exportPath}': {ex.Message}", ex);
-            }
-        }
-
-        private static string BuildBlockPathSuggestion(string softwarePath, string blockPath)
+        private static ResponseRenamed Renamed(string kind, string oldPath, string newName, string newPath) => new ResponseRenamed
         {
-            if (string.IsNullOrEmpty(blockPath) || blockPath.Contains('/')) return string.Empty;
-            try
-            {
-                var escaped = Regex.Escape(blockPath);
-                var blocks = Portal.GetBlocks(softwarePath, $"^{escaped}$");
-                if (blocks == null || blocks.Count == 0)
-                {
-                    blocks = Portal.GetBlocks(softwarePath, escaped);
-                }
+            Kind = kind,
+            OldPath = oldPath,
+            NewName = newName,
+            NewPath = newPath,
+            Message = $"{kind} '{oldPath}' renamed to '{newName}'. {SaveHint}",
+            Meta = OkMeta()
+        };
 
-                var candidates = blocks
-                    .Take(10)
-                    .Select(b =>
-                    {
-                        var name = b.Name;
-                        var parts = new List<string> { name };
-                        var parent = b.Parent;
-                        while (parent != null)
-                        {
-                            if (parent is PlcBlockSystemGroup) break;
-                            if (parent is PlcBlockGroup grp)
-                            {
-                                parts.Insert(0, grp.Name);
-                                parent = grp.Parent;
-                            }
-                            else break;
-                        }
-                        if (parts.Count > 1) parts.RemoveAt(0);
-                        return string.Join("/", parts);
-                    })
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-                return candidates.Count > 0 ? $" Did you mean: {string.Join(", ", candidates)}?" : string.Empty;
-            }
-            catch
-            {
-                return string.Empty; // best effort only
-            }
-        }
-        [McpServerTool(Name = "ImportBlock", Title = "Import block from XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import a block file to plc software")]
-        public static ResponseImportBlock ImportBlock(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("groupPath: defines the path in the project structure to the group, where to import the block")] string groupPath,
-            [Description("importPath: defines the path of the xml file from where to import the block")] string importPath)
+        private static ResponseImported Imported(string kind, string groupPath, string importPath) => new ResponseImported
         {
-            try
-            {
-                if (Portal.ImportBlock(softwarePath, groupPath, importPath))
-                {
-                    return new ResponseImportBlock
-                    {
-                        Message = $"Block imported from '{importPath}' to '{groupPath}'",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed importing block from '{importPath}' to '{groupPath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error importing block from '{importPath}' to '{groupPath}': {ex.Message}", ex);
-            }
-        }
+            Kind = kind,
+            GroupPath = groupPath,
+            ImportPath = importPath,
+            Message = $"{kind} imported from '{importPath}' into '{groupPath}'. {SaveHint}",
+            Meta = OkMeta()
+        };
 
-        [McpServerTool(Name = "ExportBlocks", Title = "Export blocks to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export all blocks from the plc software to path")]
-        public static async Task<ResponseExportBlocks> ExportBlocks(
-            IProgress<ProgressNotificationValue> progress,
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("exportPath: defines the path where to export the blocks")] string exportPath,
-            [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "",
-            [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
+        /// <summary>Replaces the last segment of a path, for reporting a rename's new path.</summary>
+        private static string ReplaceLeaf(string path, string newName)
         {
-            var startTime = DateTime.Now;
-            
-            try
-            {
-                // First, get the list of blocks to determine total count
-                Logger?.LogInformation($"Starting export of blocks from '{softwarePath}' to '{exportPath}'");
-                
-                var allBlocks = await Task.Run(() => Portal.GetBlocks(softwarePath, regexName));
-                var totalBlocks = allBlocks?.Count ?? 0;
+            var trimmed = (path ?? string.Empty).Trim('/');
+            var index = trimmed.LastIndexOf('/');
 
-                if (totalBlocks == 0)
-                {
-                    progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = "No blocks found to export" });
-                    
-                    return new ResponseExportBlocks
-                    {
-                        Message = $"No blocks found with regex '{regexName}' in '{softwarePath}'",
-                        Items = new List<ResponseBlockInfo>(),
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true,
-                            ["totalBlocks"] = 0,
-                            ["exportedBlocks"] = 0,
-                            ["duration"] = (DateTime.Now - startTime).TotalSeconds
-                        }
-                    };
-                }
-
-                // Send initial progress notification
-                progress.Report(new ProgressNotificationValue { Progress = 0, Total = totalBlocks, Message = $"Starting export of {totalBlocks} blocks..." });
-
-                // Export blocks asynchronously
-                var exportedBlocks = await Task.Run(() => Portal.ExportBlocks(softwarePath, exportPath, regexName, preservePath));
-
-                // Build list of inconsistent (skipped) blocks for reporting
-                var inconsistentInfos = new List<ResponseBlockInfo>();
-                if (allBlocks != null)
-                {
-                    foreach (var b in allBlocks)
-                    {
-                        if (b != null && b.IsConsistent == false)
-                        {
-                            var attrs = Helper.GetAttributeList(b);
-                            inconsistentInfos.Add(new ResponseBlockInfo
-                            {
-                                Path = Portal.GetBlockPath(b),
-                                Name = b.Name,
-                                TypeName = b.GetType().Name,
-                                Namespace = b.Namespace,
-                                ProgrammingLanguage = Enum.GetName(typeof(ProgrammingLanguage), b.ProgrammingLanguage),
-                                MemoryLayout = Enum.GetName(typeof(MemoryLayout), b.MemoryLayout),
-                                IsConsistent = b.IsConsistent,
-                                HeaderName = b.HeaderName,
-                                ModifiedDate = b.ModifiedDate,
-                                IsKnowHowProtected = b.IsKnowHowProtected,
-                                Attributes = attrs,
-                                Description = b.ToString()
-                            });
-                        }
-                    }
-                }
-                
-                // Send progress update after export completion
-                if (exportedBlocks != null)
-                {
-                    var exportedCount = exportedBlocks.Count();
-                    progress.Report(new ProgressNotificationValue { Progress = exportedCount, Total = totalBlocks, Message = $"Exported {exportedCount} of {totalBlocks} blocks" });
-                }
-
-                if (exportedBlocks != null)
-                {
-                    var responseList = new List<ResponseBlockInfo>();
-                    var processedCount = 0;
-                    
-                    foreach (var block in exportedBlocks)
-                    {
-                        if (block != null)
-                        {
-                            var attributes = Helper.GetAttributeList(block);
-
-                            responseList.Add(new ResponseBlockInfo
-                            {
-                                Path = Portal.GetBlockPath(block),
-                                Name = block.Name,
-                                TypeName = block.GetType().Name,
-                                Namespace = block.Namespace,
-                                ProgrammingLanguage = Enum.GetName(typeof(ProgrammingLanguage), block.ProgrammingLanguage),
-                                MemoryLayout = Enum.GetName(typeof(MemoryLayout), block.MemoryLayout),
-                                IsConsistent = block.IsConsistent,
-                                HeaderName = block.HeaderName,
-                                ModifiedDate = block.ModifiedDate,
-                                IsKnowHowProtected = block.IsKnowHowProtected,
-                                Attributes = attributes,
-                                Description = block.ToString()
-                            });
-                        }
-                        processedCount++;
-                    }
-
-                    // Send final progress notification
-                    progress.Report(new ProgressNotificationValue { Progress = processedCount, Total = totalBlocks, Message = $"Export completed: {processedCount} blocks exported successfully" });
-
-                    var duration = (DateTime.Now - startTime).TotalSeconds;
-                    Logger?.LogInformation($"Export completed: {processedCount} blocks exported in {duration:F2} seconds");
-
-                    return new ResponseExportBlocks
-                    {
-                        Message = $"Export completed: {processedCount} blocks with regex '{regexName}' exported from '{softwarePath}' to '{exportPath}'",
-                        Items = responseList,
-                        Inconsistent = inconsistentInfos,
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true,
-                            ["totalBlocks"] = totalBlocks,
-                            ["exportedBlocks"] = processedCount,
-                            ["inconsistentBlocks"] = inconsistentInfos.Count,
-                            ["duration"] = duration
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed exporting blocks with '{regexName}' from '{softwarePath}' to {exportPath}");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                // Send error progress notification if we have a progress token
-                progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Export failed: {ex.Message}" });
-                
-                Logger?.LogError(ex, $"Failed exporting blocks with '{regexName}' from '{softwarePath}' to {exportPath}");
-                throw new McpException($"Unexpected error exporting blocks with '{regexName}' from '{softwarePath}' to {exportPath}: {ex.Message}", ex);
-            }
+            return index < 0 ? newName : trimmed.Substring(0, index + 1) + newName;
         }
 
-        #endregion
-
-        #region types
-
-        [McpServerTool(Name = "GetTypeInfo", Title = "Get type info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a type info from the plc software")]
-        public static ResponseTypeInfo GetTypeInfo(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("typePath: defines the path in the project structure to the type")] string typePath)
-        {
-            try
-            {
-                var type = Portal.GetType(softwarePath, typePath);
-                if (type != null)
-                {
-                    var attributes = Helper.GetAttributeList(type);
-
-                    return new ResponseTypeInfo
-                    {
-                        Path = Portal.GetTypePath(type),
-                        Message = $"Type info retrieved from '{typePath}' in '{softwarePath}'",
-                        Name = type.Name,
-                        TypeName = type.GetType().Name,
-                        Namespace = type.Namespace,
-                        IsConsistent = type.IsConsistent,
-                        ModifiedDate = type.ModifiedDate,
-                        IsKnowHowProtected = type.IsKnowHowProtected,
-                        Attributes = attributes,
-                        Description = type.ToString(),
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Type not found at '{typePath}' in '{softwarePath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error retrieving type info from '{typePath}' in '{softwarePath}': {ex.Message}", ex);
-            }
-        }
-
-        [McpServerTool(Name = "GetTypes", Title = "Get types", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of types from the plc software")]
-        public static ResponseTypes GetTypes(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "")
-        {
-            try
-            {
-                var list = Portal.GetTypes(softwarePath, regexName);
-
-                var responseList = new List<ResponseTypeInfo>();
-                foreach (var type in list)
-                {
-                    if (type != null)
-                    {
-                        var attributes = Helper.GetAttributeList(type);
-
-                        responseList.Add(new ResponseTypeInfo
-                        {
-                            Path = Portal.GetTypePath(type),
-                            Name = type.Name,
-                            TypeName = type.GetType().Name,
-                            Namespace = type.Namespace,
-                            IsConsistent = type.IsConsistent,
-                            ModifiedDate = type.ModifiedDate,
-                            IsKnowHowProtected = type.IsKnowHowProtected,
-                            Attributes = attributes,
-                            Description = type.ToString()
-                        });
-                    }
-                }
-
-                if (list != null)
-                {
-                    return new ResponseTypes
-                    {
-                        Message = $"Types with regex '{regexName}' retrieved from '{softwarePath}'",
-                        Items = responseList,
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed retrieving user defined types with regex '{regexName}' in '{softwarePath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error retrieving user defined types with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
-            }
-        }
-
-        [McpServerTool(Name = "ExportType", Title = "Export type to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export a type from the plc software")]
-        public static ResponseExportType ExportType(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("exportPath: defines the path where export the type")] string exportPath,
-            [Description("typePath: defines the path in the project structure to the type")] string typePath,
-            [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
-        {
-            try
-            {
-                var type = Portal.ExportType(softwarePath, typePath, exportPath, preservePath);
-                if (type != null)
-                {
-                    return new ResponseExportType
-                    {
-                        Message = $"Type exported from '{typePath}' to '{exportPath}'",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed exporting type from '{typePath}' to '{exportPath}'");
-                }
-            }
-            catch (TiaMcpServer.Siemens.PortalException pex)
-            {
-                switch (pex.Code)
-                {
-                    case TiaMcpServer.Siemens.PortalErrorCode.NotFound:
-                        throw new McpException("Type not found.");
-                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidState:
-                    case TiaMcpServer.Siemens.PortalErrorCode.InvalidParams:
-                        throw new McpException(pex.Message);
-                    case TiaMcpServer.Siemens.PortalErrorCode.ExportFailed:
-                        {
-                            var reason = pex.InnerException?.Message?.Trim();
-                            var msg = "Failed to export type.";
-                            if (!string.IsNullOrEmpty(reason)) msg += $" Reason: {reason}";
-                            Logger?.LogError(pex, "MCP ExportType failed for {SoftwarePath} {TypePath} -> {ExportPath}",
-                                pex.Data?["softwarePath"], pex.Data?["typePath"], pex.Data?["exportPath"]);
-                            throw new McpException(msg);
-                        }
-                }
-                throw new McpException(pex.Message);
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error exporting type from '{typePath}' to '{exportPath}': {ex.Message}", ex);
-            }
-        }
-
-        [McpServerTool(Name = "ImportType", Title = "Import type from XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import a type from file into the plc software")]
-        public static ResponseImportType ImportType(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("groupPath: defines the path in the project structure to the group, where to import the type")] string groupPath,
-            [Description("importPath: defines the path of the xml file from where to import the type")] string importPath)
-        {
-            try
-            {
-                if (Portal.ImportType(softwarePath, groupPath, importPath))
-                {
-                    return new ResponseImportType
-                    {
-                        Message = $"Type imported from '{importPath}' to '{groupPath}'",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed importing type from '{importPath}' to '{groupPath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error importing type from '{importPath}' to '{groupPath}': {ex.Message}", ex);
-            }
-        }
-
-        [McpServerTool(Name = "ExportTypes", Title = "Export types to XML", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export types from the plc software to path")]
-        public static async Task<ResponseExportTypes> ExportTypes(
-            IProgress<ProgressNotificationValue> progress,
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("exportPath: defines the path where to export the types")] string exportPath,
-            [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "",
-            [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
-        {
-            var startTime = DateTime.Now;
-            
-            try
-            {
-                // First, get the list of types to determine total count
-                Logger?.LogInformation($"Starting export of types from '{softwarePath}' to '{exportPath}'");
-                
-                var allTypes = await Task.Run(() => Portal.GetTypes(softwarePath, regexName));
-                var totalTypes = allTypes?.Count ?? 0;
-
-                if (totalTypes == 0)
-                {
-                    progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = "No types found to export" });
-                    
-                    return new ResponseExportTypes
-                    {
-                        Message = $"No types found with regex '{regexName}' in '{softwarePath}'",
-                        Items = new List<ResponseTypeInfo>(),
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true,
-                            ["totalTypes"] = 0,
-                            ["exportedTypes"] = 0,
-                            ["duration"] = (DateTime.Now - startTime).TotalSeconds
-                        }
-                    };
-                }
-
-                // Send initial progress notification
-                progress.Report(new ProgressNotificationValue { Progress = 0, Total = totalTypes, Message = $"Starting export of {totalTypes} types..." });
-
-                // Export types asynchronously
-                var exportedTypes = await Task.Run(() => Portal.ExportTypes(softwarePath, exportPath, regexName, preservePath));
-
-                // Build list of inconsistent (skipped) types for reporting
-                var inconsistentTypeInfos = new List<ResponseTypeInfo>();
-                if (allTypes != null)
-                {
-                    foreach (var t in allTypes)
-                    {
-                        if (t != null && t.IsConsistent == false)
-                        {
-                            var attrs = Helper.GetAttributeList(t);
-                            inconsistentTypeInfos.Add(new ResponseTypeInfo
-                            {
-                                Path = Portal.GetTypePath(t),
-                                Name = t.Name,
-                                TypeName = t.GetType().Name,
-                                Namespace = t.Namespace,
-                                IsConsistent = t.IsConsistent,
-                                ModifiedDate = t.ModifiedDate,
-                                IsKnowHowProtected = t.IsKnowHowProtected,
-                                Attributes = attrs,
-                                Description = t.ToString()
-                            });
-                        }
-                    }
-                }
-                
-                // Send progress update after export completion
-                if (exportedTypes != null)
-                {
-                    var exportedCount = exportedTypes.Count();
-                    progress.Report(new ProgressNotificationValue { Progress = exportedCount, Total = totalTypes, Message = $"Exported {exportedCount} of {totalTypes} types" });
-                }
-
-                if (exportedTypes != null)
-                {
-                    var responseList = new List<ResponseTypeInfo>();
-                    var processedCount = 0;
-                    
-                    foreach (var type in exportedTypes)
-                    {
-                        if (type != null)
-                        {
-                            var attributes = Helper.GetAttributeList(type);
-
-                            responseList.Add(new ResponseTypeInfo
-                            {
-                                Path = Portal.GetTypePath(type),
-                                Name = type.Name,
-                                TypeName = type.GetType().Name,
-                                Namespace = type.Namespace,
-                                IsConsistent = type.IsConsistent,
-                                ModifiedDate = type.ModifiedDate,
-                                IsKnowHowProtected = type.IsKnowHowProtected,
-                                Attributes = attributes,
-                                Description = type.ToString()
-                            });
-                        }
-                        processedCount++;
-                    }
-
-                    // Send final progress notification
-                    progress.Report(new ProgressNotificationValue { Progress = processedCount, Total = totalTypes, Message = $"Export completed: {processedCount} types exported successfully" });
-
-                    var duration = (DateTime.Now - startTime).TotalSeconds;
-                    Logger?.LogInformation($"Type export completed: {processedCount} types exported in {duration:F2} seconds");
-
-                    return new ResponseExportTypes
-                    {
-                        Message = $"Export completed: {processedCount} types with regex '{regexName}' exported from '{softwarePath}' to '{exportPath}'",
-                        Items = responseList,
-                        Inconsistent = inconsistentTypeInfos,
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true,
-                            ["totalTypes"] = totalTypes,
-                            ["exportedTypes"] = processedCount,
-                            ["inconsistentTypes"] = inconsistentTypeInfos.Count,
-                            ["duration"] = duration
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed exporting types '{regexName}' from '{softwarePath}' to {exportPath}");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                // Send error progress notification if we have a progress token
-                progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Type export failed: {ex.Message}" });
-                
-                Logger?.LogError(ex, $"Failed exporting types '{regexName}' from '{softwarePath}' to {exportPath}");
-                throw new McpException($"Unexpected error exporting types '{regexName}' from '{softwarePath}' to {exportPath}: {ex.Message}", ex);
-            }
-        }
-
-        #endregion
-
-        #region documents
-
-        [McpServerTool(Name = "ExportAsDocuments", Title = "Export block as documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export as documents (.s7dcl/.s7res) from a block in the plc software to path")]
-        public static ResponseExportAsDocuments ExportAsDocuments(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("blockPath: defines the path in the project structure to the block")] string blockPath,
-            [Description("exportPath: defines the path where to export the documents")] string exportPath,
-            [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
-        {
-            try
-            {
-                if (Engineering.TiaMajorVersion < 20)
-                {
-                    throw new McpException("ExportAsDocuments requires TIA Portal V20 or newer");
-                }
-                if (Portal.ExportAsDocuments(softwarePath, blockPath, exportPath, preservePath))
-                {
-                    return new ResponseExportAsDocuments
-                    {
-                        Message = $"Documents exported from '{blockPath}' to '{exportPath}'",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed exporting documents from '{blockPath}' to '{exportPath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error exporting documents from '{blockPath}' to '{exportPath}': {ex.Message}", ex);
-            }
-        }
-
-        [McpServerTool(Name = "ExportBlocksAsDocuments", Title = "Export blocks as documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export as documents (.s7dcl/.s7res) from blocks in the plc software to path")]
-        public static async Task<ResponseExportBlocksAsDocuments> ExportBlocksAsDocuments(
-            IProgress<ProgressNotificationValue> progress,
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("exportPath: defines the path where to export the documents")] string exportPath,
-            [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "",
-            [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
-        {
-            var startTime = DateTime.Now;
-            
-            try
-            {
-                if (Engineering.TiaMajorVersion < 20)
-                {
-                    throw new McpException("ExportBlocksAsDocuments requires TIA Portal V20 or newer");
-                }
-                // First, get the list of blocks to determine total count
-                Logger?.LogInformation($"Starting export of blocks as documents from '{softwarePath}' to '{exportPath}'");
-                
-                var allBlocks = await Task.Run(() => Portal.GetBlocks(softwarePath, regexName));
-                var totalBlocks = allBlocks?.Count ?? 0;
-
-                if (totalBlocks == 0)
-                {
-                    progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = "No blocks found to export as documents" });
-                    
-                    return new ResponseExportBlocksAsDocuments
-                    {
-                        Message = $"No blocks found with regex '{regexName}' in '{softwarePath}'",
-                        Items = new List<ResponseBlockInfo>(),
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true,
-                            ["totalBlocks"] = 0,
-                            ["exportedBlocks"] = 0,
-                            ["duration"] = (DateTime.Now - startTime).TotalSeconds
-                        }
-                    };
-                }
-
-                // Send initial progress notification
-                progress.Report(new ProgressNotificationValue { Progress = 0, Total = totalBlocks, Message = $"Starting export of {totalBlocks} blocks as documents..." });
-
-                // Export blocks as documents asynchronously
-                var exportedBlocks = await Task.Run(() => Portal.ExportBlocksAsDocuments(softwarePath, exportPath, regexName, preservePath));
-                
-                // Send progress update after export completion
-                if (exportedBlocks != null)
-                {
-                    var exportedCount = exportedBlocks.Count();
-                    progress.Report(new ProgressNotificationValue { Progress = exportedCount, Total = totalBlocks, Message = $"Exported {exportedCount} of {totalBlocks} blocks as documents" });
-                }
-
-                if (exportedBlocks != null)
-                {
-                    var responseList = new List<ResponseBlockInfo>();
-                    var processedCount = 0;
-                    
-                    foreach (var block in exportedBlocks)
-                    {
-                        if (block != null)
-                        {
-                            var attributes = Helper.GetAttributeList(block);
-
-                            responseList.Add(new ResponseBlockInfo
-                            {
-                                Path = Portal.GetBlockPath(block),
-                                Name = block.Name,
-                                TypeName = block.GetType().Name,
-                                Namespace = block.Namespace,
-                                ProgrammingLanguage = Enum.GetName(typeof(ProgrammingLanguage), block.ProgrammingLanguage),
-                                MemoryLayout = Enum.GetName(typeof(MemoryLayout), block.MemoryLayout),
-                                IsConsistent = block.IsConsistent,
-                                HeaderName = block.HeaderName,
-                                ModifiedDate = block.ModifiedDate,
-                                IsKnowHowProtected = block.IsKnowHowProtected,
-                                Attributes = attributes,
-                                Description = block.ToString()
-                            });
-                        }
-                        processedCount++;
-                    }
-
-                    // Send final progress notification
-                    progress.Report(new ProgressNotificationValue { Progress = processedCount, Total = totalBlocks, Message = $"Document export completed: {processedCount} blocks exported successfully" });
-
-                    var duration = (DateTime.Now - startTime).TotalSeconds;
-                    Logger?.LogInformation($"Document export completed: {processedCount} blocks exported in {duration:F2} seconds");
-
-                    return new ResponseExportBlocksAsDocuments
-                    {
-                        Message = $"Document export completed: {processedCount} blocks with regex '{regexName}' exported from '{softwarePath}' to '{exportPath}'",
-                        Items = responseList,
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true,
-                            ["totalBlocks"] = totalBlocks,
-                            ["exportedBlocks"] = processedCount,
-                            ["duration"] = duration
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed exporting documents to '{exportPath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                // Send error progress notification if we have a progress token
-                progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Document export failed: {ex.Message}" });
-                
-                Logger?.LogError(ex, $"Failed exporting documents to '{exportPath}'");
-                throw new McpException($"Unexpected error exporting documents to '{exportPath}': {ex.Message}", ex);
-            }
-        }
-
-        [McpServerTool(Name = "ImportFromDocuments", Title = "Import block from documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import program block from SIMATIC SD documents (.s7dcl/.s7res) into PLC software (V20+)")]
-        public static ResponseImportFromDocuments ImportFromDocuments(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("groupPath: optional path within the PLC program where the block should be placed (empty for root)")] string groupPath,
-            [Description("importPath: directory containing the document files (.s7dcl/.s7res)")] string importPath,
-            [Description("fileNameWithoutExtension: name of the block file without extension") ] string fileNameWithoutExtension,
-            [Description("importOption: ImportDocumentOptions value (None, Override, SkipInactiveCultures, ActivateInactiveCultures)")] string importOption = "Override")
-        {
-            try
-            {
-                if (Engineering.TiaMajorVersion < 20)
-                {
-                    throw new McpException("ImportFromDocuments requires TIA Portal V20 or newer");
-                }
-
-                var option = ParseImportDocumentOption(importOption);
-
-                // Pre-check .s7res for missing en-US tags
-                var warnings = new JsonArray();
-                try
-                {
-                    var missingIds = GetResMissingEnUsIds(importPath, fileNameWithoutExtension);
-                    if (missingIds != null && missingIds.Count > 0)
-                    {
-                        Logger?.LogWarning($".s7res for '{fileNameWithoutExtension}' missing en-US tags for {missingIds.Count} items: {string.Join(", ", missingIds)}");
-                        warnings.Add(new JsonObject
-                        {
-                            ["name"] = fileNameWithoutExtension,
-                            ["missingEnUsIds"] = new JsonArray(missingIds.Select(id => (JsonNode)id).ToArray())
-                        });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger?.LogDebug(ex, "Failed to evaluate .s7res warnings");
-                }
-
-                var ok = Portal.ImportFromDocuments(softwarePath, groupPath, importPath, fileNameWithoutExtension, option);
-                if (ok)
-                {
-                    return new ResponseImportFromDocuments
-                    {
-                        Message = $"Imported '{fileNameWithoutExtension}' from '{importPath}'",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true,
-                            ["warnings"] = warnings
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException($"Failed importing '{fileNameWithoutExtension}' from '{importPath}'");
-                }
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error importing from documents: {ex.Message}", ex);
-            }
-        }
-
-        [McpServerTool(Name = "ImportBlocksFromDocuments", Title = "Import blocks from documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import program blocks from SIMATIC SD documents (.s7dcl/.s7res) into PLC software (V20+)")]
-        public static async Task<ResponseImportBlocksFromDocuments> ImportBlocksFromDocuments(
-            IProgress<ProgressNotificationValue> progress,
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
-            [Description("groupPath: optional path within the PLC program where the blocks should be placed (empty for root)")] string groupPath,
-            [Description("importPath: directory containing the document files (.s7dcl/.s7res)")] string importPath,
-            [Description("regexName: name or regular expression to select block files (empty for all)")] string regexName = "",
-            [Description("importOption: ImportDocumentOptions value (None, Override, SkipInactiveCultures, ActivateInactiveCultures)")] string importOption = "Override")
-        {
-            var startTime = DateTime.Now;
-
-            try
-            {
-                if (Engineering.TiaMajorVersion < 20)
-                {
-                    throw new McpException("ImportBlocksFromDocuments requires TIA Portal V20 or newer");
-                }
-
-                // Determine total by scanning .s7dcl files matching regex
-                int total = 0;
-                var scanWarnings = new JsonArray();
-                try
-                {
-                    if (Directory.Exists(importPath))
-                    {
-                        var rx = string.IsNullOrWhiteSpace(regexName) ? null : new Regex(regexName, RegexOptions.Compiled);
-                        var files = Directory.GetFiles(importPath, "*.s7dcl", SearchOption.TopDirectoryOnly);
-                        foreach (var f in files)
-                        {
-                            var name = Path.GetFileNameWithoutExtension(f);
-                            if (rx != null && !rx.IsMatch(name))
-                                continue;
-                            total++;
-
-                            try
-                            {
-                                var missingIds = GetResMissingEnUsIds(importPath, name);
-                                if (missingIds != null && missingIds.Count > 0)
-                                {
-                                    scanWarnings.Add(new JsonObject
-                                    {
-                                        ["name"] = name,
-                                        ["missingEnUsIds"] = new JsonArray(missingIds.Select(id => (JsonNode)id).ToArray())
-                                    });
-                                }
-                            }
-                            catch { }
-                        }
-                    }
-                }
-                catch { /* ignore pre-scan errors */ }
-
-                progress.Report(new ProgressNotificationValue { Progress = 0, Total = total, Message = total > 0 ? $"Starting import of {total} blocks from documents..." : "Scanning import directory..." });
-
-                var option = ParseImportDocumentOption(importOption);
-                var imported = await Task.Run(() => Portal.ImportBlocksFromDocuments(softwarePath, groupPath, importPath, regexName, option));
-
-                var responseList = new List<ResponseBlockInfo>();
-                int processed = 0;
-                if (imported != null)
-                {
-                    foreach (var block in imported)
-                    {
-                        if (block != null)
-                        {
-                            var attributes = Helper.GetAttributeList(block);
-                            responseList.Add(new ResponseBlockInfo
-                            {
-                                Path = Portal.GetBlockPath(block),
-                                Name = block.Name,
-                                TypeName = block.GetType().Name,
-                                Namespace = block.Namespace,
-                                ProgrammingLanguage = Enum.GetName(typeof(ProgrammingLanguage), block.ProgrammingLanguage),
-                                MemoryLayout = Enum.GetName(typeof(MemoryLayout), block.MemoryLayout),
-                                IsConsistent = block.IsConsistent,
-                                HeaderName = block.HeaderName,
-                                ModifiedDate = block.ModifiedDate,
-                                IsKnowHowProtected = block.IsKnowHowProtected,
-                                Attributes = attributes,
-                                Description = block.ToString()
-                            });
-                        }
-                        processed++;
-                    }
-                }
-
-                progress.Report(new ProgressNotificationValue { Progress = processed, Total = total, Message = $"Document import completed: {processed} blocks imported successfully" });
-
-                var duration = (DateTime.Now - startTime).TotalSeconds;
-                Logger?.LogInformation($"Document import completed: {processed} blocks imported in {duration:F2} seconds");
-
-                return new ResponseImportBlocksFromDocuments
-                {
-                    Message = $"Document import completed: {processed} blocks imported from '{importPath}'",
-                    Items = responseList,
-                    Meta = new JsonObject
-                    {
-                        ["timestamp"] = DateTime.Now,
-                        ["success"] = true,
-                        ["totalBlocks"] = total,
-                        ["importedBlocks"] = processed,
-                        ["duration"] = duration,
-                        ["warnings"] = scanWarnings
-                    }
-                };
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Document import failed: {ex.Message}" });
-
-                Logger?.LogError(ex, $"Failed importing documents from '{importPath}'");
-                throw new McpException($"Unexpected error importing documents from '{importPath}': {ex.Message}", ex);
-            }
-        }
-
-        /// <summary>Internal, not private: McpServerWrite.Documents.cs parses the same option.</summary>
-        internal static ImportDocumentOptions ParseImportDocumentOption(string option)
-        {
-            if (string.IsNullOrWhiteSpace(option)) return ImportDocumentOptions.Override;
-
-            var normalized = option.Trim();
-
-            // Primary: accept exact enum names (case-insensitive)
-            if (Enum.TryParse<ImportDocumentOptions>(normalized, ignoreCase: true, out var parsed))
-            {
-                return parsed;
-            }
-
-            // Aliases and common misspellings
-            switch (normalized.ToLowerInvariant())
-            {
-                case "override": return ImportDocumentOptions.Override;
-                case "none": return ImportDocumentOptions.None;
-                case "skipinactiveculture":
-                case "skipinactivecultures":
-                case "skipinactive":
-                case "skipinactivecult":
-                    return ImportDocumentOptions.SkipInactiveCultures;
-                case "activeinactiveculture":
-                case "activateinactivecultures":
-                case "activeinactivecultures":
-                case "activateinactive":
-                    return ImportDocumentOptions.ActivateInactiveCultures;
-                default:
-                    throw new McpException($"Invalid importOption '{option}'. Allowed: None, Override, SkipInactiveCultures, ActivateInactiveCultures");
-            }
-        }
-
-        /// <summary>Internal, not private: the type document imports run the same pre-check.</summary>
-        internal static List<string> GetResMissingEnUsIds(string directory, string baseName)
-        {
-            var resPath = Path.Combine(directory, baseName + ".s7res");
-            var missing = new List<string>();
-            if (!File.Exists(resPath))
-            {
-                return missing;
-            }
-            var xdoc = XDocument.Load(resPath);
-            XNamespace ns = xdoc.Root?.Name.Namespace ?? XNamespace.None;
-            foreach (var comment in xdoc.Descendants(ns + "Comment"))
-            {
-                var hasEnUs = comment.Elements(ns + "MultiLanguageText")
-                                     .Any(e => string.Equals((string?)e.Attribute("Lang"), "en-US", StringComparison.OrdinalIgnoreCase));
-                if (!hasEnUs)
-                {
-                    var id = (string?)comment.Attribute("Id") ?? "";
-                    missing.Add(id);
-                }
-            }
-            return missing;
-        }
+        private static string JoinPath(string groupPath, string name) =>
+            string.IsNullOrEmpty(groupPath) ? name : $"{groupPath}/{name}";
 
         #endregion
     }
 }
-

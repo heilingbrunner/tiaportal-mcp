@@ -1,20 +1,16 @@
 ﻿using Microsoft.Extensions.Logging;
 using Siemens.Engineering;
-using Siemens.Engineering.Compiler;
-using Siemens.Engineering.Hmi;
-using Siemens.Engineering.HmiUnified;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
+using Siemens.Engineering.Hmi;
+using Siemens.Engineering.HmiUnified;
 using Siemens.Engineering.Multiuser;
-using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW;
-using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Types;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Security;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -26,9 +22,8 @@ namespace TiaMcpServer.Siemens
         // closing parantheses for regex characters ommitted, because they are not relevant for regex detection
         private readonly char[] _regexChars = ['.', '^', '$', '*', '+', '?', '(', '[', '{', '\\', '|'];
 
-        private TiaPortal? _portal;
-        private ProjectBase? _project;
-        private LocalSession? _session;
+        // _portal, _project and _session resolve per request - see Portal.Instances.cs
+
         private readonly ILogger<Portal>? _logger;
 
         #region ctor
@@ -103,22 +98,18 @@ namespace TiaMcpServer.Siemens
 
         public void Dispose()
         {
-            try
+            foreach (var context in _contexts.Values.ToList())
             {
-                (_project as Project)?.Close();
-            }
-            catch (Exception)
-            {
-                // Console.WriteLine($"Error closing the project: {ex.Message}");
-            }
+                try
+                {
+                    (context.Project as Project)?.Close();
+                }
+                catch (Exception)
+                {
+                    // Console.WriteLine($"Error closing the project: {ex.Message}");
+                }
 
-            try
-            {
-                _portal?.Dispose();
-            }
-            catch (Exception)
-            {
-                // Console.WriteLine($"Error closing the portal: {ex.Message}");
+                Forget(context);
             }
         }
 
@@ -132,45 +123,22 @@ namespace TiaMcpServer.Siemens
 
             try
             {
-                _project = null;
-                _session = null;
-                _portal = null;
-
-                // connect to running TIA Portal
-                var processes = TiaPortal.GetProcesses();
-                if (processes.Any())
-                {
-                    _portal = processes.First().Attach();
-
-                    // check for existing local sessions
-                    if (_portal.LocalSessions.Any())
-                    {
-                        _session = _portal.LocalSessions.First();
-                        _project = _session.Project;
-                    }
-                    // checks for existing projects
-                    else if (_portal.Projects.Any())
-                    {
-                        _project = _portal.Projects.First();
-                    }
-
-                    return true;
-                }
-
-                // start new TIA Portal
-                _portal = new TiaPortal(TiaPortalMode.WithUserInterface);
+                // attaches to the only running instance or starts one; refuses to guess between several
+                AttachPortal(null);
 
                 return true;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger?.LogWarning(ex, "Connecting to TIA Portal failed");
+
                 return false;
             }
         }
 
         public bool IsConnected()
         {
-            return _portal != null;
+            return Current != null;
         }
 
         public bool DisconnectPortal()
@@ -179,11 +147,13 @@ namespace TiaMcpServer.Siemens
 
             try
             {
-                _project = null;
-                _session = null;
+                // only the instance of this request; other attached instances stay attached
+                var context = Current;
 
-                _portal?.Dispose();
-                _portal = null;
+                if (context != null)
+                {
+                    Forget(context);
+                }
 
                 return true;
             }
@@ -202,23 +172,17 @@ namespace TiaMcpServer.Siemens
         public State GetState()
         {
             _logger?.LogInformation("Getting TIA Portal state...");
-            if (_portal != null)
+            var context = Current;
+
+            if (context is not null)
             {
-                // check for existing local sessions
-                if (_portal.LocalSessions.Any())
-                {
-                    _session = _portal.LocalSessions.First();
-                    _project = _session.Project;
-                }
-                // checks for existing projects
-                else if (_portal.Projects.Any())
-                {
-                    _project = _portal.Projects.First();
-                }
+                // picks up a project opened in the UI, but keeps one that is still open
+                RefreshProject(context);
             }
 
             return new State
             {
+                PortalId = context?.Id,
                 IsConnected = IsConnected(),
                 Project = _project != null ? _project.Name : "-",
                 Session = _session != null ? _session.Project.Name : "-"
@@ -322,8 +286,8 @@ namespace TiaMcpServer.Siemens
                 Path = project.Path,
                 Type = project.GetType().Name,
                 IsMultiuserProject = project is MultiuserProject,
-                IsLocalSession = _session != null,
-                IsLocalProject = _session == null
+                IsLocalSession = _session is not null,
+                IsLocalProject = _session is null
             };
 
             return info;
@@ -409,7 +373,7 @@ namespace TiaMcpServer.Siemens
                 return false;
             }
 
-            if (_session != null)
+            if (_session is not null)
             {
                 _project = null;
                 _session?.Close();
@@ -426,21 +390,21 @@ namespace TiaMcpServer.Siemens
                 {
                     // Session is already open  
                     _session = _portal?.LocalSessions.FirstOrDefault(s => s.Project.Name == sessionName);
-                    if (_session != null)
+                    if (_session is not null)
                     {
                         // Correctly cast MultiuserProject to Project  
                         _project = _session.Project;
-                        return _project != null;
+                        return _project is not null;
                     }
                 }
                 else
                 {
                     _session = _portal?.LocalSessions.Open(new FileInfo(localSessionPath));
-                    if (_session != null)
+                    if (_session is not null)
                     {
                         // Correctly cast MultiuserProject to Project  
                         _project = _session.Project;
-                        return _project != null;
+                        return _project is not null;
                     }
                 }
             }
@@ -485,7 +449,7 @@ namespace TiaMcpServer.Siemens
 
         #endregion
 
-        #region devices
+        #region project tree
 
         public string GetProjectTree()
         {
@@ -534,1203 +498,6 @@ namespace TiaMcpServer.Siemens
             return sb.ToString();
         }
 
-        
-
-        public List<Device> GetDevices(string regexName = "")
-        {
-            _logger?.LogInformation("Getting devices...");
-
-            if (IsProjectNull())
-            {
-                return [];
-            }
-
-            var list = new List<Device>();
-
-            if (_project?.Devices != null)
-            {
-                foreach (Device device in _project.Devices)
-                {
-                    list.Add(device);
-                }
-
-                foreach (var group in _project.DeviceGroups)
-                {
-                    GetDevicesRecursive(group, list, regexName);
-                }
-
-                //foreach (var group in _project.UngroupedDevicesGroup)
-                //{
-                //    GetDevicesRecursive(_project.UngroupedDevicesGroup, list, regexName);
-                //}
-            }
-
-            return list;
-        }
-
-        public Device? GetDevice(string devicePath)
-        {
-            _logger?.LogInformation($"Getting device by path: {devicePath}");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            // Retrieve the device by its path
-            return GetDeviceByPath(devicePath);
-        }
-
-        public DeviceItem? GetDeviceItem(string deviceItemPath)
-        {
-            _logger?.LogInformation($"Getting device item by path: {deviceItemPath}");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            // Retrieve the device by its path
-            return GetDeviceItemByPath(deviceItemPath);
-
-        }
-
-        #endregion
-
-        #region software
-
-        public PlcSoftware? GetPlcSoftware(string softwarePath)
-        {
-            _logger?.LogInformation($"Getting software by path: {softwarePath}");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            var softwareContainer = GetSoftwareContainer(softwarePath);
-
-            if (softwareContainer?.Software is PlcSoftware plcSoftware)
-            {
-                return plcSoftware;
-            }
-
-            return null;
-        }
-
-        public CompilerResult? CompileSoftware(string softwarePath, string password = "")
-        {
-            _logger?.LogInformation($"Compiling software by path: {softwarePath}");
-
-            if (IsProjectNull())
-            {
-                return null; // "Error, no project";
-            }
-
-            var softwareContainer = GetSoftwareContainer(softwarePath);
-
-            if (!string.IsNullOrEmpty(password))
-            {
-                var deviceItem = softwareContainer?.Parent as DeviceItem;
-
-                var admin = deviceItem?.GetService<SafetyAdministration>();
-                if (admin != null)
-                {
-                    if (!admin.IsLoggedOnToSafetyOfflineProgram)
-                    {
-                        SecureString secString = new NetworkCredential("", password).SecurePassword;
-                        try
-                        {
-                            admin.LoginToSafetyOfflineProgram(secString);
-                        }
-                        catch (Exception)
-                        {
-                            return null; // "Error, login to safety offline program failed";
-                        }
-                    }
-                }
-            }
-
-            if (softwareContainer?.Software is PlcSoftware plcSoftware)
-            {
-                try
-                {
-                    ICompilable compileService = plcSoftware.GetService<ICompilable>();
-
-                    CompilerResult result = compileService.Compile();
-
-                    return result;
-                }
-                catch (Exception)
-                {
-                    return null; // "Error, compiling failed";
-                }
-            }
-
-            return null; // "Error";
-        }
-
-        #endregion
-
-        #region blocks/types
-
-        public PlcBlock? GetBlock(string softwarePath, string blockPath)
-        {
-            _logger?.LogInformation($"Getting block by path: {blockPath}");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            var softwareContainer = GetSoftwareContainer(softwarePath);
-            if (softwareContainer?.Software is PlcSoftware plcSoftware)
-            {
-                var blockGroup = plcSoftware?.BlockGroup;
-
-                if (blockGroup != null)
-                {
-                    var path = blockPath.Contains("/") ? blockPath.Substring(0, blockPath.LastIndexOf("/")) : string.Empty;
-                    var regexName = blockPath.Contains("/") ? blockPath.Substring(blockPath.LastIndexOf("/") + 1) : blockPath;
-
-                    PlcBlock? block = null;
-
-                    var group = GetPlcBlockGroupByPath(softwarePath, path);
-                    if (group != null)
-                    {
-                        if (regexName.IndexOfAny(_regexChars) >= 0)
-                        {
-                            try
-                            {
-                                var regex = new Regex(regexName, RegexOptions.IgnoreCase);
-                                block = group.Blocks.FirstOrDefault(b => regex.IsMatch(b.Name)) as PlcBlock;
-                            }
-                            catch (Exception)
-                            {
-                                // Invalid regex, return null
-                                return null;
-                            }
-                        }
-                        else
-                        {
-                            block = group.Blocks.FirstOrDefault(b => b.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase));
-                        }
-
-                        return block;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        public PlcType? GetType(string softwarePath, string typePath)
-        {
-            _logger?.LogInformation($"Getting type by path: {typePath}");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            var softwareContainer = GetSoftwareContainer(softwarePath);
-            if (softwareContainer?.Software is PlcSoftware plcSoftware)
-            {
-                var typeGroup = plcSoftware?.TypeGroup;
-
-                if (typeGroup != null)
-                {
-                    var path = typePath.Contains("/") ? typePath.Substring(0, typePath.LastIndexOf("/")) : string.Empty;
-                    var regexName = typePath.Contains("/") ? typePath.Substring(typePath.LastIndexOf("/") + 1) : typePath;
-
-                    PlcType? type = null;
-
-                    var group = GetPlcTypeGroupByPath(softwarePath, path);
-                    if (group != null)
-                    {
-                        if (regexName.IndexOfAny(_regexChars) >= 0)
-                        {
-                            try
-                            {
-                                var regex = new Regex(regexName, RegexOptions.IgnoreCase);
-                                type = group.Types.FirstOrDefault(t => regex.IsMatch(t.Name)) as PlcType;
-                            }
-                            catch (Exception)
-                            {
-                                // Invalid regex, return null
-                                return null;
-                            }
-                        }
-                        else
-                        {
-                            type = group.Types.FirstOrDefault(t => t.Name.Equals(regexName, StringComparison.OrdinalIgnoreCase));
-                        }
-
-                        return type;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// Root-relative path of a block, e.g. "Common/CarrierRegister/GLOBAL_POSITIONING".
-        /// The system group ("Program blocks") is deliberately excluded so the result can be fed
-        /// straight back into GetBlock/ExportBlock as a blockPath.
-        /// </summary>
-        public string GetBlockPath(PlcBlock block)
-        {
-            if (block == null)
-            {
-                return string.Empty;
-            }
-
-            if (block.Parent is PlcBlockGroup parentGroup)
-            {
-                var groupPath = GetPlcBlockGroupPath(parentGroup, includeSystemRoot: false);
-                return string.IsNullOrEmpty(groupPath) ? block.Name : $"{groupPath}/{block.Name}";
-            }
-
-            return block.Name;
-        }
-
-        /// <summary>
-        /// Root-relative path of a PLC data type, the GetBlockPath counterpart.
-        /// </summary>
-        public string GetTypePath(PlcType type)
-        {
-            if (type == null)
-            {
-                return string.Empty;
-            }
-
-            if (type.Parent is PlcTypeGroup parentGroup)
-            {
-                var groupPath = GetPlcTypeGroupPath(parentGroup, includeSystemRoot: false);
-                return string.IsNullOrEmpty(groupPath) ? type.Name : $"{groupPath}/{type.Name}";
-            }
-
-            return type.Name;
-        }
-
-        public List<PlcBlock> GetBlocks(string softwarePath, string regexName = "")
-        {
-            _logger?.LogInformation("Getting blocks...");
-
-            if (IsProjectNull())
-            {
-                return [];
-            }
-
-            var list = new List<PlcBlock>();
-
-            try
-            {
-                var softwareContainer = GetSoftwareContainer(softwarePath);
-                if (softwareContainer?.Software is PlcSoftware plcSoftware)
-                {
-                    var group = plcSoftware?.BlockGroup;
-
-                    if (group != null)
-                    {
-                        GetBlocksRecursive(group, list, regexName);
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                // Console.WriteLine($"Error getting blocks: {ex.Message}");
-            }
-
-            return list;
-        }
-
-        public PlcBlockGroup? GetBlockRootGroup(string softwarePath)
-        {
-            _logger?.LogInformation("Getting block root group...");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            try
-            {
-                var softwareContainer = GetSoftwareContainer(softwarePath);
-                if (softwareContainer?.Software is PlcSoftware plcSoftware)
-                {
-                    return plcSoftware.BlockGroup;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Error getting block root group");
-            }
-
-            return null;
-        }
-
-        public List<PlcType> GetTypes(string softwarePath, string regexName = "")
-        {
-            _logger?.LogInformation("Getting types...");
-
-            if (IsProjectNull())
-            {
-                return [];
-            }
-
-            var list = new List<PlcType>();
-
-            try
-            {
-                var softwareContainer = GetSoftwareContainer(softwarePath);
-                if (softwareContainer?.Software is PlcSoftware plcSoftware)
-                {
-                    var group = plcSoftware?.TypeGroup;
-
-                    if (group != null)
-                    {
-                        GetTypesRecursive(group, list, regexName);
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                // Console.WriteLine($"Error getting user defined types: {ex.Message}");
-            }
-
-            return list;
-        }
-
-        public PlcBlock? ExportBlock(string softwarePath, string blockPath, string exportPath, bool preservePath = false)
-        {
-            _logger?.LogInformation($"Exporting block by path: {blockPath}");
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                var block = GetBlock(softwarePath, blockPath);
-
-                if (block == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, "Block not found");
-                }
-
-                if (preservePath)
-                {
-                    var groupPath = "";
-                    if (block.Parent is PlcBlockGroup parentGroup)
-                    {
-                        groupPath = GetPlcBlockGroupPath(parentGroup);
-                    }
-
-                    exportPath = Path.Combine(exportPath, groupPath.Replace('/', '\\'), $"{block.Name}.xml");
-                }
-                else
-                {
-                    exportPath = Path.Combine(exportPath, $"{block.Name}.xml");
-                }
-
-                // TIA Portal never exports inconsistent blocks
-                if (!block.IsConsistent)
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "Block is inconsistent; TIA Portal does not export inconsistent blocks.");
-                }
-
-                if (File.Exists(exportPath))
-                {
-                    File.Delete(exportPath);
-                }
-
-                block.Export(new FileInfo(exportPath), ExportOptions.None);
-
-                return block;
-            }
-            catch (Exception ex)
-            {
-                //If the exception is already a PortalException, use it; otherwise, wrap it in a new PortalException
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export failed", null, ex);
-
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["blockPath"] = blockPath;
-                pex.Data["exportPath"] = exportPath;
-
-                _logger?.LogError(pex, "ExportBlock failed for {SoftwarePath} {BlockPath} -> {ExportPath}", softwarePath, blockPath, exportPath);
-                throw pex;
-            }
-        }
-
-        public PlcType? ExportType(string softwarePath, string typePath, string exportPath, bool preservePath = false)
-        {
-            _logger?.LogInformation($"Exporting type by path: {typePath}");
-
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                var type = GetType(softwarePath, typePath);
-
-                if (type == null)
-                {
-                    throw new PortalException(PortalErrorCode.NotFound, "Type not found");
-                }
-
-                // TIA Portal never exports inconsistent types
-                if (!type.IsConsistent)
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "Type is inconsistent; TIA Portal does not export inconsistent types.");
-                }
-
-                if (preservePath)
-                {
-                    var groupPath = "";
-                    if (type.Parent is PlcTypeGroup parentGroup)
-                    {
-                        groupPath = GetPlcTypeGroupPath(parentGroup);
-                    }
-
-                    exportPath = Path.Combine(exportPath, groupPath.Replace('/', '\\'), $"{type.Name}.xml");
-                }
-                else
-                {
-                    exportPath = Path.Combine(exportPath, $"{type.Name}.xml");
-                }
-
-                if (File.Exists(exportPath))
-                {
-                    File.Delete(exportPath);
-                }
-
-                type.Export(new FileInfo(exportPath), ExportOptions.None);
-
-                return type;
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export failed", null, ex);
-
-                if (!pex.Data.Contains("softwarePath")) pex.Data["softwarePath"] = softwarePath;
-                if (!pex.Data.Contains("typePath")) pex.Data["typePath"] = typePath;
-                if (!pex.Data.Contains("exportPath")) pex.Data["exportPath"] = exportPath;
-
-                _logger?.LogError(pex, "ExportType failed for {SoftwarePath} {TypePath} -> {ExportPath}", softwarePath, typePath, exportPath);
-                throw pex;
-            }
-        }
-
-        public bool ImportBlock(string softwarePath, string groupPath, string importPath)
-        {
-            _logger?.LogInformation($"Importing block from path: {importPath}");
-
-            if (IsProjectNull())
-            {
-                return false;
-            }
-
-            var softwareContainer = GetSoftwareContainer(softwarePath);
-            if (softwareContainer?.Software is PlcSoftware plcSoftware)
-            {
-                var blockGroup = plcSoftware?.BlockGroup;
-
-                if (blockGroup != null)
-                {
-
-                    var group = GetPlcBlockGroupByPath(softwarePath, groupPath);
-                    if (group == null)
-                    {
-                        return false;
-                    }
-
-                    try
-                    {
-                        // Correct the argument type by using FileInfo instead of FileStream  
-                        var fileInfo = new FileInfo(importPath);
-                        if (fileInfo.Exists)
-                        {
-                            var list = group.Blocks.Import(fileInfo, ImportOptions.Override);
-                            if (list != null && list.Count > 0)
-                            {
-                                return true;
-                            }
-                        }
-
-                    }
-                    catch (Exception)
-                    {
-                        return false;
-                    }
-                }
-            }
-
-            return false;
-        }
-
-        public bool ImportType(string softwarePath, string groupPath, string importPath)
-        {
-            _logger?.LogInformation($"Importing type from path: {importPath}");
-
-            var success = false;
-
-            if (IsProjectNull())
-            {
-                return success;
-            }
-
-            var softwareContainer = GetSoftwareContainer(softwarePath);
-            if (softwareContainer?.Software is PlcSoftware plcSoftware)
-            {
-                var typeGroup = plcSoftware?.TypeGroup;
-
-                if (typeGroup != null)
-                {
-                    var group = GetPlcTypeGroupByPath(softwarePath, groupPath);
-                    if (group == null)
-                    {
-                        return false;
-                    }
-
-                    try
-                    {
-                        // Correct the argument type by using FileInfo instead of FileStream  
-                        var fileInfo = new FileInfo(importPath);
-                        if (fileInfo.Exists)
-                        {
-                            var list = group.Types.Import(fileInfo, ImportOptions.Override);
-                            if (list != null && list.Count > 0)
-                            {
-                                return true;
-                            }
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        return false;
-                    }
-                }
-            }
-
-            return success;
-        }
-
-        public IEnumerable<PlcBlock>? ExportBlocks(string softwarePath, string exportPath, string regexName = "", bool preservePath = false)
-        {
-            _logger?.LogInformation("Exporting blocks...");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            var exportList = new List<PlcBlock>();
-            var failures = new List<string>();
-            
-            PlcBlock[] list;
-
-            try
-            {
-                list = GetBlocks(softwarePath, regexName).ToArray();
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Failed to retrieve block list for {SoftwarePath}", softwarePath);
-                return exportList;
-            }
-
-            for (int k = 0; k < list.Count(); k++)
-            {
-                var block = list[k];
-
-                _logger?.LogDebug($"- Exporting block {k}/{list.Count()} : {block.Name}");
-
-                string path;
-                if (preservePath)
-                {
-                    var groupPath = "";
-                    if (block.Parent is PlcBlockGroup parentGroup)
-                    {
-                        groupPath = GetPlcBlockGroupPath(parentGroup);
-                    }
-                    path = Path.Combine(exportPath, groupPath.Replace('/', '\\'), $"{block.Name}.xml");
-                }
-                else
-                {
-                    path = Path.Combine(exportPath, $"{block.Name}.xml");
-                }
-
-                try
-                {
-                    if (!block.IsConsistent)
-                    {
-                        _logger?.LogWarning("Skipping inconsistent block {Name}", block.Name);
-
-                        continue;
-                    }
-
-                    var dir = Path.GetDirectoryName(path);
-                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                    {
-                        Directory.CreateDirectory(dir);
-                    }
-
-                    if (File.Exists(path))
-                    {
-                        try { File.Delete(path); }
-                        catch (Exception ioEx)
-                        {
-                            failures.Add($"{block.Name}: cannot delete existing file ({ioEx.Message})");
-                            _logger?.LogError(ioEx, "Delete failed for {File}", path);
-
-                            continue;
-                        }
-                    }
-
-                    try
-                    {
-                        block.Export(new FileInfo(path), ExportOptions.None);
-                    }
-                    catch (LicenseNotFoundException licEx)
-                    {
-                        failures.Add($"{block.Name}: license not found ({licEx.Message})");
-                        _logger?.LogError(licEx, "License issue exporting {Block}", block.Name);
-
-                        continue;
-                    }
-                    catch (EngineeringTargetInvocationException engEx)
-                    {
-                        failures.Add($"{block.Name}: target invocation failed ({engEx.Message})");
-                        _logger?.LogError(engEx, "TargetInvocationException exporting {Block}", block.Name);
-
-                        continue;
-                    }
-                    catch (Exception ex)
-                    {
-                        failures.Add($"{block.Name}: export failed ({ex.Message})");
-                        _logger?.LogError(ex, "Export failed for {Block}", block.Name);
-
-                        continue;
-                    }
-
-                    exportList.Add(block);
-                }
-                catch (Exception ex)
-                {
-                    // Catch only truly unexpected wrapper-level errors
-                    failures.Add($"{block.Name}: unexpected exception ({ex.Message})");
-                    _logger?.LogError(ex, "Unexpected error at block {Block}", block.Name);
-                    // continue with next block
-                }
-            }
-
-            if (failures.Count > 0)
-            {
-                _logger?.LogWarning($"ExportBlocks completed with {failures.Count} failures out of {list.Count()}. First failure: {failures[0]}");
-                // Optionally: _logger?.LogDebug("All failures: {Failures}", string.Join("; ", failures));
-            }
-            else
-            {
-                _logger?.LogInformation($"ExportBlocks completed successfully. Exported {exportList.Count} blocks.");
-            }
-
-            return exportList;
-        }
-
-        public IEnumerable<PlcType>? ExportTypes(string softwarePath, string exportPath, string regexName = "", bool preservePath = false)
-        {
-            _logger?.LogInformation("Exporting types...");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            var exportList = new List<PlcType>();
-            var failures = new List<string>();
-
-            PlcType[] list;
-
-            try
-            {
-                list = GetTypes(softwarePath, regexName).ToArray();
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Failed to retrieve type list for {SoftwarePath}", softwarePath);
-                return exportList;
-            }
-
-            for (int i = 0; i < list.Count(); i++)
-            {
-                var type = list[i];
-
-                _logger?.LogDebug("- Exporting type {Index}/{Total} : {Name}", i, list.Count(), type.Name);
-
-                string path;
-                if (preservePath)
-                {
-                    var groupPath = "";
-                    if (type.Parent is PlcTypeGroup parentGroup)
-                    {
-                        groupPath = GetPlcTypeGroupPath(parentGroup);
-                    }
-                    path = Path.Combine(exportPath, groupPath.Replace('/', '\\'), $"{type.Name}.xml");
-                }
-                else
-                {
-                    path = Path.Combine(exportPath, $"{type.Name}.xml");
-                }
-
-                try
-                {
-                    if (!type.IsConsistent)
-                    {
-                        _logger?.LogWarning("Skipping inconsistent type {Name}", type.Name);
-                        continue;
-                    }
-
-                    var dir = Path.GetDirectoryName(path);
-                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                    {
-                        Directory.CreateDirectory(dir);
-                    }
-
-                    if (File.Exists(path))
-                    {
-                        try
-                        {
-                            File.Delete(path);
-                        }
-                        catch (Exception ioEx)
-                        {
-                            failures.Add($"{type.Name}: cannot delete existing file ({ioEx.Message})");
-                            _logger?.LogError(ioEx, "Delete failed for {File}", path);
-                            continue;
-                        }
-                    }
-
-                    try
-                    {
-                        type.Export(new FileInfo(path), ExportOptions.None);
-                    }
-                    catch (Exception ex)
-                    {
-                        failures.Add($"{type.Name}: export failed ({ex.Message})");
-                        _logger?.LogError(ex, "Export failed for type {Type}", type.Name);
-                        continue;
-                    }
-
-                    exportList.Add(type);
-                }
-                catch (Exception ex)
-                {
-                    failures.Add($"{type.Name}: unexpected exception ({ex.Message})");
-                    _logger?.LogError(ex, "Unexpected error at type {Type}", type.Name);
-                }
-            }
-
-            if (failures.Count > 0)
-            {
-                _logger?.LogWarning($"ExportTypes completed with {failures.Count} failures out of {list.Count()}. First failure: {failures[0]}");
-            }
-            else
-            {
-                _logger?.LogInformation($"ExportTypes completed successfully. Exported {exportList.Count} types.");
-            }
-
-            return exportList;
-        }
-        
-
-        public bool ExportAsDocuments(string softwarePath, string blockPath, string exportPath, bool preservePath = false)
-        {
-            _logger?.LogInformation($"Exporting block as documents by path: {blockPath}");
-            var success = false;
-            try
-            {
-                if (IsProjectNull())
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
-                }
-
-                if (Engineering.TiaMajorVersion < 20)
-                {
-                    throw new PortalException(PortalErrorCode.InvalidState, "ExportAsDocuments requires TIA Portal V20 or newer");
-                }
-
-                
-                var softwareContainer = GetSoftwareContainer(softwarePath);
-                if (softwareContainer?.Software is PlcSoftware plcSoftware)
-                {
-                    if (plcSoftware != null)
-                    {
-                        // Export code blocks as documents
-                        // https://docs.tia.siemens.cloud/r/en-us/v20/creating-and-managing-blocks/exporting-and-importing-blocks-in-simatic-sd-format-s7-1200-s7-1500/exporting-and-importing-blocks-in-simatic-sd-format-s7-1200-s7-1500
-
-                        var groupPath = blockPath.Contains("/") ? blockPath.Substring(0, blockPath.LastIndexOf("/")) : string.Empty;
-                        var blockName = blockPath.Contains("/") ? blockPath.Substring(blockPath.LastIndexOf("/") + 1) : blockPath;
-
-                        var group = GetPlcBlockGroupByPath(softwarePath, groupPath);
-
-                        //group?.Blocks.ForEach(b => Console.WriteLine($"Block: {b.Name}, Type: {b.GetType().Name}"));
-
-                        // join exportPath and groupPath
-                        if (!Directory.Exists(exportPath))
-                        {
-                            Directory.CreateDirectory(exportPath);
-                        }
-
-                        if (preservePath && !string.IsNullOrEmpty(groupPath))
-                        {
-                            exportPath = Path.Combine(exportPath, groupPath);
-
-                            if (!Directory.Exists(exportPath))
-                            {
-                                Directory.CreateDirectory(exportPath);
-                            }
-                        }
-
-                        try
-                        {
-                            // delete files s7dcl/s7res if already exists
-                            var blockFiles7dclPath = Path.Combine(exportPath, $"{blockName}.s7dcl");
-                            if (File.Exists(blockFiles7dclPath))
-                            {
-                                File.Delete(blockFiles7dclPath);
-                            }
-                            var blockFiles7resPath = Path.Combine(exportPath, $"{blockName}.s7res");
-                            if (File.Exists(blockFiles7resPath))
-                            {
-                                File.Delete(blockFiles7resPath);
-                            }
-
-                            var result = group?.Blocks.Find(blockName)?.ExportAsDocuments(new DirectoryInfo(exportPath), blockName);
-
-                            if (result != null && result.State == DocumentResultState.Success)
-                            {
-                                success = true;
-                            }
-                        }
-                        catch (EngineeringNotSupportedException ex)
-                        {
-                            // The export or import of blocks with mixed programming languages is not possible
-                            throw new PortalException(PortalErrorCode.ExportFailed, $"EngineeringNotSupportedException at block '{blockName}'. {ex.Message}", null, ex);
-                        }
-                        catch (Exception ex)
-                        {
-                            throw new PortalException(PortalErrorCode.ExportFailed, $"Exception at block '{blockName}'. {ex.Message}", null, ex);
-                        }
-
-                    }
-
-                }
-
-
-            }
-            catch (Exception ex)
-            {
-                var pex = ex as PortalException ?? new PortalException(PortalErrorCode.ExportFailed, "Export failed", null, ex);
-
-                pex.Data["softwarePath"] = softwarePath;
-                pex.Data["blockPath"] = blockPath;
-                pex.Data["exportPath"] = exportPath;
-
-                _logger?.LogError(pex, "ExportAsDocuments failed for {SoftwarePath} {BlockPath} -> {ExportPath}", softwarePath, blockPath, exportPath);
-                throw pex;
-            }
-            return success;
-        }
-
-        // TIA portal crashes when exporting blocks as documents, :-(
-        public IEnumerable<PlcBlock>? ExportBlocksAsDocuments(string softwarePath, string exportPath, string regexName = "", bool preservePath = false)
-        {
-            _logger?.LogInformation("Exporting blocks as documents...");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            if (Engineering.TiaMajorVersion < 20)
-            {
-                _logger?.LogWarning("ExportBlocksAsDocuments is only supported on TIA Portal V20 or newer");
-                return null;
-            }
-
-            var exportList = new List<PlcBlock>();
-            var failures = new List<string>();
-
-            PlcBlock[] list;
-            try
-            {
-                list = GetBlocks(softwarePath, regexName).ToArray();
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, $"Failed to retrieve block list for {softwarePath}");
-                return exportList;
-            }
-
-            for (int i = 0; i < list.Count(); i++)
-            {
-                var block = list[i];
-
-                _logger?.LogDebug($"- Exporting block as document {i}/{list.Count()} : {block.Name}");
-
-                // Skip inconsistent blocks (TIA generally won’t export them)
-                if (!block.IsConsistent)
-                {
-                    _logger?.LogWarning($"Skipping inconsistent block {block.Name}");
-                    continue;
-                }
-
-                // Determine base directory (preserve group path if requested)
-                string targetDir = exportPath;
-                if (preservePath && block.Parent is PlcBlockGroup parentGroup)
-                {
-                    var groupPath = GetPlcBlockGroupPath(parentGroup);
-                    if (!string.IsNullOrWhiteSpace(groupPath))
-                    {
-                        targetDir = Path.Combine(exportPath, groupPath.Replace('/', '\\'));
-                    }
-                }
-
-                try
-                {
-                    if (!Directory.Exists(targetDir))
-                    {
-                        Directory.CreateDirectory(targetDir);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    failures.Add($"{block.Name}: cannot create directory '{targetDir}' ({ex.Message})");
-                    _logger?.LogError(ex, $"Directory creation failed for {targetDir}");
-                    continue;
-                }
-
-                var fileDcl = Path.Combine(targetDir, $"{block.Name}.s7dcl");
-                var fileRes = Path.Combine(targetDir, $"{block.Name}.s7res");
-
-                // Clean previous artifacts
-                foreach (var f in new[] { fileDcl, fileRes })
-                {
-                    try
-                    {
-                        if (File.Exists(f))
-                        {
-                            File.Delete(f);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        failures.Add($"{block.Name}: cannot delete existing '{Path.GetFileName(f)}' ({ex.Message})");
-                        _logger?.LogError(ex, $"Failed deleting existing file {f}");
-                        // Continue anyway; export might overwrite.
-                    }
-                }
-
-                try
-                {
-                    DocumentExportResult? result = null;
-                    try
-                    {
-                        result = block.ExportAsDocuments(new DirectoryInfo(targetDir), block.Name);
-                    }
-                    catch (EngineeringNotSupportedException ex)
-                    {
-                        failures.Add($"{block.Name}: not supported ({ex.Message})");
-                        _logger?.LogWarning(ex, $"EngineeringNotSupported exporting {block.Name}");
-                        continue;
-                    }
-                    catch (LicenseNotFoundException ex)
-                    {
-                        failures.Add($"{block.Name}: license not found ({ex.Message})");
-                        _logger?.LogError(ex, $"License issue exporting {block.Name}");
-                        continue;
-                    }
-                    catch (Exception ex)
-                    {
-                        failures.Add($"{block.Name}: export threw ({ex.Message})");
-                        _logger?.LogError(ex, $"ExportAsDocuments failed for {block.Name}");
-                        continue;
-                    }
-
-                    if (result == null)
-                    {
-                        failures.Add($"{block.Name}: no result returned");
-                        continue;
-                    }
-
-                    if (result.State == DocumentResultState.Success)
-                    {
-                        exportList.Add(block);
-                    }
-                    else
-                    {
-                        failures.Add($"{block.Name}: result state {result.State}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    failures.Add($"{block.Name}: unexpected exception ({ex.Message})");
-                    _logger?.LogError(ex, $"Unexpected wrapper error for {block.Name}");
-                }
-            }
-
-            if (failures.Count > 0)
-            {
-                _logger?.LogWarning($"ExportBlocksAsDocuments completed with {failures.Count} failures out of {list.Count()}. First failure: {failures[0]}");
-                // Optional verbose list:
-                // _logger?.LogDebug("All failures: {Failures}", string.Join("; ", failures));
-            }
-            else
-            {
-                _logger?.LogInformation($"ExportBlocksAsDocuments completed successfully. Exported {exportList.Count} blocks.");
-            }
-
-            return exportList;
-        }
-
-        public bool ImportFromDocuments(string softwarePath, string groupPath, string importPath, string fileNameWithoutExtension, ImportDocumentOptions option)
-        {
-            _logger?.LogInformation($"Importing block from documents: {fileNameWithoutExtension} in {importPath}");
-
-            if (IsProjectNull())
-            {
-                return false;
-            }
-
-            if (Engineering.TiaMajorVersion < 20)
-            {
-                _logger?.LogWarning("ImportFromDocuments is only supported on TIA Portal V20 or newer");
-                return false;
-            }
-
-            try
-            {
-                var softwareContainer = GetSoftwareContainer(softwarePath);
-                if (softwareContainer?.Software is PlcSoftware plcSoftware)
-                {
-                    var group = GetPlcBlockGroupByPath(softwarePath, groupPath);
-                    var dir = new DirectoryInfo(importPath);
-                    if (!dir.Exists)
-                    {
-                        _logger?.LogWarning($"Import directory does not exist: {importPath}");
-                        return false;
-                    }
-
-                    DocumentImportResult? result = null;
-                    try
-                    {
-                        result = (group != null)
-                            ? group.Blocks.ImportFromDocuments(dir, fileNameWithoutExtension, option)
-                            : plcSoftware.BlockGroup.Blocks.ImportFromDocuments(dir, fileNameWithoutExtension, option);
-                    }
-                    catch (EngineeringNotSupportedException ex)
-                    {
-                        throw new PortalException(PortalErrorCode.ExportFailed, $"EngineeringNotSupportedException at file '{fileNameWithoutExtension}'. {ex.Message}", null, ex);
-                    }
-
-                    if (result != null && result.State == DocumentResultState.Success)
-                    {
-                        return true;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Error importing block from documents");
-            }
-            return false;
-        }
-
-        public IEnumerable<PlcBlock>? ImportBlocksFromDocuments(string softwarePath, string groupPath, string importPath, string regexName, ImportDocumentOptions option, bool preservePath = false)
-        {
-            _logger?.LogInformation($"Importing blocks from documents in {importPath} with regex '{regexName}'");
-
-            if (IsProjectNull())
-            {
-                return null;
-            }
-
-            if (Engineering.TiaMajorVersion < 20)
-            {
-                _logger?.LogWarning("ImportBlocksFromDocuments is only supported on TIA Portal V20 or newer");
-                return null;
-            }
-
-            var imported = new List<PlcBlock>();
-
-            try
-            {
-                var softwareContainer = GetSoftwareContainer(softwarePath);
-                if (softwareContainer?.Software is PlcSoftware plcSoftware)
-                {
-                    var group = GetPlcBlockGroupByPath(softwarePath, groupPath);
-                    var dir = new DirectoryInfo(importPath);
-                    if (!dir.Exists)
-                    {
-                        _logger?.LogWarning($"Import directory does not exist: {importPath}");
-                        return imported;
-                    }
-
-                    var rx = string.IsNullOrWhiteSpace(regexName)
-                        ? null
-                        : new Regex(regexName, RegexOptions.Compiled);
-
-                    // Consider .s7dcl as the primary index; .s7res is optional supplemental
-                    var files = dir.GetFiles("*.s7dcl", SearchOption.TopDirectoryOnly);
-                    foreach (var file in files)
-                    {
-                        var name = Path.GetFileNameWithoutExtension(file.Name);
-                        if (rx != null && !rx.IsMatch(name))
-                        {
-                            continue;
-                        }
-
-                        try
-                        {
-                            var result = (group != null)
-                                ? group.Blocks.ImportFromDocuments(dir, name, option)
-                                : plcSoftware.BlockGroup.Blocks.ImportFromDocuments(dir, name, option);
-
-                            if (result != null && result.State == DocumentResultState.Success && result.ImportedPlcBlocks != null)
-                            {
-                                foreach (var blk in result.ImportedPlcBlocks)
-                                {
-                                    if (blk != null)
-                                    {
-                                        imported.Add(blk);
-                                    }
-                                }
-                            }
-                        }
-                        catch (EngineeringNotSupportedException)
-                        {
-                            // mixed languages etc.; skip but continue batch
-                        }
-                        catch (Exception)
-                        {
-                            // skip problematic item, continue
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Error importing blocks from documents");
-            }
-
-            return imported;
-        }
-
         #endregion
 
         #region private helper
@@ -1771,7 +538,9 @@ namespace TiaMcpServer.Siemens
             return false;
         }
 
-        #region  GetTree ...
+        #endregion
+
+        #region get tree ...
 
         private string GetTreePrefix(List<bool> ancestorStates, bool isLast)
         {
@@ -1847,7 +616,7 @@ namespace TiaMcpServer.Siemens
                 }
             }
         }
-        
+
         private void GetProjectTreeGroupDevices(StringBuilder sb, DeviceComposition devices, List<bool> ancestorStates, bool hasSubGroups)
         {
             var deviceList = devices.ToList();
@@ -1865,7 +634,7 @@ namespace TiaMcpServer.Siemens
                 }
             }
         }
-        
+
         private void GetProjectTreeSubGroups(StringBuilder sb, DeviceUserGroupComposition groups, List<bool> ancestorStates)
         {
             var groupList = groups.ToList();
@@ -1920,7 +689,7 @@ namespace TiaMcpServer.Siemens
                 }
             }
         }
-        
+
         private void GetProjectTreeItems(StringBuilder sb, DeviceItemAssociation items, List<bool> ancestorStates, bool hasSubDeviceItems)
         {
             var itemsList = items.ToList();
@@ -1933,7 +702,6 @@ namespace TiaMcpServer.Siemens
                 sb.AppendLine($"{GetTreePrefix(ancestorStates, isLastItem)}{subItem.Name} [Hardware Component]");
             }
         }
-
 
         private void GetProjectTreeDeviceItemSoftware(StringBuilder sb, DeviceItem deviceItem, List<bool> ancestorStates)
         {
@@ -1996,587 +764,100 @@ namespace TiaMcpServer.Siemens
 
         #endregion
 
-        #region GetSoftwareTree ...
+        // From the former Portal.Transactions.cs:
+        // Atomic, undoable write scopes.
+        //
+        // Callers: the Guarded helper in McpServer.cs, which wraps every project-mutating
+        // tool. Affected API: no signature changes - the wrapper is invisible to callers, it only
+        // changes what TIA Portal does with the edits underneath. Reads and writes no data files.
+        //
+        // Why: before this, a write tool that failed halfway left the project half-changed, and a
+        // batch of edits appeared in the TIA Portal undo stack as an unlabelled pile of steps.
+        // Siemens.Engineering.ExclusiveAccess.Transaction gives both an all-or-nothing commit and
+        // a single named undo entry.
+        //
+        // Deliberately best-effort: if the running TIA Portal refuses exclusive access - another
+        // dialog holds it, or the project does not support transactions - the write still runs,
+        // unwrapped, exactly as it did before. Refusing to write at all would be a regression for
+        // the sake of a safety net.
 
-        /// <param name="sections">
-        /// Comma separated subset of "blocks,types,tags,watch,sources", or "all" (the default).
-        /// Lets a client keep the output small on a large PLC.
+        #region transactions
+
+        /// <summary>
+        /// Runs <paramref name="body"/> inside a named transaction when TIA Portal allows one.
+        /// The transaction commits only if the body returns without throwing, so a failed write
+        /// rolls back instead of leaving the project half-edited.
+        /// </summary>
+        /// <param name="description">
+        /// What the operator sees: the exclusive-access banner while it runs, and the undo entry
+        /// afterwards. Keep it short and name the tool.
         /// </param>
-        public string GetSoftwareTree(string softwarePath, string sections = "all")
+        public T InTransaction<T>(string description, Func<T> body)
         {
-            _logger?.LogInformation("Getting software tree for path: {SoftwarePath}", softwarePath);
-
-            if (IsProjectNull())
+            if (_portal == null || _project is not ITransactionSupport persistence)
             {
-                return string.Empty;
+                // No portal, or a project that cannot host a transaction: run the write directly
+                // rather than failing it.
+                return body();
             }
+
+            ExclusiveAccess? access;
 
             try
             {
-                var softwareContainer = GetSoftwareContainer(softwarePath);
-                if (softwareContainer?.Software is PlcSoftware plcSoftware)
-                {
-                    StringBuilder sb = new();
-                    sb.AppendLine($"{plcSoftware.Name} [PLC Software]");
-
-                    var selected = ParseTreeSections(sections);
-                    var ancestorStates = new List<bool>();
-
-                    // Every section takes an "is last" flag; that can only be decided once all
-                    // present sections are known, so they are collected before being rendered.
-                    var renderers = new List<Action<bool>>();
-
-                    var blockGroup = plcSoftware.BlockGroup;
-                    if (selected.Contains("blocks") && blockGroup != null)
-                    {
-                        renderers.Add(isLast => GetSoftwareTreeBlockGroup(sb, blockGroup, ancestorStates, "Program blocks", isLast));
-                    }
-
-                    var typeGroup = plcSoftware.TypeGroup;
-                    if (selected.Contains("types") && typeGroup != null)
-                    {
-                        renderers.Add(isLast => GetSoftwareTreeTypeGroup(sb, typeGroup, ancestorStates, "PLC data types", isLast));
-                    }
-
-                    renderers.AddRange(BuildAdditionalTreeSections(plcSoftware, sb, ancestorStates, selected));
-
-                    for (int i = 0; i < renderers.Count; i++)
-                    {
-                        renderers[i](i == renderers.Count - 1);
-                    }
-
-                    return sb.ToString();
-                }
-                else
-                {
-                    return $"No PLC software found at path: {softwarePath}";
-                }
+                access = _portal.ExclusiveAccess(description);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error getting software tree for {SoftwarePath}", softwarePath);
-                return $"Error retrieving software tree: {ex.Message}";
+                _logger?.LogDebug(ex, "Exclusive access refused for '{Description}'; writing without a transaction", description);
+
+                return body();
+            }
+
+            using (access)
+            {
+                Transaction? transaction;
+
+                try
+                {
+                    transaction = access.Transaction(persistence, description);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "Transaction refused for '{Description}'; writing without one", description);
+
+                    return body();
+                }
+
+                using (transaction)
+                {
+                    var result = body();
+
+                    // Only reached when the body did not throw. Without this call the using
+                    // block rolls the transaction back on dispose.
+                    transaction.CommitOnDispose();
+
+                    if (access.IsCancellationRequested)
+                    {
+                        _logger?.LogInformation("The operator requested cancellation during '{Description}'", description);
+                    }
+
+                    return result;
+                }
             }
         }
-        
-        private void GetSoftwareTreeBlockGroup(StringBuilder sb, PlcBlockGroup blockGroup, List<bool> ancestorStates, string groupLabel, bool isLastSection)
+
+        /// <summary>Void counterpart of <see cref="InTransaction{T}"/>.</summary>
+        public void InTransaction(string description, Action body)
         {
-            sb.AppendLine($"{GetTreePrefix(ancestorStates, isLastSection)}{groupLabel}"); // [Collection]
-            var newAncestorStates = new List<bool>(ancestorStates) { isLastSection };
-            
-            // Get blocks in this group
-            var blocks = blockGroup.Blocks.ToList();
-            var subGroups = blockGroup.Groups.ToList();
-            
-            // First, add all blocks
-            for (int i = 0; i < blocks.Count; i++)
+            InTransaction(description, () =>
             {
-                var block = blocks[i];
-                // Block is last only if it's the last block AND there are no subgroups following
-                var isLastBlock = (i == blocks.Count - 1) && (subGroups.Count == 0);
+                body();
 
-                var blockTypeName = new[] { "ArrayDB", "GlobalDB", "InstanceDB" }.Contains(block.GetType().Name)
-                    ? "DB"
-                    : block.GetType().Name;
-
-                sb.AppendLine($"{GetTreePrefix(newAncestorStates, isLastBlock)}{block.Name} [{blockTypeName}{block.Number}, {block.ProgrammingLanguage}]");
-            }
-            
-            // Then, add all subgroups recursively
-            for (int i = 0; i < subGroups.Count; i++)
-            {
-                var subGroup = subGroups[i];
-                var isLastGroup = i == subGroups.Count - 1;
-                
-                sb.AppendLine($"{GetTreePrefix(newAncestorStates, isLastGroup)}{subGroup.Name}"); // [Block Group]
-
-                var groupAncestorStates = new List<bool>(newAncestorStates) { isLastGroup };
-                GetSoftwareTreeBlockGroupRecursive(sb, subGroup, groupAncestorStates);
-            }
-        }
-        
-        private void GetSoftwareTreeBlockGroupRecursive(StringBuilder sb, PlcBlockGroup blockGroup, List<bool> ancestorStates)
-        {
-            // Get blocks in this group
-            var blocks = blockGroup.Blocks.ToList();
-            var subGroups = blockGroup.Groups.ToList();
-            
-            // First, add all blocks
-            for (int i = 0; i < blocks.Count; i++)
-            {
-                var block = blocks[i];
-                // Block is last only if it's the last block AND there are no subgroups following
-                var isLastBlock = (i == blocks.Count - 1) && (subGroups.Count == 0);
-
-                var blockTypeName = new[] { "ArrayDB", "GlobalDB", "InstanceDB" }.Contains(block.GetType().Name)
-                    ? "DB"
-                    : block.GetType().Name;
-
-                sb.AppendLine($"{GetTreePrefix(ancestorStates, isLastBlock)}{block.Name} [{blockTypeName}{block.Number}, {block.ProgrammingLanguage}]");
-            }
-            
-            // Then, add all subgroups recursively
-            for (int i = 0; i < subGroups.Count; i++)
-            {
-                var subGroup = subGroups[i];
-                var isLastGroup = i == subGroups.Count - 1;
-                
-                sb.AppendLine($"{GetTreePrefix(ancestorStates, isLastGroup)}{subGroup.Name}"); // [Block Group]
-
-                var groupAncestorStates = new List<bool>(ancestorStates) { isLastGroup };
-                GetSoftwareTreeBlockGroupRecursive(sb, subGroup, groupAncestorStates);
-            }
-        }
-        
-        private void GetSoftwareTreeTypeGroup(StringBuilder sb, PlcTypeGroup typeGroup, List<bool> ancestorStates, string groupLabel, bool isLastSection)
-        {
-            
-            sb.AppendLine($"{GetTreePrefix(ancestorStates, isLastSection)}{groupLabel}"); // [Collection]
-            var newAncestorStates = new List<bool>(ancestorStates) { isLastSection };
-            
-            // Get types in this group
-            var types = typeGroup.Types.ToList();
-            var subGroups = typeGroup.Groups.ToList();
-            
-            // First, add all types
-            for (int i = 0; i < types.Count; i++)
-            {
-                var type = types[i];
-                // Type is last only if it's the last type AND there are no subgroups following
-                var isLastType = (i == types.Count - 1) && (subGroups.Count == 0);
-
-                var typeTypeName = type.GetType().Name;
-                typeTypeName = typeTypeName=="PlcStruct" ? "UDT": typeTypeName;
-
-                sb.AppendLine($"{GetTreePrefix(newAncestorStates, isLastType)}{type.Name} [{typeTypeName}]");
-            }
-            
-            // Then, add all subgroups recursively
-            for (int i = 0; i < subGroups.Count; i++)
-            {
-                var subGroup = subGroups[i];
-                var isLastGroup = i == subGroups.Count - 1;
-                
-                sb.AppendLine($"{GetTreePrefix(newAncestorStates, isLastGroup)}{subGroup.Name}"); // [Type Group]
-
-                var groupAncestorStates = new List<bool>(newAncestorStates) { isLastGroup };
-                GetSoftwareTreeTypeGroupRecursive(sb, subGroup, groupAncestorStates);
-            }
-        }
-        
-        private void GetSoftwareTreeTypeGroupRecursive(StringBuilder sb, PlcTypeGroup typeGroup, List<bool> ancestorStates)
-        {
-            // Get types in this group
-            var types = typeGroup.Types.ToList();
-            var subGroups = typeGroup.Groups.ToList();
-            
-            // First, add all types
-            for (int i = 0; i < types.Count; i++)
-            {
-                var type = types[i];
-                // Type is last only if it's the last type AND there are no subgroups following
-                var isLastType = (i == types.Count - 1) && (subGroups.Count == 0);
-
-                var typeTypeName = type.GetType().Name;
-                typeTypeName = typeTypeName == "PlcStruct" ? "UDT" : typeTypeName;
-
-                sb.AppendLine($"{GetTreePrefix(ancestorStates, isLastType)}{type.Name} [{typeTypeName}]");
-            }
-            
-            // Then, add all subgroups recursively
-            for (int i = 0; i < subGroups.Count; i++)
-            {
-                var subGroup = subGroups[i];
-                var isLastGroup = i == subGroups.Count - 1;
-                
-                sb.AppendLine($"{GetTreePrefix(ancestorStates, isLastGroup)}{subGroup.Name}"); // [Type Group]
-
-                var groupAncestorStates = new List<bool>(ancestorStates) { isLastGroup };
-                GetSoftwareTreeTypeGroupRecursive(sb, subGroup, groupAncestorStates);
-            }
+                return true;
+            });
         }
 
         #endregion
-
-        #region GetSoftwareContainer ...
-
-        private SoftwareContainer? GetSoftwareContainer(string softwarePath)
-        {
-            if (_project == null)
-            {
-                return null;
-            }
-
-            string[] pathSegments = softwarePath.Split('/');
-            int index = 0;
-
-            if (index >= pathSegments.Length)
-                return null;
-
-            string segment = pathSegments[index];
-            SoftwareContainer? softwareContainer = null;
-
-            // in Devices
-            if (_project.Devices != null)
-            {
-                softwareContainer = GetSoftwareContainerInDevices(_project.Devices, pathSegments, index);
-                if (softwareContainer != null)
-                {
-                    return softwareContainer;
-                }
-            }
-
-            // in Groups
-            if (_project.DeviceGroups != null)
-            {
-                softwareContainer = GetSoftwareContainerInGroups(_project.DeviceGroups, pathSegments, index);
-                if (softwareContainer != null)
-                {
-                    return softwareContainer;
-                }
-            }
-
-            return null;
-        }
-
-        private SoftwareContainer? GetSoftwareContainerInDevices(DeviceComposition devices, string[] pathSegments, int index)
-        {
-
-            if (index >= pathSegments.Length)
-                return null;
-
-            string segment = pathSegments[index];
-            string nextSegment = index + 1 < pathSegments.Length ? pathSegments[index + 1] : string.Empty;
-
-            if (devices != null)
-            {
-                SoftwareContainer? softwareContainer = null;
-                Device? device = null;
-                DeviceItem? deviceItem = null;
-
-                // a pc based plc has a Device.Name = 'PC-System_1' or something like that, which is visible in the TIA-Portal IDE
-                // use segment to find device
-                device = devices.FirstOrDefault(d => d.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
-                if (device != null)
-                {
-                    // then use next segment to find device item
-                    deviceItem = device.DeviceItems.FirstOrDefault(di => di.Name.Equals(nextSegment, StringComparison.OrdinalIgnoreCase));
-                    // but here we use next segment to find device item
-                    softwareContainer = GetSoftwareContainerInDeviceItem(deviceItem, pathSegments, index + 1);
-                    if (softwareContainer != null)
-                    {
-                        return softwareContainer;
-                    }
-                }
-
-                // a hardware plc has a Device.Name = 'S7-1500/ET200MP-Station_1' or something like that, which is not visible in the TIA-Portal IDE
-                // ignored segment for Device.Name and use it for DeviceItem.Name
-                deviceItem = devices
-                    .SelectMany(d => d.DeviceItems)
-                    .FirstOrDefault(di => di.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
-                if (deviceItem != null)
-                {
-                    return GetSoftwareContainerInDeviceItem(deviceItem, pathSegments, index);
-                }
-
-            }
-
-            return null;
-        }
-
-        private SoftwareContainer? GetSoftwareContainerInGroups(DeviceUserGroupComposition groups, string[] pathSegments, int index)
-        {
-            if (index >= pathSegments.Length)
-                return null;
-
-            string segment = pathSegments[index];
-            SoftwareContainer? softwareContainer = null;
-
-            if (groups != null)
-            {
-                var group = groups.FirstOrDefault(g => g.Name.Equals(segment));
-                if (group != null)
-                {
-                    // when segment matched
-                    softwareContainer = GetSoftwareContainerInDevices(group.Devices, pathSegments, index + 1);
-                    if (softwareContainer != null)
-                    {
-                        return softwareContainer;
-                    }
-
-                    return GetSoftwareContainerInGroups(group.Groups, pathSegments, index + 1);
-                }
-            }
-
-            return null;
-        }
-
-        private SoftwareContainer? GetSoftwareContainerInDeviceItem(DeviceItem deviceItem, string[] pathSegments, int index)
-        {
-            if (deviceItem != null)
-            {
-                // when segment matched
-                if (index == pathSegments.Length - 1)
-                {
-                    // get from DeviceItem
-                    var softwareContainer = deviceItem.GetService<SoftwareContainer>();
-                    if (softwareContainer != null)
-                    {
-                        return softwareContainer;
-                    }
-                }
-            }
-
-            return null;
-        }
-
-        #endregion
-
-        #region Get...ByPath
-
-        private Device? GetDeviceByPath(string devicePath)
-        {
-            if (_project?.Devices == null || string.IsNullOrWhiteSpace(devicePath))
-                return null;
-
-            var pathSegments = devicePath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-            if (pathSegments.Length == 0)
-            {
-                return null;
-            }
-
-            // Try top-level device first
-            if (pathSegments.Length == 1)
-            {
-                return _project.Devices.FirstOrDefault(d => d.Name.Equals(pathSegments[0], StringComparison.OrdinalIgnoreCase));
-            }
-
-            // Traverse device groups
-            DeviceUserGroupComposition? groups = _project.DeviceGroups;
-            DeviceUserGroup? group = groups?.FirstOrDefault(g => g.Name.Equals(pathSegments[0], StringComparison.OrdinalIgnoreCase));
-
-            if (group == null)
-            {
-                return null;
-            }
-
-            for (int i = 1; i < pathSegments.Length; i++)
-            {
-                // Try to find device in current group
-                var device = group.Devices.FirstOrDefault(d => d.Name.Equals(pathSegments[i], StringComparison.OrdinalIgnoreCase));
-                if (device != null)
-                {
-                    return device;
-                }
-
-                // Try to find subgroup
-                group = group.Groups.FirstOrDefault(g => g.Name.Equals(pathSegments[i], StringComparison.OrdinalIgnoreCase));
-                if (group == null)
-                {
-                    break;
-                }
-            }
-
-            return null;
-        }
-
-        private DeviceItem? GetDeviceItemByPath(string deviceItemPath)
-        {
-            if (_project == null || _project.Devices == null)
-            {
-                return null;
-            }
-
-            // Split the device path by '/' to get each device name  
-            var pathSegments = deviceItemPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-
-            DeviceItem? deviceItem = null;
-
-            // initial devices and groups
-            var devices = _project.Devices;
-            var groups = _project.DeviceGroups;
-
-            for (int index = 0; index < pathSegments.Length; index++)
-            {
-                deviceItem = GetDeviceItemFromDevice(pathSegments, devices, index);
-
-                if (deviceItem == null)
-                {
-                    // search in groups
-                    var group = groups?.FirstOrDefault(g => g.Name.Equals(pathSegments[index], StringComparison.OrdinalIgnoreCase));
-                    if (group != null)
-                    {
-                        devices = group.Devices;
-                        if (devices != null)
-                        {
-                            deviceItem = GetDeviceItemFromDevice(pathSegments, devices, index + 1);
-                        }
-
-                        if (deviceItem != null)
-                        {
-                            return deviceItem;
-                        }
-
-                        // not found, but on the path
-                        groups = group.Groups;
-                        devices = group.Devices;
-                    }
-                }
-                else
-                {
-                    return deviceItem;
-                }
-            }
-
-            return deviceItem;
-        }
-
-        private static DeviceItem? GetDeviceItemFromDevice(string[] pathSegments, DeviceComposition? devices, int index)
-        {
-            string segment = pathSegments[index];
-            string nextSegment = index + 1 < pathSegments.Length ? pathSegments[index + 1] : string.Empty;
-
-            DeviceItem? deviceItem = null;
-
-            // a pc based plc has a Device.Name = 'PC-System_1' or something like that, which is visible in the TIA-Portal IDE
-            // use segment to find device
-            var device = devices.FirstOrDefault(d => d.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
-            if (device != null)
-            {
-                // then use next segment to find device item
-                deviceItem = device.DeviceItems.FirstOrDefault(di => di.Name.Equals(nextSegment, StringComparison.OrdinalIgnoreCase));
-
-            }
-
-            // a hardware plc has a Device.Name = 'S7-1500/ET200MP-Station_1' or something like that, which is not visible in the TIA-Portal IDE
-            if (device == null)
-            {
-                deviceItem = devices
-                .SelectMany(d => d.DeviceItems)
-                .FirstOrDefault(di => di.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
-            }
-
-            return deviceItem;
-        }
-
-        private PlcBlockGroup? GetPlcBlockGroupByPath(string softwarePath, string groupPath)
-        {
-            if (_project == null)
-            {
-                return null;
-            }
-
-            var plcSoftware = (GetSoftwareContainer(softwarePath)?.Software as PlcSoftware);
-
-            return plcSoftware?.BlockGroup == null
-                ? null
-                : WalkGroups<PlcBlockGroup>(plcSoftware.BlockGroup, groupPath, BlockSubgroups, g => g.Name);
-        }
-
-        private PlcTypeGroup? GetPlcTypeGroupByPath(string softwarePath, string groupPath)
-        {
-            if (_project == null)
-            {
-                return null;
-            }
-
-            var plcSoftware = (GetSoftwareContainer(softwarePath)?.Software as PlcSoftware);
-
-            return plcSoftware?.TypeGroup == null
-                ? null
-                : WalkGroups<PlcTypeGroup>(plcSoftware.TypeGroup, groupPath, TypeSubgroups, g => g.Name);
-        }
-
-        /// <param name="includeSystemRoot">
-        /// True (the default) prefixes the system group name, e.g. "Program blocks/1_Tests".
-        /// That is the layout the preservePath exports write and Test_415_ImportBlock reads back.
-        /// False yields "1_Tests", which round-trips into GetPlcBlockGroupByPath.
-        /// </param>
-        private string GetPlcBlockGroupPath(PlcBlockGroup group, bool includeSystemRoot = true)
-        {
-            return BuildGroupPath<PlcBlockGroup>(
-                group,
-                g => g.Parent as PlcBlockGroup,
-                g => g.Name,
-                g => g is PlcBlockSystemGroup,
-                includeSystemRoot);
-        }
-
-        /// <param name="includeSystemRoot">See GetPlcBlockGroupPath.</param>
-        private string GetPlcTypeGroupPath(PlcTypeGroup group, bool includeSystemRoot = true)
-        {
-            return BuildGroupPath<PlcTypeGroup>(
-                group,
-                g => g.Parent as PlcTypeGroup,
-                g => g.Name,
-                g => g is PlcTypeSystemGroup,
-                includeSystemRoot);
-        }
-
-        #endregion
-
-        #region GetRecursive ...
-
-        private bool GetDevicesRecursive(DeviceUserGroup group, List<Device> list, string regexName = "")
-        {
-            var anySuccess = false;
-
-            foreach (var composition in group.Devices)
-            {
-                if (composition is Device device)
-                {
-                    try
-                    {
-                        if (!string.IsNullOrEmpty(regexName) && !Regex.IsMatch(device.Name, regexName, RegexOptions.IgnoreCase))
-                        {
-                            continue; // Skip this device if it doesn't match the pattern
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        // Invalid regex pattern, skip this device
-                        continue;
-                    }
-
-                    list.Add(device);
-
-                    anySuccess = true;
-                }
-            }
-
-            foreach (var subgroup in group.Groups)
-            {
-                anySuccess = GetDevicesRecursive(subgroup, list, regexName);
-            }
-
-            return anySuccess;
-        }
-
-        private bool GetBlocksRecursive(PlcBlockGroup group, List<PlcBlock> list, string regexName = "")
-        {
-            var before = list.Count;
-
-            WalkRecursive<PlcBlockGroup, PlcBlock>(group, list, g => g.Blocks, BlockSubgroups, b => b.Name, regexName);
-
-            // The previous implementation reported only the last subgroup's outcome; report
-            // whether anything at all was collected.
-            return list.Count > before;
-        }
-
-        private bool GetTypesRecursive(PlcTypeGroup group, List<PlcType> list, string regexName = "")
-        {
-            var before = list.Count;
-
-            WalkRecursive<PlcTypeGroup, PlcType>(group, list, g => g.Types, TypeSubgroups, t => t.Name, regexName);
-
-            return list.Count > before;
-        }
-
-        #endregion
-
-        #endregion
-
     }
-
-
 }

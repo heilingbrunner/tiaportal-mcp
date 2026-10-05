@@ -1,29 +1,40 @@
 using Siemens.Engineering;
+using Siemens.Engineering.CrossReference;
+using Siemens.Engineering.HW;
+using Siemens.Engineering.HW.Features;
+using Siemens.Engineering.HmiUnified;
+using Siemens.Engineering.Multiuser;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.Types;
+using Siemens.Engineering.Safety;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace TiaMcpServer.Siemens
 {
-    /// <summary>
-    /// Generic path resolution and traversal shared by the PLC software areas.
-    ///
-    /// Callers: the private resolvers in Portal.cs (GetPlcBlockGroupByPath, GetPlcTypeGroupByPath,
-    /// GetPlcBlockGroupPath, GetPlcTypeGroupPath, GetBlocksRecursive, GetTypesRecursive) and the
-    /// Portal partials added for tags, watch tables, external sources and cross references.
-    /// Affected API: none - every member here is private to Portal. Reads/writes no data files.
-    ///
-    /// PlcSoftware exposes five look-alike group hierarchies (BlockGroup, TypeGroup,
-    /// TagTableGroup, WatchAndForceTableGroup, ExternalSourceGroup) that share no common base
-    /// type, so the shape is captured with generics plus selector delegates rather than
-    /// inheritance.
-    /// </summary>
     public partial class Portal
     {
+        // From the former Portal.Resolve.cs:
+        // Generic path resolution and traversal shared by the PLC software areas.
+        //
+        // Callers: the private resolvers in Portal.Blocks.cs and Portal.Types.cs (GetPlcBlockGroupByPath, GetPlcTypeGroupByPath,
+        // GetPlcBlockGroupPath, GetPlcTypeGroupPath, GetBlocksRecursive, GetTypesRecursive) and the
+        // tag, watch table, external source and cross reference members.
+        // Affected API: none - every member here is private to Portal. Reads/writes no data files.
+        //
+        // PlcSoftware exposes five look-alike group hierarchies (BlockGroup, TypeGroup,
+        // TagTableGroup, WatchAndForceTableGroup, ExternalSourceGroup) that share no common base
+        // type, so the shape is captured with generics plus selector delegates rather than
+        // inheritance.
+
+        #region resolve
+
         /// <summary>
         /// Resolves a software path to its PlcSoftware, throwing rather than returning null so
         /// callers wrapped in Operation.Run get a decorated PortalException.
@@ -48,6 +59,28 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
+        /// Canonical form of a group or object path: '/'-separated, without empty or '.' segments.
+        /// "", ".", "/" and "./" (and null) all mean the top folder of the software structure and
+        /// come back as the empty string; "./A//B/" comes back as "A/B". Backslashes are accepted
+        /// as separators.
+        /// </summary>
+        private static string NormalizeGroupPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return string.Empty;
+            }
+
+            var segments = path!
+                .Replace('\\', '/')
+                .Split(['/'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => s.Length > 0 && s != ".");
+
+            return string.Join("/", segments);
+        }
+
+        /// <summary>
         /// Walks a '/'-separated group path down from <paramref name="root"/>.
         /// An empty path returns the root itself. Returns null when a segment does not match.
         /// </summary>
@@ -60,7 +93,7 @@ namespace TiaMcpServer.Siemens
         {
             T? current = root;
 
-            foreach (var segment in groupPath.Split(['/'], StringSplitOptions.RemoveEmptyEntries))
+            foreach (var segment in NormalizeGroupPath(groupPath).Split(['/'], StringSplitOptions.RemoveEmptyEntries))
             {
                 if (current == null)
                 {
@@ -187,13 +220,15 @@ namespace TiaMcpServer.Siemens
         /// </summary>
         private static (string GroupPath, string LeafName) SplitPath(string path)
         {
-            var trimmed = (path ?? string.Empty).Trim('/');
+            var trimmed = NormalizeGroupPath(path);
             var index = trimmed.LastIndexOf('/');
 
             return index < 0
                 ? (string.Empty, trimmed)
                 : (trimmed.Substring(0, index), trimmed.Substring(index + 1));
         }
+
+        #endregion
 
         #region selectors for the block and type hierarchies
 

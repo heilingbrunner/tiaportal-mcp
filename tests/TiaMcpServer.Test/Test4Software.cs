@@ -4,6 +4,7 @@ using Siemens.Engineering.SW.Blocks;
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using TiaMcpServer.Siemens;
 
 namespace TiaMcpServer.Test
@@ -217,7 +218,7 @@ namespace TiaMcpServer.Test
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "0_OBs/Main_1", true)]
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "0_OBs/Main_1", false)]
         //[DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "Common/CarrierRegister/GLOBAL_POSITIONING", true)]
-        public void Test_415_ExportBlock(string projectPath, string softwarePath, string exportPath, string blockPath, bool preservePath)
+        public void Test_415_ExportXmlBlock(string projectPath, string softwarePath, string exportPath, string blockPath, bool preservePath)
         {
             if (_portal == null)
             {
@@ -226,7 +227,7 @@ namespace TiaMcpServer.Test
 
             bool success = Common.OpenProject(_portal, projectPath);
 
-            var result = _portal.ExportBlock(softwarePath, blockPath, exportPath, preservePath);
+            var result = _portal.ExportXmlBlock(softwarePath, blockPath, exportPath, preservePath);
 
             if (result != null)
             {
@@ -249,7 +250,7 @@ namespace TiaMcpServer.Test
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests", Settings.Project1ExportPath0 + "\\Program blocks\\1_Tests\\FC_Block_1.xml")]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests", Settings.Project1ExportPath0 + "\\Program blocks\\1_Tests\\DB_Block_1.xml")]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister", Settings.Project1ExportPath0 + "\\Program blocks\\Common\\CarrierRegister\\GLOBAL_POSITIONING.xml")]
-        public void Test_415_ImportBlock(string projectPath, string softwarePath, string groupPath, string importPath)
+        public void Test_415_ImportXmlBlock(string projectPath, string softwarePath, string groupPath, string importPath)
         {
             if (_portal == null)
             {
@@ -258,7 +259,7 @@ namespace TiaMcpServer.Test
 
             bool success = Common.OpenProject(_portal, projectPath);
 
-            var result = _portal.ImportBlock(softwarePath, groupPath, importPath);
+            var result = _portal.ImportXmlBlock(softwarePath, groupPath, importPath);
 
             success &= Common.CloseProject(_portal, projectPath);
 
@@ -270,7 +271,7 @@ namespace TiaMcpServer.Test
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "Common/CarrierRegister/ML_CarrierRegisterShort", true)]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "Common/CarrierRegister/ML_CarrierRegisterShort", false)]
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "Common/CarrierRegister/ML_SubstratState")]
-        public void Test_416_ExportType(string projectPath, string softwarePath, string exportPath, string typePath, bool preservePath)
+        public void Test_416_ExportXmlType(string projectPath, string softwarePath, string exportPath, string typePath, bool preservePath)
         {
             if (_portal == null)
             {
@@ -279,7 +280,7 @@ namespace TiaMcpServer.Test
 
             bool success = Common.OpenProject(_portal, projectPath);
 
-            var result = _portal.ExportType(softwarePath, typePath, exportPath, preservePath);
+            var result = _portal.ExportXmlType(softwarePath, typePath, exportPath, preservePath);
 
             if (result != null)
             {
@@ -300,7 +301,7 @@ namespace TiaMcpServer.Test
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister", Settings.Project1ExportPath0 + "\\Plc data types\\Common\\CarrierRegister\\ML_SubstratState.xml")]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister", Settings.Project1ExportPath0 + "\\Plc data types\\Common\\CarrierRegister\\ML_CarrierRegisterShort.xml")]
-        public void Test_416_ImportType(string projectPath, string softwarePath, string groupPath, string importPath)
+        public void Test_416_ImportXmlType(string projectPath, string softwarePath, string groupPath, string importPath)
         {
             if (_portal == null)
             {
@@ -309,7 +310,7 @@ namespace TiaMcpServer.Test
 
             bool success = Common.OpenProject(_portal, projectPath);
 
-            var result = _portal.ImportType(softwarePath, groupPath, importPath);
+            var result = _portal.ImportXmlType(softwarePath, groupPath, importPath);
 
             success &= Common.CloseProject(_portal, projectPath);
 
@@ -325,7 +326,7 @@ namespace TiaMcpServer.Test
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "", true)]
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "_HMI_.+", true)]
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "_HMI_.+", false)]
-        public void Test_417_ExportBlocks(string projectPath, string softwarePath, string exportPath, string regexName, bool preservePath)
+        public void Test_417_ExportXmlBlocks(string projectPath, string softwarePath, string exportPath, string regexName, bool preservePath)
         {
             if (_portal == null)
             {
@@ -334,7 +335,7 @@ namespace TiaMcpServer.Test
 
             bool success = Common.OpenProject(_portal, projectPath);
 
-            var result = _portal.ExportBlocks(softwarePath, exportPath, regexName, preservePath);
+            var result = _portal.ExportXmlBlocks(softwarePath, exportPath, regexName, preservePath);
 
             if (result != null)
             {
@@ -363,7 +364,7 @@ namespace TiaMcpServer.Test
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "", true)]
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "(^ErrTyp_|_HMI_AllError$)", true)]
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "(^ErrTyp_|_HMI_AllError$)", false)]
-        public void Test_418_ExportTypes(string projectPath, string softwarePath, string exportPath, string regexName, bool preservePath)
+        public void Test_418_ExportXmlTypes(string projectPath, string softwarePath, string exportPath, string regexName, bool preservePath)
         {
             if (_portal == null)
             {
@@ -372,7 +373,7 @@ namespace TiaMcpServer.Test
 
             bool success = Common.OpenProject(_portal, projectPath);
 
-            var result = _portal.ExportTypes(softwarePath, exportPath, regexName, preservePath);
+            var result = _portal.ExportXmlTypes(softwarePath, exportPath, regexName, preservePath);
             if (result != null)
             {
                 Console.WriteLine($"Exported Types:");
@@ -393,6 +394,110 @@ namespace TiaMcpServer.Test
             success &= Common.CloseProject(_portal, projectPath);
 
             Assert.IsTrue(success, "Failed to export types");
+        }
+
+        /// <summary>
+        /// ExportXmlTagTable writes one tag table as XML: '&lt;exportPath&gt;/&lt;table&gt;.xml', or with
+        /// preservePath below the system group and the table's groups. Exports the first tag table the
+        /// PLC has and checks the file, so no table name has to be hard-coded.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, false)]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, true)]
+        public void Test_419_ExportXmlTagTable(string projectPath, string softwarePath, bool preservePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var exportPath = NewTempDirectory("ExportXmlTagTable");
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var candidate = _portal.GetTagTables(softwarePath).FirstOrDefault();
+
+                if (candidate == null)
+                {
+                    Assert.Inconclusive($"'{softwarePath}' holds no tag table to export");
+                }
+
+                var tagTablePath = _portal.GetTagTablePath(candidate!);
+                var result = _portal.ExportXmlTagTable(softwarePath, tagTablePath, exportPath, preservePath);
+
+                Assert.IsNotNull(result, "No tag table was returned");
+                Assert.AreEqual(candidate!.Name, result!.Name, "Name mismatch");
+
+                var files = Directory.GetFiles(exportPath, "*.xml", SearchOption.AllDirectories);
+
+                Console.WriteLine($"Exported tag table '{tagTablePath}': {string.Join(", ", files)}");
+
+                Assert.AreEqual(1, files.Length, "Exactly one XML file must be written");
+                Assert.AreEqual(candidate.Name + ".xml", Path.GetFileName(files[0]), "The file is named after the table");
+                Assert.IsTrue(new FileInfo(files[0]).Length > 0, "The XML file is empty");
+
+                var relative = files[0].Substring(exportPath.Length).TrimStart('\\', '/');
+
+                if (preservePath)
+                {
+                    // The system group folder always leads, then the table's groups, then the file.
+                    Assert.IsTrue(relative.Contains("\\") || relative.Contains("/"), "preservePath must write below a group folder");
+                    StringAssert.EndsWith(relative.Replace('\\', '/'), tagTablePath + ".xml", "The folder tree must mirror the table's path");
+                }
+                else
+                {
+                    Assert.AreEqual(candidate.Name + ".xml", relative, "Without preservePath the file must sit directly in the export folder");
+                }
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+                DeleteTempDirectory(exportPath);
+            }
+        }
+
+        /// <summary>
+        /// An unknown tag table is reported as NotFound before anything is written.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "NoSuchGroup/NoSuchTable")]
+        public void Test_420_ExportXmlTagTable_UnknownTableIsNotFound(string projectPath, string softwarePath, string tagTablePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var exportPath = NewTempDirectory("ExportXmlTagTableUnknown");
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                PortalException? thrown = null;
+
+                try
+                {
+                    _portal.ExportXmlTagTable(softwarePath, tagTablePath, exportPath);
+                }
+                catch (PortalException ex)
+                {
+                    thrown = ex;
+                }
+
+                Assert.IsNotNull(thrown, "Exporting an unknown tag table must throw a PortalException");
+                Assert.AreEqual(PortalErrorCode.NotFound, thrown!.Code, "Error code mismatch");
+                Assert.IsFalse(
+                    Directory.Exists(exportPath) && Directory.GetFiles(exportPath, "*.*", SearchOption.AllDirectories).Length > 0,
+                    "Nothing may be written for an unknown table");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+                DeleteTempDirectory(exportPath);
+            }
         }
 
         [TestMethod]
@@ -805,7 +910,7 @@ namespace TiaMcpServer.Test
 
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0)]
-        public void Test_452_ExportPlcAsSourceTree(string projectPath, string softwarePath)
+        public void Test_452_ExportPlcAsDocuments(string projectPath, string softwarePath)
         {
             if (_portal == null)
             {
@@ -818,7 +923,7 @@ namespace TiaMcpServer.Test
 
             try
             {
-                var result = _portal.ExportPlcAsSourceTree(softwarePath, exportPath);
+                var result = _portal.ExportPlcAsDocuments(softwarePath, exportPath);
 
                 Console.WriteLine($"Snapshot in {result.Directory}: {result.TotalWritten} written, " +
                                   $"{result.Skipped.Count} skipped, {result.Failures.Count} failed");
@@ -1032,6 +1137,472 @@ namespace TiaMcpServer.Test
                 Common.CloseProject(_portal, projectPath);
             }
         }
+
+        #region source files
+
+        private static string NewTempDirectory(string purpose) =>
+            Path.Combine(Path.GetTempPath(), "TiaMcpServerSourceTests", purpose, Guid.NewGuid().ToString("N"));
+
+        private static void DeleteTempDirectory(string path)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: true);
+                }
+            }
+            catch (Exception)
+            {
+                // Temp cleanup only.
+            }
+        }
+
+        private static string GroupOf(string objectPath) =>
+            objectPath.Contains("/") ? objectPath.Substring(0, objectPath.LastIndexOf('/')) : string.Empty;
+
+        /// <summary>
+        /// ExportSourceBlock writes one block as an external source file in the format the compiler
+        /// reads back; a data block comes out as '.db'. Without preservePath the file lands directly
+        /// in the export folder, with it below the block's group.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests/DB_Block_1", false)]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests/DB_Block_1", true)]
+        public void Test_491_ExportSourceBlock(string projectPath, string softwarePath, string blockPath, bool preservePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var exportPath = NewTempDirectory("ExportSourceBlock");
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var result = _portal.ExportSourceBlock(softwarePath, blockPath, exportPath, preservePath: preservePath);
+
+                Console.WriteLine($"Exported '{result.Path}' as {result.Format} ({result.Language}): {result.File}");
+
+                Assert.AreEqual(Path.GetFileName(blockPath), result.Name, "Name mismatch");
+                Assert.AreEqual(blockPath, result.Path, "Path mismatch");
+                Assert.AreEqual(".db", result.Format, "A data block must be generated as '.db'");
+                Assert.AreEqual(".db", Path.GetExtension(result.File), "The file extension must follow the format");
+                Assert.IsTrue(File.Exists(result.File), "The source file does not exist");
+
+                if (preservePath)
+                {
+                    StringAssert.Contains(result.File, GroupOf(blockPath), "preservePath must keep the block's group in the folder tree");
+                }
+                else
+                {
+                    Assert.IsFalse(result.File.Contains(GroupOf(blockPath)), "Without preservePath the file must not sit in a group folder");
+                }
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+                DeleteTempDirectory(exportPath);
+            }
+        }
+
+        /// <summary>
+        /// ExportSources is the whole-PLC counterpart of ExportSourceBlock: one file per
+        /// generatable block and PLC data type, with the objects that have no source form reported
+        /// as skipped rather than failing the run.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "", "")]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "^DB_Block_1$", "DB_Block_1")]
+        public void Test_492_ExportSources(string projectPath, string softwarePath, string regexName, string expectedName)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var exportPath = NewTempDirectory("ExportSources");
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var result = _portal.ExportSources(softwarePath, exportPath, regexName);
+
+                Console.WriteLine($"Generated {result.Files.Count} file(s) in {result.Directory}: " +
+                                  $"{result.Written["blocks"]} block(s), {result.Written["types"]} type(s), " +
+                                  $"{result.Skipped.Count} skipped, {result.Failures.Count} failed");
+
+                foreach (var skipped in result.Skipped.Take(5))
+                {
+                    Console.WriteLine($"  skipped: {skipped}");
+                }
+
+                foreach (var failure in result.Failures.Take(5))
+                {
+                    Console.WriteLine($"  failure: {failure}");
+                }
+
+                if (result.Files.Count == 0)
+                {
+                    Assert.Inconclusive($"'{softwarePath}' holds no generatable object for the pattern '{regexName}'");
+                }
+
+                var knownFormats = new[] { ".db", ".awl", ".scl", ".udt" };
+
+                Assert.AreEqual(exportPath, result.Directory, "Directory mismatch");
+                Assert.AreEqual(result.Files.Count, result.Written["blocks"] + result.Written["types"], "Written counts do not add up to the files");
+                Assert.IsTrue(result.Files.All(f => File.Exists(f.File)), "A reported source file does not exist");
+                Assert.IsTrue(result.Files.All(f => knownFormats.Contains(f.Format)), "A file has an unexpected format");
+
+                if (expectedName != string.Empty)
+                {
+                    Assert.IsTrue(
+                        result.Files.Any(f => f.Name == expectedName && f.Format == ".db"),
+                        $"No '.db' file was generated for '{expectedName}'");
+                }
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+                DeleteTempDirectory(exportPath);
+            }
+        }
+
+        /// <summary>
+        /// Round trip through ImportSources, selecting a single file by name: export a block as a
+        /// source file, delete the block from the PLC, import the file again and expect the block
+        /// back. The project is closed without saving, so the change never reaches the project file.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests/DB_Block_1")]
+        public void Test_493_ImportSources_SingleBlockRoundTrip(string projectPath, string softwarePath, string blockPath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var importPath = NewTempDirectory("ImportSources");
+            var name = Path.GetFileName(blockPath);
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var exported = _portal.ExportSourceBlock(softwarePath, blockPath, importPath, preservePath: true);
+
+                Assert.IsTrue(File.Exists(exported.File), "The source file was not written");
+                Assert.IsTrue(_portal.DeleteBlock(softwarePath, blockPath), "Failed to delete the block before re-importing it");
+                Assert.IsNull(_portal.GetBlock(softwarePath, blockPath), "The block is still in the PLC after the delete");
+
+                var result = _portal.ImportSources(softwarePath, importPath, "^" + Regex.Escape(name) + "$");
+
+                Console.WriteLine($"Imported {result.Items.Count} object(s) from {result.Directory}, {result.Failures.Count} failure(s)");
+
+                foreach (var failure in result.Failures)
+                {
+                    Console.WriteLine($"  failure: {failure}");
+                }
+
+                Assert.AreEqual(0, result.Failures.Count, "The import reported failures: " + string.Join("; ", result.Failures));
+                Assert.AreEqual(1, result.Items.Count, "Exactly the selected file must be imported");
+                Assert.AreEqual("block", result.Items[0].Kind, "Kind mismatch");
+                Assert.AreEqual(name, result.Items[0].Name, "Name mismatch");
+                Assert.IsNotNull(_portal.GetBlock(softwarePath, blockPath), "The re-imported block is not in the PLC");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+                DeleteTempDirectory(importPath);
+            }
+        }
+
+        /// <summary>
+        /// ImportExternalSource compiles one registered external source into blocks. Registers an
+        /// exported source file as a scratch external source, deletes the block, compiles the
+        /// source back into the block's group and expects the block again. The scratch source is
+        /// deleted afterwards; the project is closed without saving.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests/DB_Block_1")]
+        public void Test_494_ImportExternalSource(string projectPath, string softwarePath, string blockPath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var exportPath = NewTempDirectory("ImportExternalSource");
+            var name = Path.GetFileName(blockPath);
+            string? sourcePath = null;
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var exported = _portal.ExportSourceBlock(softwarePath, blockPath, exportPath);
+
+                var sourceName = "McpTest_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+                var source = _portal.CreateExternalSourceFromFile(softwarePath, string.Empty, sourceName, exported.File);
+                sourcePath = _portal.GetExternalSourcePath(source);
+
+                Assert.IsTrue(_portal.DeleteBlock(softwarePath, blockPath), "Failed to delete the block before compiling it back");
+
+                var generated = _portal.ImportExternalSource(softwarePath, sourcePath, GroupOf(blockPath));
+
+                Console.WriteLine($"Compiled '{sourcePath}' into: {string.Join(", ", generated)}");
+
+                CollectionAssert.Contains(generated, name, "The source did not generate the block");
+                Assert.IsNotNull(_portal.GetBlock(softwarePath, blockPath), "The compiled block is not in the PLC");
+            }
+            finally
+            {
+                if (sourcePath != null)
+                {
+                    try
+                    {
+                        _portal.DeleteExternalSource(softwarePath, sourcePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Could not delete the scratch external source '{sourcePath}': {ex.Message}");
+                    }
+                }
+
+                Common.CloseProject(_portal, projectPath);
+                DeleteTempDirectory(exportPath);
+            }
+        }
+
+        /// <summary>
+        /// Round trip through ImportSourceBlock: export a block as a source file, delete the
+        /// block from the PLC, import the single file into the block's group and expect the block
+        /// back. The project is closed without saving, so the change never reaches the project file.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests/DB_Block_1")]
+        public void Test_495_ImportSourceBlock(string projectPath, string softwarePath, string blockPath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var exportPath = NewTempDirectory("ImportSourceBlock");
+            var name = Path.GetFileName(blockPath);
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var exported = _portal.ExportSourceBlock(softwarePath, blockPath, exportPath);
+
+                Assert.IsTrue(_portal.DeleteBlock(softwarePath, blockPath), "Failed to delete the block before re-importing it");
+                Assert.IsNull(_portal.GetBlock(softwarePath, blockPath), "The block is still in the PLC after the delete");
+
+                var result = _portal.ImportSourceBlock(softwarePath, GroupOf(blockPath), exported.File);
+
+                Console.WriteLine($"Imported {result.Items.Count} object(s) from {exported.File}");
+
+                Assert.AreEqual(0, result.Failures.Count, "The import reported failures: " + string.Join("; ", result.Failures));
+                Assert.IsTrue(result.Items.Any(i => i.Kind == "block" && i.Name == name), "The file did not generate the block");
+                Assert.IsNotNull(_portal.GetBlock(softwarePath, blockPath), "The re-imported block is not in the PLC");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+                DeleteTempDirectory(exportPath);
+            }
+        }
+
+        /// <summary>
+        /// Round trip through ImportSourceType: export a PLC data type as a '.udt' file, delete
+        /// the type, import the file into the type's group and expect the type back.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister/ML_SubstratState")]
+        public void Test_496_ImportSourceType(string projectPath, string softwarePath, string typePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var exportPath = NewTempDirectory("ImportSourceType");
+            var name = Path.GetFileName(typePath);
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var exported = _portal.ExportSourceType(softwarePath, typePath, exportPath);
+
+                Assert.AreEqual(".udt", Path.GetExtension(exported.File), "A PLC data type must be generated as '.udt'");
+                Assert.IsTrue(_portal.DeleteType(softwarePath, typePath), "Failed to delete the type before re-importing it");
+                Assert.IsNull(_portal.GetType(softwarePath, typePath), "The type is still in the PLC after the delete");
+
+                var result = _portal.ImportSourceType(softwarePath, GroupOf(typePath), exported.File);
+
+                Console.WriteLine($"Imported {result.Items.Count} object(s) from {exported.File}");
+
+                Assert.AreEqual(0, result.Failures.Count, "The import reported failures: " + string.Join("; ", result.Failures));
+                Assert.IsTrue(result.Items.Any(i => i.Kind == "type" && i.Name == name), "The file did not generate the type");
+                Assert.IsNotNull(_portal.GetType(softwarePath, typePath), "The re-imported type is not in the PLC");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+                DeleteTempDirectory(exportPath);
+            }
+        }
+
+        /// <summary>
+        /// ImportSourceBlocks reads a folder written by ExportSourceBlocks. Flat: every file lands
+        /// in the given group. With preservePath: the folder tree below the import path decides
+        /// the subgroup, so the group argument can stay empty. Selects the one block by name.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests/DB_Block_1", false)]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests/DB_Block_1", true)]
+        public void Test_497_ImportSourceBlocks(string projectPath, string softwarePath, string blockPath, bool preservePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var exportPath = NewTempDirectory("ImportSourceBlocks");
+            var name = Path.GetFileName(blockPath);
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var exported = _portal.ExportSourceBlocks(softwarePath, GroupOf(blockPath), exportPath, preservePath: preservePath);
+
+                if (!exported.Files.Any(f => f.Name == name))
+                {
+                    Assert.Inconclusive($"'{name}' was not exported: {string.Join("; ", exported.Skipped.Concat(exported.Failures))}");
+                }
+
+                Assert.IsTrue(_portal.DeleteBlock(softwarePath, blockPath), "Failed to delete the block before re-importing it");
+
+                var result = _portal.ImportSourceBlocks(
+                    softwarePath,
+                    preservePath ? string.Empty : GroupOf(blockPath),
+                    exportPath,
+                    "^" + Regex.Escape(name) + "$",
+                    preservePath);
+
+                Console.WriteLine($"Imported {result.Items.Count} object(s) from {result.Directory}, {result.Failures.Count} failure(s)");
+
+                Assert.AreEqual(0, result.Failures.Count, "The import reported failures: " + string.Join("; ", result.Failures));
+                Assert.AreEqual(1, result.Items.Count, "Exactly the selected file must be imported");
+                Assert.AreEqual(name, result.Items[0].Name, "Name mismatch");
+                Assert.IsNotNull(_portal.GetBlock(softwarePath, blockPath), "The re-imported block is not in its group");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+                DeleteTempDirectory(exportPath);
+            }
+        }
+
+        /// <summary>
+        /// ImportSourceTypes reads a folder written by ExportSourceTypes, flat into one group or
+        /// with preservePath into the subgroups the folder tree implies. Selects the one type by name.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister/ML_SubstratState", false)]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "Common/CarrierRegister/ML_SubstratState", true)]
+        public void Test_498_ImportSourceTypes(string projectPath, string softwarePath, string typePath, bool preservePath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var exportPath = NewTempDirectory("ImportSourceTypes");
+            var name = Path.GetFileName(typePath);
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var exported = _portal.ExportSourceTypes(softwarePath, GroupOf(typePath), exportPath, preservePath: preservePath);
+
+                if (!exported.Files.Any(f => f.Name == name))
+                {
+                    Assert.Inconclusive($"'{name}' was not exported: {string.Join("; ", exported.Skipped.Concat(exported.Failures))}");
+                }
+
+                Assert.IsTrue(_portal.DeleteType(softwarePath, typePath), "Failed to delete the type before re-importing it");
+
+                var result = _portal.ImportSourceTypes(
+                    softwarePath,
+                    preservePath ? string.Empty : GroupOf(typePath),
+                    exportPath,
+                    "^" + Regex.Escape(name) + "$",
+                    preservePath);
+
+                Console.WriteLine($"Imported {result.Items.Count} object(s) from {result.Directory}, {result.Failures.Count} failure(s)");
+
+                Assert.AreEqual(0, result.Failures.Count, "The import reported failures: " + string.Join("; ", result.Failures));
+                Assert.AreEqual(1, result.Items.Count, "Exactly the selected file must be imported");
+                Assert.AreEqual(name, result.Items[0].Name, "Name mismatch");
+                Assert.IsNotNull(_portal.GetType(softwarePath, typePath), "The re-imported type is not in its group");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+                DeleteTempDirectory(exportPath);
+            }
+        }
+
+        /// <summary>
+        /// The single-file imports refuse a file of the wrong kind and a missing file with a clear
+        /// message, before anything in the project is touched.
+        /// </summary>
+        [TestMethod]
+        [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "1_Tests/DB_Block_1")]
+        public void Test_499_ImportSource_RejectsWrongFile(string projectPath, string softwarePath, string blockPath)
+        {
+            if (_portal == null)
+            {
+                Assert.Fail("TiaPortal instance is not initialized");
+            }
+
+            var exportPath = NewTempDirectory("ImportSourceRejects");
+
+            Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
+
+            try
+            {
+                var exported = _portal.ExportSourceBlock(softwarePath, blockPath, exportPath);
+
+                var wrongKind = Assert.ThrowsException<PortalException>(
+                    () => _portal.ImportSourceType(softwarePath, GroupOf(blockPath), exported.File),
+                    "A '.db' file must not be accepted as a PLC data type source");
+                StringAssert.Contains(wrongKind.Message, ".udt");
+
+                var missing = Assert.ThrowsException<PortalException>(
+                    () => _portal.ImportSourceBlock(softwarePath, GroupOf(blockPath), Path.Combine(exportPath, "DoesNotExist.db")),
+                    "A missing file must be reported");
+                StringAssert.Contains(missing.Message, "does not exist");
+
+                Assert.IsNotNull(_portal.GetBlock(softwarePath, blockPath), "A rejected import must leave the project untouched");
+            }
+            finally
+            {
+                Common.CloseProject(_portal, projectPath);
+                DeleteTempDirectory(exportPath);
+            }
+        }
+
+        #endregion
 
     }
 }

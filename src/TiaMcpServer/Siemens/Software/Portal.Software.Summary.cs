@@ -1,21 +1,41 @@
+using Siemens.Engineering;
+using Siemens.Engineering.Compiler;
+using Siemens.Engineering.CrossReference;
+using Siemens.Engineering.HW;
+using Siemens.Engineering.HW.Features;
+using Siemens.Engineering.HmiUnified;
+using Siemens.Engineering.Multiuser;
+using Siemens.Engineering.SW;
+using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.ExternalSources;
+using Siemens.Engineering.SW.Tags;
+using Siemens.Engineering.SW.Types;
+using Siemens.Engineering.SW.WatchAndForceTables;
+using Siemens.Engineering.Safety;
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Security;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace TiaMcpServer.Siemens
 {
-    /// <summary>
-    /// A single orientation call for a PLC software.
-    ///
-    /// Callers: the GetPlcSummary tool in McpServer.Insight.cs. Affected API: none existing -
-    /// every member here is new. Reads and writes no data files.
-    ///
-    /// Why: answering "what am I looking at?" previously meant GetProjectTree, GetSoftwareTree,
-    /// GetBlocks, GetTypes, GetTagTables and GetWatchTables, then counting by hand. This
-    /// composes the existing collectors once and reports the numbers plus the things worth
-    /// knowing before touching anything: what cannot be exported, and what is locked.
-    /// </summary>
     public partial class Portal
     {
+        // From the former Portal.Summary.cs:
+        // A single orientation call for a PLC software.
+        //
+        // Callers: the GetPlcSummary tool in McpServer.Software.Summary.cs. Affected API: none existing -
+        // every member here is new. Reads and writes no data files.
+        //
+        // Why: answering "what am I looking at?" previously meant GetProjectTree, GetSoftwareTree,
+        // GetBlocks, GetTypes, GetTagTables and GetWatchTables, then counting by hand. This
+        // composes the existing collectors once and reports the numbers plus the things worth
+        // knowing before touching anything: what cannot be exported, and what is locked.
+
+        #region summary
+
         /// <summary>
         /// Counts and health of one PLC software. Every figure comes from the existing
         /// collectors, so it stays consistent with what the individual tools report.
@@ -114,6 +134,8 @@ namespace TiaMcpServer.Siemens
                 return null;
             }
         }
+
+        #endregion
     }
 
     /// <summary>What a PLC software contains and what is wrong with it, in one object.</summary>

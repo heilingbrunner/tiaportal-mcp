@@ -28,7 +28,7 @@ This document standardizes how errors are raised in the Siemens portal layer and
 
 - Single decoration point
   - Do not attach `Exception.Data` inline at throw sites.
-  - Each public portal method (e.g., `ExportBlock`, `ExportType`) attaches standard context keys in a single catch block just before rethrowing, ensuring uniform metadata on all failures:
+  - Each public portal method (e.g., `ExportXmlBlock`, `ExportXmlType`) attaches standard context keys in a single catch block just before rethrowing, ensuring uniform metadata on all failures:
     - `softwarePath`
     - `blockPath` / `typePath` (as applicable)
     - `exportPath` (as applicable)
@@ -38,10 +38,10 @@ This document standardizes how errors are raised in the Siemens portal layer and
 
 ## Portal Layer Pattern
 
-Within `src/TiaMcpServer/Siemens/Portal.cs` methods:
+Within the `Portal` methods (`src/TiaMcpServer/Siemens/Portal*.cs`):
 
 - Throw lightweight `PortalException` with an appropriate `Code` from locations that detect an error (validation, not-found, invalid state).
-- Use a single `catch (Exception ex)` per method and funnel into the canonical wrapping pattern (see `ExportBlock`):
+- Use a single `catch (Exception ex)` per method and funnel into the canonical wrapping pattern (see `ExportXmlBlock`):
 
 ```csharp
 catch (Exception ex)
@@ -90,7 +90,7 @@ context pair into `Exception.Data`, logs once and rethrows. Three properties mat
 - __Serialized.__ `Run` holds a lock for the duration of the body. Openness objects are not
   thread-safe and the MCP SDK may dispatch tool calls concurrently; with write tools enabled an
   unsynchronized race can corrupt project state, not merely return stale data. The lock is a
-  `Monitor`, not a `SemaphoreSlim`, because portal methods call one another (`ExportBlock` calls
+  `Monitor`, not a `SemaphoreSlim`, because portal methods call one another (`ExportXmlBlock` calls
   `GetBlock`) and `Monitor` is reentrant on the same thread while a semaphore would deadlock.
 
 Methods predating 0.2.0 still carry the hand-written block; migrating them is tracked in `TODO.md`.
@@ -100,7 +100,7 @@ Methods predating 0.2.0 still carry the hand-written block; migrating them is tr
 Project-mutating tools are refused above the portal layer, so this is an MCP-layer concern rather
 than a `PortalErrorCode`:
 
-- `Program.BuildToolTypes()` registers the `McpServerWrite` tool type only when `--allow-write`
+- `Program.BuildTools()` registers the `[WriteTool]` tools only when `--allow-write`
   was passed. Without it the write tools are absent from `tools/list` entirely - the primary
   guard, because a tool that is not advertised cannot be mis-invoked.
 - `WritePolicy.EnsureEnabled(toolName)` runs as the first statement of every write tool and
@@ -118,8 +118,8 @@ than a `PortalErrorCode`:
 ## Bulk Export Reporting
 
 - Responses for bulk operations include both exported items and a list of inconsistent (skipped) items:
-  - `ResponseExportBlocks`: `Items` (exported), `Inconsistent` (skipped)
-  - `ResponseExportTypes`: `Items` (exported), `Inconsistent` (skipped)
+  - `ResponseExportXmlBlocks`: `Items` (exported), `Inconsistent` (skipped)
+  - `ResponseExportXmlTypes`: `Items` (exported), `Inconsistent` (skipped)
 - `Meta` contains counts for totals, exported, and inconsistent.
 
 ## Formatting

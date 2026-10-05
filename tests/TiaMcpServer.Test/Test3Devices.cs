@@ -57,7 +57,7 @@ namespace TiaMcpServer.Test
             bool success = Common.OpenProject(_portal, projectPath);
 
             var result = _portal.GetDevice(devicePath);
-            if (result != null)
+            if (result is not null)
             {
                 Console.WriteLine($"Device: {result?.Name} found under {devicePath}");
             }
@@ -66,7 +66,7 @@ namespace TiaMcpServer.Test
                 Console.WriteLine($"Device not found under {devicePath}");
             }
 
-            success &= result != null;
+            success &= result is not null;
 
             success &= Common.CloseProject(_portal, projectPath);
 
@@ -93,7 +93,7 @@ namespace TiaMcpServer.Test
             bool success = Common.OpenProject(_portal, projectPath);
 
             var result = _portal.GetDeviceItem(deviceItemPath);
-            if (result != null)
+            if (result is not null)
             {
                 Console.WriteLine($"DeviceItem: {result?.Name} found under {deviceItemPath}");
             }
@@ -102,7 +102,7 @@ namespace TiaMcpServer.Test
                 Console.WriteLine($"DeviceItem not found under {deviceItemPath}");
             }
 
-            success &= result != null;
+            success &= result is not null;
 
             success &= Common.CloseProject(_portal, projectPath);
 
@@ -124,7 +124,7 @@ namespace TiaMcpServer.Test
             bool success = Common.OpenProject(_portal, projectPath);
 
             var list = _portal.GetDevices();
-            if (list != null)
+            if (list is not null)
             {
                 Console.WriteLine($"Devices: {list.Count} found");
 
@@ -138,7 +138,7 @@ namespace TiaMcpServer.Test
                 Console.WriteLine($"Devices not found");
             }
 
-            success &= list != null;
+            success &= list is not null;
 
             success &= Common.CloseProject(_portal, projectPath);
 

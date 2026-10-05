@@ -1,28 +1,45 @@
 using Microsoft.Extensions.Logging;
+using Siemens.Engineering.Compiler;
+using Siemens.Engineering.CrossReference;
+using Siemens.Engineering.HW;
+using Siemens.Engineering.HW.Features;
+using Siemens.Engineering.HmiUnified;
+using Siemens.Engineering.Multiuser;
+using Siemens.Engineering.SW;
+using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.ExternalSources;
+using Siemens.Engineering.SW.Tags;
+using Siemens.Engineering.SW.Types;
+using Siemens.Engineering.SW.WatchAndForceTables;
+using Siemens.Engineering.Safety;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace TiaMcpServer.Siemens
 {
-    /// <summary>
-    /// Searching the program text, not just object names.
-    ///
-    /// Callers: the FindInCode tool in McpServer.Insight.cs. Affected API: none existing - every
-    /// member here is new.
-    ///
-    /// File I/O: like the source readers, this has to export before it can search, because
-    /// Openness offers no in-memory access to a block body. Everything is written to a scratch
-    /// directory under the temp path and removed again.
-    ///
-    /// Cost: one export per candidate object, per call. A whole PLC of this project's size
-    /// exports in roughly ten seconds, so no persistent cache is kept - invalidating one
-    /// correctly is not worth the complexity at that scale. Narrow the work with 'nameFilter'
-    /// on a large PLC.
-    /// </summary>
     public partial class Portal
     {
+        // From the former Portal.Search.cs:
+        // Searching the program text, not just object names.
+        //
+        // Callers: the FindInCode tool in McpServer.Software.Search.cs. Affected API: none existing - every
+        // member here is new.
+        //
+        // File I/O: like the source readers, this has to export before it can search, because
+        // Openness offers no in-memory access to a block body. Everything is written to a scratch
+        // directory under the temp path and removed again.
+        //
+        // Cost: one export per candidate object, per call. A whole PLC of this project's size
+        // exports in roughly ten seconds, so no persistent cache is kept - invalidating one
+        // correctly is not worth the complexity at that scale. Narrow the work with 'nameFilter'
+        // on a large PLC.
+
+        #region search
+
         /// <summary>
         /// Finds a regular expression in the source text of blocks and PLC data types.
         /// </summary>
@@ -143,6 +160,8 @@ namespace TiaMcpServer.Siemens
                 });
             }
         }
+
+        #endregion
     }
 
     /// <summary>One line of source text that matched the search.</summary>

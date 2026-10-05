@@ -13,12 +13,12 @@ A MCP server which connects to Siemens TIA Portal.
 
 ## Command Line Arguments
 
-| Argument | Description |
-| --- | --- |
-| `--tia-major-version <n>` | TIA Portal major version to bind against. Default `21`. |
-| `--logging <1\|2\|3>` | `1` stderr, `2` debug output, `3` Windows event log. Omit for no logging. |
-| `--doctor` | Print the environment report and exit without starting the MCP server. |
-| `--allow-write` | Register the project-mutating tools. Omitted by default; see below. |
+| Argument                  | Description                                                               |
+| ------------------------- | ------------------------------------------------------------------------- |
+| `--tia-major-version <n>` | TIA Portal major version to bind against. Default `21`.                   |
+| `--logging <1\|2\|3>`     | `1` stderr, `2` debug output, `3` Windows event log. Omit for no logging. |
+| `--doctor`                | Print the environment report and exit without starting the MCP server.    |
+| `--allow-write`           | Register the project-mutating tools. Omitted by default; see below.       |
 
 ## Write mode
 
@@ -33,7 +33,7 @@ The server is read-only unless it is started with `--allow-write`.
 - Write operations change the project **in memory only**. Every write response says so and names
   the tool that persists it: `SaveProject`, or `SaveSession` when a multiuser local session is open.
 
-Export tools are intentionally *not* gated. `ExportBlock`, `ExportTagTable`, `ExportWatchTable`
+Export tools are intentionally *not* gated. `ExportXmlBlock`, `ExportXmlTagTable`, `ExportXmlWatchTable`
 and friends only write files on the machine running the server; they never modify the project.
 They are annotated `destructiveHint: true` because they can overwrite files on disk.
 
@@ -42,36 +42,36 @@ To enable write mode, add the argument to your client configuration, for example
 
 ## Tools
 
-Read-only tools (59) are always available.
+Read-only tools (62) are always available.
 
-| Area | Tools |
-| --- | --- |
-| Portal and state | `Connect`, `Disconnect`, `GetState`, `Doctor` |
-| Project and session | `GetProject`, `OpenProject`, `SaveProject`, `SaveAsProject`, `CloseProject` |
-| Devices | `GetProjectTree`, `GetDevices`, `GetDeviceInfo`, `GetDeviceItemInfo` |
-| PLC software | `GetSoftwareInfo`, `GetSoftwareTree`, `CompileSoftware` |
-| Blocks | `GetBlocks`, `GetBlockInfo`, `GetBlocksWithHierarchy`, `ExportBlock`, `ExportBlocks`, `ImportBlock` |
-| Types | `GetTypes`, `GetTypeInfo`, `ExportType`, `ExportTypes`, `ImportType` |
-| Tags and constants | `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants`, `ExportTagTable` |
-| Watch and force tables | `GetWatchTables`, `GetWatchTableInfo`, `GetForceTables`, `ExportWatchTable` |
-| External sources | `GetExternalSources`, `GetExternalSourceInfo`, `GenerateBlockSource`, `GenerateTypeSource` |
-| Cross references | `GetCrossReferences` |
-| Block documents (V20+) | `ExportAsDocuments`, `ExportBlocksAsDocuments`, `ImportFromDocuments`, `ImportBlocksFromDocuments` |
-| Type documents (V21+) | `ExportTypeAsDocuments`, `ExportTypesAsDocuments` |
-| Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsSourceTree`, `GenerateSources` |
+| Area                          | Tools                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Portal and state              | `Connect`, `Disconnect`, `GetState`, `Doctor`                                                                                                                                                          |
+| Project and session           | `GetProject`, `OpenProject`, `SaveProject`, `SaveAsProject`, `CloseProject`                                                                                                                            |
+| Devices                       | `GetProjectTree`, `GetDevices`, `GetDeviceInfo`, `GetDeviceItemInfo`                                                                                                                                   |
+| PLC software                  | `GetSoftwareInfo`, `GetSoftwareTree`, `CompileSoftware`                                                                                                                                                |
+| Blocks                        | `GetBlocks`, `GetBlockInfo`, `GetBlocksWithHierarchy`, `ExportXmlBlock`, `ExportXmlBlocks`, `ImportXmlBlock`                                                                                           |
+| Types                         | `GetTypes`, `GetTypeInfo`, `ExportXmlType`, `ExportXmlTypes`, `ImportXmlType`                                                                                                                          |
+| Tags and constants            | `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants`, `ExportXmlTagTable`                                                                                                        |
+| Watch and force tables        | `GetWatchTables`, `GetWatchTableInfo`, `GetForceTables`, `ExportXmlWatchTable`                                                                                                                         |
+| External sources              | `GetExternalSources`, `GetExternalSourceInfo`, `ExportSourceBlock`, `ExportSourceType`                                                                                                                 |
+| Cross references              | `GetCrossReferences`                                                                                                                                                                                   |
+| Block documents (V20+)        | `ExportAsDocuments`, `ExportBlocksAsDocuments`, `ImportFromDocuments`, `ImportBlocksFromDocuments`                                                                                                     |
+| Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                                                                      |
+| Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `ExportSources` |
 
-Write tools (40) require `--allow-write`.
+Write tools (44) require `--allow-write`.
 
-| Area | Tools |
-| --- | --- |
-| Block and type groups | `CreateBlockGroup`, `DeleteBlockGroup`, `CreateTypeGroup`, `DeleteTypeGroup` |
-| Blocks and types | `DeleteBlock`, `RenameBlock`, `DeleteType`, `RenameType`, `CreateFB`, `CreateInstanceDB` |
-| Copy and move | `CopyBlock`, `MoveBlock`, `CopyType`, `MoveType` |
-| Tag tables | `CreateTagTable`, `DeleteTagTable`, `RenameTagTable`, `CreateTagTableGroup`, `DeleteTagTableGroup`, `ImportTagTable` |
-| Tags and constants | `CreateTag`, `UpdateTag`, `DeleteTag`, `CreateUserConstant`, `UpdateUserConstant`, `DeleteUserConstant` |
-| Watch tables | `CreateWatchTable`, `RenameWatchTable`, `DeleteWatchTable`, `CreateWatchTableGroup`, `DeleteWatchTableGroup`, `ImportWatchTable` |
-| External sources | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `GenerateBlocksFromSource`, `ImportSources` |
-| Type documents (V21+) | `ImportTypeFromDocuments`, `ImportTypesFromDocuments` |
+| Area                  | Tools                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Block and type groups | `CreateBlockGroup`, `DeleteBlockGroup`, `CreateTypeGroup`, `DeleteTypeGroup`                                                                            |
+| Blocks and types      | `DeleteBlock`, `RenameBlock`, `DeleteType`, `RenameType`, `CreateFB`, `CreateInstanceDB`                                                                |
+| Copy and move         | `CopyBlock`, `MoveBlock`, `CopyType`, `MoveType`                                                                                                        |
+| Tag tables            | `CreateTagTable`, `DeleteTagTable`, `RenameTagTable`, `CreateTagTableGroup`, `DeleteTagTableGroup`, `ImportXmlTagTable`                                    |
+| Tags and constants    | `CreateTag`, `UpdateTag`, `DeleteTag`, `CreateUserConstant`, `UpdateUserConstant`, `DeleteUserConstant`                                                 |
+| Watch tables          | `CreateWatchTable`, `RenameWatchTable`, `DeleteWatchTable`, `CreateWatchTableGroup`, `DeleteWatchTableGroup`, `ImportWatchTable`                        |
+| External sources      | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `ImportExternalSource`, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes`, `ImportSources` |
+| Type documents (V21+) | `ImportTypeFromDocuments`, `ImportTypesFromDocuments`                                                                                                   |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
 `blocks,types,tags,watch,sources`, default `all` - to keep the output small on a large PLC.
@@ -79,6 +79,28 @@ Write tools (40) require `--allow-write`.
 
 Paths used by these tools are **root-relative**: `1_Tests/FC_Block_1`, not
 `Program blocks/1_Tests/FC_Block_1`. Use `GetProjectTree` and `GetSoftwareTree` to discover them.
+
+## Prompts (slash commands)
+
+Every tool has a prompt of the same name that you can start as a slash command, for example
+`/mcp__tia-mcp-server__OpenProject D:\Siemens\Test\TestProject1_V21.ap21`. The part after `mcp__` is
+the server name from your MCP configuration. Claude Code shows the prompt description and the
+argument names, matches the typed values to the arguments by position and requires every argument
+without a default. A prompt only sends text to the model, which then calls the tool.
+
+A value with spaces goes in **double quotes**, for example a PC based PLC software or an export
+folder:
+
+```
+/mcp__tia-mcp-server__ExportXmlBlocks "PC-System_1/Software PLC_1" "D:\My Export"
+```
+
+Claude Code itself splits the text at every space and drops the words beyond the last argument. The
+server joins the pieces of a quoted value again, so the value reaches the tool unchanged; `""`
+passes an empty value. All typed words together must not exceed the number of arguments of the
+prompt, so a prompt with few arguments (for example `GetSoftwareInfo`, which only has
+`softwarePath`) cannot take a value of several words: write a normal request instead of the slash
+command.
 
 ## Resources
 
@@ -153,7 +175,7 @@ group the type already lives in to replace it.
 ## Known Limitations
 
 - As of 2025-09-02: Importing Ladder (LAD) blocks from SIMATIC SD documents requires the companion `.s7res` file to contain en-US tags for all items; otherwise import may fail. This is a known limitation/bug in TIA Portal Openness.
- - `ExportBlock` requires a fully qualified `blockPath` like `Group/Subgroup/Name`. If only a name is provided, the tool fails with an error result that may include suggestions for likely full paths.
+ - `ExportXmlBlock` requires a fully qualified `blockPath` like `Group/Subgroup/Name`. If only a name is provided, the tool fails with an error result that may include suggestions for likely full paths.
 
 ### Limits imposed by the Openness API itself
 
@@ -166,7 +188,7 @@ These are not gaps in this server - the underlying API offers no operation for t
   into the same PLC can hit a number collision. Renaming during a copy is not offered - it
   would mean rewriting the exported XML.
 - __No generic "create block".__ Only `CreateFB` and `CreateInstanceDB` exist; every other kind
-  of block has to arrive through `ImportBlock`.
+  of block has to arrive through `ImportXmlBlock`.
 - __Read-only objects.__ System constants cannot be created or changed, the force table cannot
   be created or deleted (the system owns one per PLC), the default tag table cannot be deleted,
   and the system groups (`Program blocks`, `PLC data types`, `PLC tags`, ...) cannot be renamed

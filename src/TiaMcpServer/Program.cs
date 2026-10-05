@@ -3,6 +3,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using System.Xml;
 using TiaMcpServer.ModelContextProtocol;
@@ -72,20 +74,20 @@ namespace TiaMcpServer
         }
 
         /// <summary>
-        /// The read-only tools are always registered. The project-mutating tools live in a
-        /// separate tool type that is only registered with '--allow-write', which is what keeps
-        /// them out of 'tools/list' rather than merely refusing them when called.
+        /// The read-only tools are always registered. The project-mutating tools are the
+        /// McpServer methods marked [WriteTool]; they are only registered with '--allow-write',
+        /// which is what keeps them out of 'tools/list' rather than merely refusing them when
+        /// called. Tools are created one by one (the SDK's type-based registration would take
+        /// every [McpServerTool] method of the class).
         /// </summary>
-        private static IEnumerable<Type> BuildToolTypes()
+        public static IEnumerable<global::ModelContextProtocol.Server.McpServerTool> BuildTools(bool allowWrite)
         {
-            var toolTypes = new List<Type> { typeof(McpServer) };
-
-            if (WritePolicy.AllowWrite)
-            {
-                toolTypes.Add(typeof(McpServerWrite));
-            }
-
-            return toolTypes;
+            return typeof(McpServer)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Where(m => m.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>() != null)
+                .Where(m => allowWrite || m.GetCustomAttribute<WriteToolAttribute>() == null)
+                .Select(m => PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m)))
+                .ToList();
         }
 
         public static async Task RunStdioHost(CliOptions? options)
@@ -134,21 +136,29 @@ namespace TiaMcpServer
                         {
                             Name = "TiaMcpServer",
                             Title = "TIA Portal MCP Server",
-                            Version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0"
+                            Version = TiaMcpServer.Siemens.Diagnostics.ServerVersion
                         };
 
                         serverOptions.ServerInstructions =
                             "Exposes Siemens TIA Portal via Openness. Call 'Connect' first, then 'OpenProject' with an " +
                             "absolute .apXX project or .alsXX session path. Use 'GetProjectTree' or 'GetSoftwareTree' to " +
                             "discover the path strings that the other tools expect. Export and import tools operate on " +
-                            "the local file system of the machine running this server." +
+                            "the local file system of the machine running this server. Every request is independent: " +
+                            "when more than one TIA Portal instance is running, call 'GetPortals' and pass the chosen " +
+                            "'portalId' to 'Connect' and to every other tool." +
                             (WritePolicy.AllowWrite
                                 ? " Write mode is enabled: tools that create, rename or delete project objects are " +
                                   "available. Their changes stay in memory until 'SaveProject' (or 'SaveSession')."
                                 : string.Empty);
                     })
                     .WithStdioServerTransport()
-                    .WithTools(BuildToolTypes())
+                    .WithRequestFilters(filters =>
+                    {
+                        filters.AddCallToolFilter(PortalSelection.Filter);
+                        filters.AddListToolsFilter(ToolOrdering.Filter);
+                        filters.AddGetPromptFilter(PromptArguments.Filter);
+                    })
+                    .WithTools(BuildTools(WritePolicy.AllowWrite))
                     .WithPrompts((IEnumerable<Type>)new[] { typeof(McpPrompts) });
 
                 // Register the Portal service for dependency injection

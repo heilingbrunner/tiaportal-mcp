@@ -17,21 +17,32 @@ Both `Portal` and `McpServer` are `partial` classes split by functional area, so
 carries the whole surface.
 
 *   **`ModelContextProtocol/`**: This directory contains the implementation of the MCP server.
-    *   `McpServer.cs` and `McpServer.{Tags,WatchTables,ExternalSources,CrossReferences,Source,GenerateSource}.cs`: the read-only tools, as partials of one `McpServer` type. `McpServer.GenerateSource.cs` holds the three external-source generators; they write files but never touch the project, so they stay on this side of the `--allow-write` gate.
-    *   `McpServerWrite.cs` and `McpServerWrite.{Blocks,Tags,Tables,MoveCopy,ImportSources}.cs`: the project-mutating tools, a separate tool type registered only under `--allow-write`. `McpServerWrite.cs` itself holds no tools, only the shared `Guarded` wrapper and response builders. `McpServerWrite.ImportSources.cs` is the bulk-import counterpart to `McpServer.GenerateSource.cs`.
+    *   `McpServer.cs` and the partials beside it: all MCP tools, as partials of one `McpServer` type, split the same way as `Portal` in `Siemens/` below. The project-mutating tools are marked `[WriteTool]` and sit next to the read-only tools of their area; `Program.BuildTools` registers them only under `--allow-write`, which keeps them out of `tools/list` rather than merely refusing them when called.
+        *   `McpServer.cs`: connection, state, project and session tools, the project tree, `OpenTiaProject` and `PreviewImport`, plus the shared write plumbing (the `Guarded` wrapper, `SaveHint` and the response builders).
+        *   `McpServer.Devices.cs`, `McpServer.Blocks.cs`, `McpServer.Types.cs`, `McpServer.Tags.cs`: devices; program blocks (including `GetBlockInterface`) and PLC data types, with their create, rename, delete, copy and move tools; tag, watch and force tables with their write tools.
+        *   `McpServer.Documents.cs`: the source document tools for PLC data types and blocks (`ExportAsDocuments`, `ExportBlocksAsDocuments`, `ExportTypeAsDocuments`, `ExportTypesAsDocuments` and the matching `...FromDocuments` imports).
+        *   `McpServer.Sources.cs`: the source file tools. `GetBlockSource`, `GetTypeSource`, `ExportPlcAsDocuments`, the external source tools incl. `ImportExternalSource`, and `ExportSourceBlock` / `ExportSourceType` / `ExportSourceBlocks` / `ExportSourceTypes` / `ExportSources`, which write files but never touch the project, so they are not `[WriteTool]`. `ImportSourceBlock` / `ImportSourceType` / `ImportSourceBlocks` / `ImportSourceTypes` / `ImportSources` are their import counterparts, one to one.
+        *   `Software/` (`McpServer.Software.*.cs`): software info and compile, the software tree, `ResolveObjectPath`, `FindInCode`, `GetPlcSummary`, and cross references (`GetCrossReferences`, `WhereUsed`).
     *   `WritePolicy.cs`: the `--allow-write` gate.
     *   `McpPrompts.cs`: This file contains the prompts that are used to guide the LLM.
     *   `Responses.cs` / `Responses.Write.cs`: the response objects returned by the tools. The write side shares `ResponseCreated`, `ResponseDeleted`, `ResponseRenamed`, `ResponseImported` and `ResponseGenerateBlocks` across all 37 tools rather than minting one DTO per operation.
     *   `Types.cs`: This file defines the data types that are used by the MCP server.
     *   `Helper.cs`: `GetAttributeList(IEngineeringObject)` reflects over any Openness object's attributes, so each new `Get*Info` tool is a few typed fields plus that call.
 *   **`Siemens/`**: This directory contains the implementation of the TIA Portal interfacing API.
-    *   `Portal.cs`: connection, project and session lifecycle, devices, blocks and types.
-    *   `Portal.Resolve.cs`: the generic path helpers (`WalkGroups`, `BuildGroupPath`, `WalkRecursive`). `PlcSoftware` exposes five look-alike group hierarchies - blocks, types, tag tables, watch and force tables, external sources - that share no common base type, so the shape is captured with generics plus selector delegates instead of inheritance.
-    *   `Portal.Tree.cs`: the software tree sections.
-    *   `Portal.{Tags,WatchTables,ExternalSources,CrossReferences}.cs`: the read side per area.
-    *   `Portal.GenerateSource.cs`: `PlcExternalSourceSystemGroup.GenerateSource`, which writes the `.scl`/`.db`/`.awl`/`.udt` files TIA Portal can compile back into blocks. Separate from `Portal.Source.cs`, which reads text and writes source documents and SimaticML.
-    *   `Portal.ImportSources.cs`: the write side counterpart - registers each file as a scratch `PlcExternalSource` via `CreateExternalSourceFromFile`, compiles it with `PlcExternalSource.GenerateBlocksFromSource`, then deletes the scratch source again.
-    *   `Portal.{BlockCrud,Write,MoveCopy}.cs`: the write side.
+    *   `Portal.cs`: connection, project and session lifecycle, the project tree, and the `InTransaction` helpers.
+    *   `Portal.Devices.cs`: devices and device items, resolved by path.
+    *   `Software/` (`Portal.Software.*.cs`): everything about one PLC software, split by concern.
+        *   `Portal.Software.Core.cs`: software lookup (`GetPlcSoftware` and the container resolvers) and `CompileSoftware`.
+        *   `Portal.Software.Tree.cs`: the software tree, including the section renderers.
+        *   `Portal.Software.Resolve.cs`: the generic path helpers (`WalkGroups`, `BuildGroupPath`, `WalkRecursive`). `PlcSoftware` exposes five look-alike group hierarchies - blocks, types, tag tables, watch and force tables, external sources - that share no common base type, so the shape is captured with generics plus selector delegates instead of inheritance.
+        *   `Portal.Software.Lookup.cs`: `ResolveObjectPath` and `GetSoftwarePaths`.
+        *   `Portal.Software.Search.cs`: `FindInCode`.
+        *   `Portal.Software.Summary.cs`: `GetPlcSummary`.
+        *   `Portal.Software.CrossReferences.cs`: `GetCrossReferences`.
+    *   `Portal.Blocks.cs` / `Portal.Types.cs`: program blocks and PLC data types respectively - read, XML export/import, create/delete/rename, copy/move, and source text (`GetBlockSource`, `GetTypeSource`). Helpers shared by both (the guards and the scratch-directory handling) live in `Portal.Blocks.cs`.
+    *   `Portal.Tags.cs`: tag tables, tags and constants, watch and force tables - both the read side and the write side.
+    *   `Portal.Documents.cs`: SIMATIC source documents for PLC data types and blocks - the four `...AsDocuments` exports (`ExportAsDocuments`, `ExportBlocksAsDocuments`, `ExportTypeAsDocuments`, `ExportTypesAsDocuments`) and the matching `...FromDocuments` imports.
+    *   `Portal.Sources.cs`: everything about TIA Portal source files. The source text readers (`GetBlockSource`, `GetTypeSource`) with their scratch directory, the whole-PLC source tree export, `ExportSourceBlock` / `ExportSourceType` / `ExportSourceBlocks` / `ExportSourceTypes` / `ExportSources` (write the `.scl`/`.db`/`.awl`/`.udt` files TIA Portal can compile back into blocks), their counterparts `ImportSourceBlock` / `ImportSourceType` / `ImportSourceBlocks` / `ImportSourceTypes` / `ImportSources` (register each file as a scratch `PlcExternalSource` via `CreateExternalSourceFromFile`, compiles it with `PlcExternalSource.GenerateBlocksFromSource`, then deletes the scratch source again), and the external source methods including `ImportExternalSource`.
     *   `Operation.cs`: the single exception-decoration point (see `docs/error-model.md`), which also serializes all Openness traffic behind a reentrant lock.
     *   `State.cs`: This file defines the `State` class, which represents the state of the TIA Portal.
     *   `Openness.cs`: This file provides a wrapper around the Siemens TIA Portal Openness API.
@@ -54,14 +65,14 @@ The TiaMcpServer project provides the following functionality:
 *   **Working with projects and sessions:** The `GetProject`, `OpenProject`, `SaveProject`, `SaveAsProject`, and `CloseProject` tools allow the LLM to work with TIA Portal projects and sessions.
 *   **Working with devices:** The `GetProjectTree`, `GetDeviceInfo`, `GetDeviceItemInfo`, and `GetDevices` tools allow the LLM to get information about the devices in a project.
 *   **Working with PLC software:** The `GetSoftwareInfo` and `CompileSoftware` tools allow the LLM to get information about and compile PLC software. `GetSoftwareTree` renders the whole PLC software - program blocks, PLC data types, PLC tags, watch and force tables and external source files - and takes a `sections` argument to narrow the output.
-*   **Working with blocks:** The `GetBlockInfo`, `GetBlocks`, `GetBlocksWithHierarchy`, `ExportBlock`, `ImportBlock`, and `ExportBlocks` tools allow the LLM to work with blocks.
-    - `ExportBlock` expects `blockPath` to be a fully qualified path like `Group/Subgroup/Name`. Passing just a name is ambiguous; the tool fails with an error result and may suggest likely full paths based on project contents.
-*   **Working with types:** The `GetTypeInfo`, `GetTypes`, `ExportType`, `ImportType`, and `ExportTypes` tools allow the LLM to work with types.
+*   **Working with blocks:** The `GetBlockInfo`, `GetBlocks`, `GetBlocksWithHierarchy`, `ExportXmlBlock`, `ImportXmlBlock`, and `ExportXmlBlocks` tools allow the LLM to work with blocks.
+    - `ExportXmlBlock` expects `blockPath` to be a fully qualified path like `Group/Subgroup/Name`. Passing just a name is ambiguous; the tool fails with an error result and may suggest likely full paths based on project contents.
+*   **Working with types:** The `GetTypeInfo`, `GetTypes`, `ExportXmlType`, `ImportXmlType`, and `ExportXmlTypes` tools allow the LLM to work with types.
 *   **Exporting blocks as documents (V20+):** The `ExportAsDocuments` and `ExportBlocksAsDocuments` tools export blocks as SIMATIC SD documents (.s7dcl/.s7res). Requires TIA Portal V20 or newer.
 *   **Importing blocks from documents (V20+):** The `ImportFromDocuments` and `ImportBlocksFromDocuments` tools import blocks from SIMATIC SD documents into PLC software. Requires TIA Portal V20 or newer.
 *   **PLC data types as documents (V21+):** `ExportTypeAsDocuments` and `ExportTypesAsDocuments` write a type as a SIMATIC Source Document set instead of XML; `ImportTypeFromDocuments` and `ImportTypesFromDocuments` read one back (both `--allow-write` only). Openness only offers `PlcType.ExportAsDocuments` from V21 on. The export response lists the files TIA Portal actually wrote rather than assuming a `.s7dcl` name.
-*   **Working with PLC tags and constants:** `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants` and `ExportTagTable`.
-*   **Working with watch and force tables:** `GetWatchTables`, `GetWatchTableInfo` (including entries), `GetForceTables` and `ExportWatchTable`.
+*   **Working with PLC tags and constants:** `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants` and `ExportXmlTagTable`.
+*   **Working with watch and force tables:** `GetWatchTables`, `GetWatchTableInfo` (including entries), `GetForceTables` and `ExportXmlWatchTable`.
 *   **Working with external source files:** `GetExternalSources` and `GetExternalSourceInfo`.
 *   **Cross references:** `GetCrossReferences` for a PLC software or a single block, type, tag table, tag or block group, with `maxDepth` to bound the result size.
 *   **Modifying the project (`--allow-write` only):** 37 tools that create, rename, delete, import, copy and move blocks, types, groups, tag tables, tags, user constants, watch tables and external sources. See the root `README.md` section "Write mode" for the gating rules and the API limits that shape them.
@@ -88,7 +99,7 @@ The TiaMcpServer project is a powerful tool that allows LLMs to interact with th
 - HTTP (planned)
   - This repo does not yet include an HTTP or SSE transport. The plan is to add a CLI flag `--transport http` and host a loopback `HttpListener` that forwards POST `/mcp` to the MCP request handler, then iterate towards MCP Streamable HTTP compliance.
 
-## Error Handling Standard (ExportBlock)
+## Error Handling Standard (ExportXmlBlock)
 
 - Portal layer
   - Throws `PortalException` with a short message and `PortalErrorCode`.
@@ -100,7 +111,7 @@ The TiaMcpServer project is a powerful tool that allows LLMs to interact with th
   - For `ExportFailed`, includes a concise reason from `InnerException.Message`.
   - Consistency: TIA Portal does not export inconsistent blocks/types. Single-item exports fail with a message advising to compile first. Bulk exports skip inconsistent items and include them in an `Inconsistent` list in the response.
   - Keeps user messages concise; structured details live in logs and context.
-  - Current standardization is applied to `ExportBlock` and will be rolled out to other methods incrementally.
+  - Current standardization is applied to `ExportXmlBlock` and will be rolled out to other methods incrementally.
   - Exception metadata: Context keys (e.g., `softwarePath`, `blockPath`/`typePath`, `exportPath`) are attached in a single catch per portal method just before rethrow, not at inline throw sites. See `docs/error-model.md`.
 
 ## Contributing
@@ -124,19 +135,19 @@ duplicated. Every one is verified against a live TIA Portal V21.
 | `WhereUsed`             | Answers "what uses this?" from a bare name                                                                          | `GetCrossReferences` plus manual tree walking        | Blocks, types, tags and tag tables only - watch tables and external sources have no cross references. Reports the candidates when a name is ambiguous.                                                                                                |
 | `ResolveObjectPath`     | Turns a bare or partial name into the root-relative path the other tools need                                       | Listing a whole area and post-processing it          | Searches blocks, types, tags, tag tables, watch tables and sources. Exact matches win; substring matches appear only when nothing matches exactly.                                                                                                    |
 | `OpenTiaProject`        | Connects if needed, opens the project, and returns the device and PLC software paths                                | `Connect` then `OpenProject` then `GetProjectTree`   | Marked destructive like `OpenProject`, because it closes whatever is open.                                                                                                                                                                            |
-| `ExportPlcAsSourceTree` | Snapshots a whole PLC to a git-ready folder tree                                                                    | Four bulk exports with matching `preservePath` flags | Blocks and types as source documents where supported, tag and watch tables as XML. Objects that cannot be exported are reported, not fatal.                                                                                                           |
+| `ExportPlcAsDocuments` | Snapshots a whole PLC to a git-ready folder tree                                                                    | Four bulk exports with matching `preservePath` flags | Blocks and types as source documents where supported, tag and watch tables as XML. Objects that cannot be exported are reported, not fatal.                                                                                                           |
 | `PreviewImport`         | Reports what an import would create, overwrite or collide with                                                      | Finding out by failing                               | Infers the object name from the file name, which is how every exporter here names its output. Changes nothing.                                                                                                                                        |
-| `GenerateBlockSource`   | Writes one block as the external source file the compiler reads back (`.db`, `.scl`, `.awl`)                        | Exporting SimaticML that cannot be compiled again    | Openness generates sources only from data blocks and STL or SCL blocks; LAD, FBD and GRAPH are rejected with the reason. The extension is not a choice - Openness throws on a mismatch.                                                              |
-| `GenerateTypeSource`    | Writes one PLC data type as a `*.udt` external source file                                                          | `ExportTypeAsDocuments`, which needs V21             | Works on every supported version, and the result can be imported again.                                                                                                                                                                              |
-| `GenerateSources`       | Writes every block and type of a PLC as sources into a tree mirroring the project groups                            | One `GenerateBlockSource` call per object            | The compilable counterpart to `ExportPlcAsSourceTree`. Objects with no source form, inconsistent ones and know-how protected ones land in `Skipped` rather than failing the run.                                                                      |
+| `ExportSourceBlock`     | Writes one block as the external source file the compiler reads back (`.db`, `.scl`, `.awl`)                        | Exporting SimaticML that cannot be compiled again    | Openness generates sources only from data blocks and STL or SCL blocks; LAD, FBD and GRAPH are rejected with the reason. The extension is not a choice - Openness throws on a mismatch.                                                               |
+| `ExportSourceType`      | Writes one PLC data type as a `*.udt` external source file                                                          | `ExportTypeAsDocuments`, which needs V21             | Works on every supported version, and the result can be imported again.                                                                                                                                                                               |
+| `ExportSources`         | Writes every block and type of a PLC as sources into a tree mirroring the project groups                            | One `ExportSourceBlock` call per object              | The compilable counterpart to `ExportPlcAsDocuments`. Objects with no source form, inconsistent ones and know-how protected ones land in `Skipped` rather than failing the run.                                                                      |
 
 `GetBlocks` and `GetTypes` now also return `Path`, which had been commented out on
 `ResponseBlockInfo` and `ResponseTypeInfo`. Exporting one type is a single call again instead of
 list, then build the path, then export.
 
-`GenerateSources`' write-side counterpart, `ImportSources`, lives under `--allow-write` rather
-than in the table above because it mutates the project: it walks a tree of `.db`/`.awl`/`.scl`/
-`.udt` files - typically one `GenerateSources` just wrote - and compiles each back into a block
+`ExportSources`' write-side counterparts, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes` and `ImportSources`, live under `--allow-write` rather
+than in the table above because they mutate the project: `ImportSources` walks a tree of `.db`/`.awl`/`.scl`/
+`.udt` files - typically one `ExportSources` just wrote - and compiles each back into a block
 or PLC data type, in the group its folder path implies. See the External sources row of the
 write tool table below.
 
@@ -185,8 +196,8 @@ capability is not listed here, it is not wired up yet.
 | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `PlcSoftware.BlockGroup`, `PlcBlockGroup.Groups` / `.Blocks`                                                                          | `GetBlocks`, `GetBlocksWithHierarchy`, `GetSoftwareTree`                  |
 | `PlcBlockComposition.Find`                                                                                                            | Resolving a block path                                                    |
-| `PlcBlock.Export(FileInfo, ExportOptions)`                                                                                            | `ExportBlock`, `ExportBlocks`                                             |
-| `PlcBlockComposition.Import(FileInfo, ImportOptions)`                                                                                 | `ImportBlock`, `CopyBlock`, `MoveBlock`                                   |
+| `PlcBlock.Export(FileInfo, ExportOptions)`                                                                                            | `ExportXmlBlock`, `ExportXmlBlocks`                                       |
+| `PlcBlockComposition.Import(FileInfo, ImportOptions)`                                                                                 | `ImportXmlBlock`, `CopyBlock`, `MoveBlock`                                |
 | `PlcBlock.ExportAsDocuments(DirectoryInfo, string)`                                                                                   | `ExportAsDocuments`, `ExportBlocksAsDocuments`, `GetBlockSource` (V20+)   |
 | `PlcBlockComposition.ImportFromDocuments(DirectoryInfo, string, ImportDocumentOptions)`                                               | `ImportFromDocuments`, `ImportBlocksFromDocuments`                        |
 | `PlcBlockGroup.Blocks.CreateFB` / `.CreateInstanceDB`                                                                                 | `CreateFB`, `CreateInstanceDB` - the only block kinds Openness can create |
@@ -197,26 +208,26 @@ capability is not listed here, it is not wired up yet.
 
 ### PLC data types
 
-| Openness member                                                                        | Used for                                                                  |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `PlcSoftware.TypeGroup`, `PlcTypeGroup.Groups` / `.Types`                              | `GetTypes`, `GetSoftwareTree`                                             |
-| `PlcType.Export`, `PlcTypeComposition.Import`                                          | `ExportType`, `ExportTypes`, `ImportType`, `CopyType`, `MoveType`         |
-| `PlcType.ExportAsDocuments(DirectoryInfo, string)`                                     | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`, `GetTypeSource` (V21+) |
-| `PlcTypeComposition.ImportFromDocuments(DirectoryInfo, string, ImportDocumentOptions)` | `ImportTypeFromDocuments`, `ImportTypesFromDocuments` (V21+)              |
-| `PlcTypeUserGroup.Groups.Create` / `.Delete`                                           | `CreateTypeGroup`, `DeleteTypeGroup`                                      |
-| `PlcType.IsConsistent`, `.ModifiedDate`, `.IsKnowHowProtected`                         | `GetTypeInfo`, `GetPlcSummary`                                            |
+| Openness member                                                                        | Used for                                                                   |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `PlcSoftware.TypeGroup`, `PlcTypeGroup.Groups` / `.Types`                              | `GetTypes`, `GetSoftwareTree`                                              |
+| `PlcType.Export`, `PlcTypeComposition.Import`                                          | `ExportXmlType`, `ExportXmlTypes`, `ImportXmlType`, `CopyType`, `MoveType` |
+| `PlcType.ExportAsDocuments(DirectoryInfo, string)`                                     | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`, `GetTypeSource` (V21+)  |
+| `PlcTypeComposition.ImportFromDocuments(DirectoryInfo, string, ImportDocumentOptions)` | `ImportTypeFromDocuments`, `ImportTypesFromDocuments` (V21+)               |
+| `PlcTypeUserGroup.Groups.Create` / `.Delete`                                           | `CreateTypeGroup`, `DeleteTypeGroup`                                       |
+| `PlcType.IsConsistent`, `.ModifiedDate`, `.IsKnowHowProtected`                         | `GetTypeInfo`, `GetPlcSummary`                                             |
 
 ### Tags, constants, tables and sources
 
-| Openness member                                                                       | Used for                                                                                  |
-| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `PlcSoftware.TagTableGroup`, `PlcTagTableGroup.TagTables` / `.Groups`                 | `GetTagTables`, `CreateTagTable`, `CreateTagTableGroup`                                   |
-| `PlcTagTable.Tags`, `.UserConstants`, `.SystemConstants` (`Create`, `Find`, `Delete`) | `GetTags`, `GetConstants`, `CreateTag`, `UpdateTag`, `DeleteTag`, the user-constant tools |
-| `PlcTagTable.Export`, `PlcTagTableComposition.Import`                                 | `ExportTagTable`, `ImportTagTable`                                                        |
-| `PlcSoftware.WatchAndForceTableGroup`, `PlcWatchTable`, `PlcForceTable`, `.Entries`   | The watch and force table tools                                                           |
-| `PlcSoftware.ExternalSourceGroup`, `ExternalSources.CreateFromFile` / `.Find`         | `GetExternalSources`, `CreateExternalSourceFromFile`                                      |
-| `PlcExternalSourceSystemGroup.GenerateBlocksFromSource`                               | `GenerateBlocksFromSource`                                                                |
-| `PlcExternalSourceSystemGroup.GenerateSource(IEnumerable<IGenerateSource>, FileInfo, GenerateOptions)`, `IGenerateSource`, `GenerateOptions` | `GenerateBlockSource`, `GenerateTypeSource`, `GenerateSources`                            |
+| Openness member                                                                                                                                                           | Used for                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `PlcSoftware.TagTableGroup`, `PlcTagTableGroup.TagTables` / `.Groups`                                                                                                     | `GetTagTables`, `CreateTagTable`, `CreateTagTableGroup`                                         |
+| `PlcTagTable.Tags`, `.UserConstants`, `.SystemConstants` (`Create`, `Find`, `Delete`)                                                                                     | `GetTags`, `GetConstants`, `CreateTag`, `UpdateTag`, `DeleteTag`, the user-constant tools       |
+| `PlcTagTable.Export`, `PlcTagTableComposition.Import`                                                                                                                     | `ExportXmlTagTable`, `ImportXmlTagTable`                                                              |
+| `PlcSoftware.WatchAndForceTableGroup`, `PlcWatchTable`, `PlcForceTable`, `.Entries`                                                                                       | The watch and force table tools                                                                 |
+| `PlcSoftware.ExternalSourceGroup`, `ExternalSources.CreateFromFile` / `.Find`                                                                                             | `GetExternalSources`, `CreateExternalSourceFromFile`                                            |
+| `PlcExternalSourceSystemGroup.GenerateBlocksFromSource`                                                                                                                   | `ImportExternalSource`                                                                            |
+| `PlcExternalSourceSystemGroup.GenerateSource(IEnumerable<IGenerateSource>, FileInfo, GenerateOptions)`, `IGenerateSource`, `GenerateOptions`                              | `ExportSourceBlock`, `ExportSourceType`, `ExportSources`                                      |
 | `PlcExternalSource.GenerateBlocksFromSource(PlcBlockUserGroup, GenerateBlockOption)`, `PlcExternalSource.GenerateBlocksFromSource(PlcTypeUserGroup, GenerateBlockOption)` | `ImportSources` - one call compiles a source into either kind, chosen by the file's own content |
 
 ### Compile and cross references

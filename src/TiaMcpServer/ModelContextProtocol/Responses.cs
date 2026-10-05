@@ -133,7 +133,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public IEnumerable<ResponseConstantInfo>? Items { get; set; }
     }
 
-    public class ResponseExportTagTable : ResponseMessage
+    public class ResponseExportXmlTagTable : ResponseMessage
     {
         public string? Name { get; set; }
         public string? Path { get; set; }
@@ -163,7 +163,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public IEnumerable<ResponseWatchTableInfo>? Items { get; set; }
     }
 
-    public class ResponseExportWatchTable : ResponseMessage
+    public class ResponseExportXmlWatchTable : ResponseMessage
     {
         public string? Name { get; set; }
         public string? Path { get; set; }
@@ -206,6 +206,22 @@ namespace TiaMcpServer.ModelContextProtocol
 
     public class ResponseConnect : ResponseMessage
     {
+        /// <summary>
+        /// Process id of the attached TIA Portal instance. Pass it as 'portalId' to the other
+        /// tools when more than one instance is attached.
+        /// </summary>
+        public int? PortalId { get; set; }
+    }
+
+    public class ResponsePortals : ResponseMessage
+    {
+        /// <summary>
+        /// Process id of the instance this server is attached to - the one tools use when no
+        /// 'portalId' is passed. Null when no instance or more than one is attached.
+        /// </summary>
+        public int? PortalId { get; set; }
+
+        public IEnumerable<TiaMcpServer.Siemens.PortalInstance>? Portals { get; set; }
     }
 
     public class ResponseDisconnect : ResponseMessage
@@ -214,6 +230,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
     public class ResponseState : ResponseMessage
     {
+        public int? PortalId { get; set; }
         public bool? IsConnected { get; set; }
         public string? Project { get; set; }
         public string? Session { get; set; }
@@ -236,6 +253,9 @@ namespace TiaMcpServer.ModelContextProtocol
     public class ResponseDoctor : ResponseMessage
     {
         public string? Report { get; set; }
+
+        /// <summary>Assembly version of TiaMcpServer.exe, e.g. "0.2.0.0".</summary>
+        public string? ServerVersion { get; set; }
         public bool? IsConnected { get; set; }
         public int? ActiveTiaMajorVersion { get; set; }
         public string? ProjectName { get; set; }
@@ -326,15 +346,15 @@ namespace TiaMcpServer.ModelContextProtocol
         public IEnumerable<ResponseBlockInfo>? Items { get; set; }
     }
 
-    public class ResponseExportBlock : ResponseMessage
+    public class ResponseExportXmlBlock : ResponseMessage
     {
     }
 
-    public class ResponseImportBlock : ResponseMessage
+    public class ResponseImportXmlBlock : ResponseMessage
     {
     }
 
-    public class ResponseExportBlocks : ResponseMessage
+    public class ResponseExportXmlBlocks : ResponseMessage
     {
         public IEnumerable<ResponseBlockInfo>? Items { get; set; }
         public IEnumerable<ResponseBlockInfo>? Inconsistent { get; set; }
@@ -345,15 +365,15 @@ namespace TiaMcpServer.ModelContextProtocol
         public IEnumerable<ResponseTypeInfo>? Items { get; set; }
     }
 
-    public class ResponseExportType : ResponseMessage
+    public class ResponseExportXmlType : ResponseMessage
     {
     }
 
-    public class ResponseImportType : ResponseMessage
+    public class ResponseImportXmlType : ResponseMessage
     {
     }
 
-    public class ResponseExportTypes : ResponseMessage
+    public class ResponseExportXmlTypes : ResponseMessage
     {
         public IEnumerable<ResponseTypeInfo>? Items { get; set; }
         public IEnumerable<ResponseTypeInfo>? Inconsistent { get; set; }
@@ -457,6 +477,9 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>The project tree, so no follow-up GetProjectTree call is needed.</summary>
         public string? Tree { get; set; }
+
+        /// <summary>The TIA Portal instance the project was opened in; pass it on as 'portalId'.</summary>
+        public int? PortalId { get; set; }
     }
     #endregion
 

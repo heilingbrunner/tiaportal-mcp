@@ -1,5 +1,8 @@
-# Set default behavior to automatically normalize line endings.
-* text=auto
+# Set default behavior to automatically normalize line endings: the repository stores LF,
+# the working tree gets CRLF (this repo is used on Windows only, see AGENTS.md). 'eol=crlf'
+# here overrides any global core.eol/core.autocrlf, so no per-machine setting is needed.
+# The '*.sh'/'*.in' rules below still force LF for scripts.
+* text=auto eol=crlf
 
 *.doc diff=astextplain
 *.DOC diff=astextplain

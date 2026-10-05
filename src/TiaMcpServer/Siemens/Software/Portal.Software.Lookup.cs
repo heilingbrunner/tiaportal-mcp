@@ -1,28 +1,40 @@
+using Siemens.Engineering;
+using Siemens.Engineering.Compiler;
+using Siemens.Engineering.CrossReference;
 using Siemens.Engineering.HW;
 using Siemens.Engineering.HW.Features;
+using Siemens.Engineering.Multiuser;
 using Siemens.Engineering.SW;
+using Siemens.Engineering.SW.ExternalSources;
 using Siemens.Engineering.SW.Tags;
+using Siemens.Engineering.SW.WatchAndForceTables;
+using Siemens.Engineering.Safety;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace TiaMcpServer.Siemens
 {
-    /// <summary>
-    /// Name-to-path resolution across every PLC software area.
-    ///
-    /// Callers: the ResolveObjectPath tool in McpServer.Lookup.cs and the NotFound branch of
-    /// ExportBlock. Affected API: none existing - every member here is new. Reads and writes no
-    /// data files.
-    ///
-    /// Why this exists: every other tool takes a root-relative path ("Common/BtnTyp_X"), but a
-    /// caller - human or model - normally knows only the bare name. Before this, the only way
-    /// to turn one into the other was to list a whole area and post-process it, and the
-    /// "did you mean" helper that did so was implemented twice inside ExportBlock, once as dead
-    /// code. Resolution lives here once and covers all six areas.
-    /// </summary>
     public partial class Portal
     {
+        // From the former Portal.Lookup.cs:
+        // Name-to-path resolution across every PLC software area.
+        //
+        // Callers: the ResolveObjectPath tool in McpServer.Software.Lookup.cs and the NotFound branch of
+        // ExportXmlBlock. Affected API: none existing - every member here is new. Reads and writes no
+        // data files.
+        //
+        // Why this exists: every other tool takes a root-relative path ("Common/BtnTyp_X"), but a
+        // caller - human or model - normally knows only the bare name. Before this, the only way
+        // to turn one into the other was to list a whole area and post-process it, and the
+        // "did you mean" helper that did so was implemented twice inside ExportXmlBlock, once as dead
+        // code. Resolution lives here once and covers all six areas.
+
+        #region lookup
+
         /// <summary>The object areas ResolveObjectPath can search, as accepted in 'kind'.</summary>
         private static readonly string[] LookupKinds =
             { "block", "type", "tag", "tagTable", "watchTable", "source" };
@@ -148,7 +160,7 @@ namespace TiaMcpServer.Siemens
                 {
                     var paths = new List<string>();
 
-                    if (_project == null)
+                    if (_project is null)
                     {
                         return paths;
                     }
@@ -217,6 +229,8 @@ namespace TiaMcpServer.Siemens
                 }
             }
         }
+
+        #endregion
     }
 
     /// <summary>One object found by ResolveObjectPath.</summary>

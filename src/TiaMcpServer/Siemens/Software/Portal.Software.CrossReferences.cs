@@ -1,22 +1,39 @@
 using Siemens.Engineering;
 using Siemens.Engineering.CrossReference;
+using Siemens.Engineering.HW.Features;
+using Siemens.Engineering.HmiUnified;
+using Siemens.Engineering.Multiuser;
+using Siemens.Engineering.SW;
+using Siemens.Engineering.SW.Blocks;
+using Siemens.Engineering.SW.ExternalSources;
 using Siemens.Engineering.SW.Tags;
+using Siemens.Engineering.SW.WatchAndForceTables;
+using Siemens.Engineering.Safety;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Security;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace TiaMcpServer.Siemens
 {
-    /// <summary>
-    /// Cross references for PLC software objects.
-    ///
-    /// Callers: the GetCrossReferences tool in McpServer.CrossReferences.cs. Affected API: none
-    /// existing - all members are new. Reads/writes no data files.
-    ///
-    /// CrossReferenceService lives in Siemens.Engineering.Base, not Step7, and is offered by
-    /// software, blocks, types, their groups, tags, tag tables and constants - but NOT by watch
-    /// tables, force tables or external sources. A null service therefore means "this object
-    /// kind has no cross references", which is reported as NotSupported rather than NotFound.
-    /// </summary>
     public partial class Portal
     {
+        // From the former Portal.CrossReferences.cs:
+        // Cross references for PLC software objects.
+        //
+        // Callers: the GetCrossReferences tool in McpServer.Software.CrossReferences.cs. Affected API: none
+        // existing - all members are new. Reads/writes no data files.
+        //
+        // CrossReferenceService lives in Siemens.Engineering.Base, not Step7, and is offered by
+        // software, blocks, types, their groups, tags, tag tables and constants - but NOT by watch
+        // tables, force tables or external sources. A null service therefore means "this object
+        // kind has no cross references", which is reported as NotSupported rather than NotFound.
+
+        #region cross references
+
         /// <param name="objectPath">Empty targets the whole PLC software.</param>
         /// <param name="objectKind">
         /// "auto" (default) resolves the path against blocks, then types, then tag tables, then
@@ -51,7 +68,7 @@ namespace TiaMcpServer.Siemens
         {
             var plcSoftware = GetPlcSoftwareOrThrow(softwarePath);
 
-            if (string.IsNullOrWhiteSpace(objectPath))
+            if (NormalizeGroupPath(objectPath).Length == 0)
             {
                 return plcSoftware;
             }
@@ -111,5 +128,7 @@ namespace TiaMcpServer.Siemens
                 return null;
             }
         }
+
+        #endregion
     }
 }

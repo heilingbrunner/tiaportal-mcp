@@ -17,8 +17,8 @@ namespace TiaMcpServer.Siemens
         /// <summary>
         /// Openness objects are not thread-safe and the MCP SDK may dispatch tool calls
         /// concurrently, so all Openness traffic is serialized here.
-        /// Monitor - not SemaphoreSlim - because Portal methods call each other (ExportBlock
-        /// calls GetBlock, ExportBlocks calls GetBlocks), and Monitor is reentrant on the
+        /// Monitor - not SemaphoreSlim - because Portal methods call each other (ExportXmlBlock
+        /// calls GetBlock, ExportXmlBlocks calls GetBlocks), and Monitor is reentrant on the
         /// same thread while SemaphoreSlim would self-deadlock.
         /// </summary>
         private static readonly object Gate = new object();
