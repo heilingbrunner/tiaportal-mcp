@@ -132,6 +132,45 @@ namespace TiaMcpServer.Test
                 "The CancellationToken is bound by the SDK, not exposed to the client");
         }
 
+        [TestMethod]
+        public void Test_706_ToolOrdering_SortsByTitleThenName()
+        {
+            // Arrange
+            var tools = new[]
+            {
+                new global::ModelContextProtocol.Protocol.Tool { Name = "Zeta", Title = "connect to TIA Portal" },
+                new global::ModelContextProtocol.Protocol.Tool { Name = "Beta" },
+                new global::ModelContextProtocol.Protocol.Tool { Name = "Alpha", Title = "Close project" },
+                new global::ModelContextProtocol.Protocol.Tool { Name = "Gamma", Title = "Connect to TIA Portal" }
+            };
+
+            // Act
+            var names = ToolOrdering.Sort(tools).Select(t => t.Name).ToList();
+
+            // Assert: "Beta" has no title and sorts by name; equal titles (ignoring case) fall back to Name
+            CollectionAssert.AreEqual(new[] { "Beta", "Alpha", "Gamma", "Zeta" }, names);
+        }
+
+        [TestMethod]
+        public void Test_707_ToolOrdering_SortsAllRegisteredTools()
+        {
+            // Arrange
+            var registered = Program.BuildTools(allowWrite: true).Select(t => t.ProtocolTool).ToList();
+
+            // Act
+            var sorted = ToolOrdering.Sort(registered);
+            var displayNames = sorted.Select(ToolOrdering.DisplayName).ToList();
+
+            // Assert
+            Assert.AreEqual(registered.Count, sorted.Count, "Sorting must keep every tool");
+            for (var i = 1; i < displayNames.Count; i++)
+            {
+                Assert.IsTrue(
+                    System.StringComparer.OrdinalIgnoreCase.Compare(displayNames[i - 1], displayNames[i]) <= 0,
+                    $"'{displayNames[i - 1]}' must not come after '{displayNames[i]}'");
+            }
+        }
+
         private static System.Collections.Generic.List<MethodInfo> WriteToolMethods() =>
             typeof(McpServer)
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)

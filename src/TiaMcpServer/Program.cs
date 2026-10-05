@@ -152,7 +152,11 @@ namespace TiaMcpServer
                                 : string.Empty);
                     })
                     .WithStdioServerTransport()
-                    .WithRequestFilters(filters => filters.AddCallToolFilter(PortalSelection.Filter))
+                    .WithRequestFilters(filters =>
+                    {
+                        filters.AddCallToolFilter(PortalSelection.Filter);
+                        filters.AddListToolsFilter(ToolOrdering.Filter);
+                    })
                     .WithTools(BuildTools(WritePolicy.AllowWrite))
                     .WithPrompts((IEnumerable<Type>)new[] { typeof(McpPrompts) });
 
