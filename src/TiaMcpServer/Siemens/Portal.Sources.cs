@@ -374,7 +374,7 @@ namespace TiaMcpServer.Siemens
         //
         // This is the compiler's own source format, not the SimaticML XML of ExportXmlBlock nor the
         // SIMATIC Source Documents of ExportAsDocuments: the files written here are exactly what
-        // 'CreateExternalSourceFromFile' plus 'ImportSourceBlocks' reads back, which makes
+        // 'ImportSourceBlock' / 'ImportSourceType' (or 'ImportExternalSource') reads back, which makes
         // them the round-trippable representation of a program.
         //
         // The rules below come from the Openness manual, section "Generate source from block", and
@@ -845,8 +845,11 @@ namespace TiaMcpServer.Siemens
         // project as compiled blocks and PLC data types - the counterpart to
         // ExportSourceBlock / ExportSourceType / ExportSources further up in this file.
         //
-        // Callers: the ImportSources tool in McpServer.Sources.cs. Affected API: none
-        // existing - every member here is new. CreateExternalSourceFromFile, DeleteExternalSource
+        // Callers: the ImportSourceBlock / ImportSourceType / ImportSourceBlocks / ImportSourceTypes /
+        // ImportSources tools in McpServer.Sources.cs, which mirror the ExportSource* tools one to
+        // one. Affected API: none existing - every member here is new, apart from
+        // ImportExternalSource, which was ImportSourceBlocks before that name went to the
+        // folder import. CreateExternalSourceFromFile, DeleteExternalSource
         // and GetExternalSourcePath (further down in this file) are reused rather
         // than duplicated, and so is StripSystemRootSegment (Portal.Documents.cs), which already
         // solves the same "does this folder name match the localized system root" problem for
@@ -890,59 +893,191 @@ namespace TiaMcpServer.Siemens
         public ImportedSourcesResult ImportSources(string softwarePath, string importPath, string regexName = "", bool keepOnError = false)
         {
             return Operation.Run(_logger, nameof(ImportSources), PortalErrorCode.ImportFailed,
+                () => ImportSourceFiles(softwarePath, importPath, string.Empty, regexName, keepOnError, preservePath: true, includeBlocks: true, includeTypes: true),
+                ("softwarePath", softwarePath), ("importPath", importPath), ("regexName", regexName));
+        }
+
+        /// <summary>
+        /// Generates the blocks of one source file (*.db, *.awl, *.scl) into a block group. The
+        /// counterpart to <see cref="ExportSourceBlock"/>. An empty <paramref name="groupPath"/>
+        /// uses the source's default location; otherwise it must be an existing block user group,
+        /// because the 'Program blocks' system root does not accept generated blocks. A file that
+        /// uses data types or other blocks may generate several objects, all listed in the result.
+        /// </summary>
+        public ImportedSourcesResult ImportSourceBlock(string softwarePath, string groupPath, string importPath, bool keepOnError = false)
+        {
+            return Operation.Run(_logger, nameof(ImportSourceBlock), PortalErrorCode.ImportFailed,
+                () => ImportSourceFile(softwarePath, groupPath, importPath, keepOnError, isType: false),
+                ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath));
+        }
+
+        /// <summary>
+        /// Generates the PLC data types of one '*.udt' source file into a type group. The
+        /// counterpart to <see cref="ExportSourceType"/>; see <see cref="ImportSourceBlock"/> for
+        /// the rules about <paramref name="groupPath"/>.
+        /// </summary>
+        public ImportedSourcesResult ImportSourceType(string softwarePath, string groupPath, string importPath, bool keepOnError = false)
+        {
+            return Operation.Run(_logger, nameof(ImportSourceType), PortalErrorCode.ImportFailed,
+                () => ImportSourceFile(softwarePath, groupPath, importPath, keepOnError, isType: true),
+                ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath));
+        }
+
+        /// <summary>
+        /// Generates blocks from every block source file (*.db, *.awl, *.scl) in a folder. The
+        /// counterpart to <see cref="ExportSourceBlocks"/>, with the same meaning of
+        /// <paramref name="preservePath"/>: without it only the files directly in
+        /// <paramref name="importPath"/> are read and all go into <paramref name="groupPath"/>;
+        /// with it the folder tree below <paramref name="importPath"/> is walked and each file goes
+        /// into the subgroup its folder implies, below <paramref name="groupPath"/>. A leading
+        /// 'Program blocks' folder, as <see cref="ExportSourceBlocks"/> writes it, is dropped.
+        /// Skip-and-continue: a file that fails is reported and the rest are still imported.
+        /// </summary>
+        public ImportedSourcesResult ImportSourceBlocks(string softwarePath, string groupPath, string importPath, string regexName = "", bool preservePath = false, bool keepOnError = false)
+        {
+            return Operation.Run(_logger, nameof(ImportSourceBlocks), PortalErrorCode.ImportFailed,
                 () =>
                 {
-                    var software = GetPlcSoftwareOrThrow(softwarePath);
+                    // Fail once, before any file is touched, when the target group is wrong.
+                    ResolveBlockUserGroupForGenerate(softwarePath, groupPath);
 
-                    if (!Directory.Exists(importPath))
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidParams,
-                            $"Import directory '{importPath}' does not exist.");
-                    }
-
-                    var blockRootName = software.BlockGroup?.Name ?? string.Empty;
-                    var typeRootName = software.TypeGroup?.Name ?? string.Empty;
-                    var option = keepOnError ? GenerateBlockOption.KeepOnError : GenerateBlockOption.None;
-
-                    var result = new ImportedSourcesResult { Directory = importPath };
-
-                    var files = Directory
-                        .EnumerateFiles(importPath, "*.*", SearchOption.AllDirectories)
-                        .Where(f => IsBlockSourceExtension(Path.GetExtension(f)) || IsTypeSourceExtension(Path.GetExtension(f)))
-                        .OrderBy(f => f, StringComparer.OrdinalIgnoreCase);
-
-                    foreach (var file in files)
-                    {
-                        var extension = Path.GetExtension(file);
-                        var isType = IsTypeSourceExtension(extension);
-                        var name = Path.GetFileNameWithoutExtension(file);
-
-                        if (!string.IsNullOrEmpty(regexName) && !MatchesRegex(name, regexName))
-                        {
-                            continue;
-                        }
-
-                        try
-                        {
-                            var relativeDir = RelativeDirectory(importPath, file);
-                            var groupPath = StripSystemRootSegment(isType ? typeRootName : blockRootName, relativeDir);
-
-                            result.Items.AddRange(ImportOneSource(softwarePath, file, groupPath, option, isType));
-                        }
-                        catch (Exception ex)
-                        {
-                            result.Failures.Add($"{name}{extension}: {ex.Message}");
-                            _logger?.LogWarning(ex, "Could not import source '{File}'", file);
-                        }
-                    }
-
-                    _logger?.LogInformation(
-                        "Sources imported from '{Directory}' into '{Software}': {Imported} object(s), {Failed} failed",
-                        importPath, softwarePath, result.Items.Count, result.Failures.Count);
-
-                    return result;
+                    return ImportSourceFiles(softwarePath, importPath, groupPath, regexName, keepOnError, preservePath, includeBlocks: true, includeTypes: false);
                 },
-                ("softwarePath", softwarePath), ("importPath", importPath), ("regexName", regexName));
+                ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath), ("regexName", regexName));
+        }
+
+        /// <summary>
+        /// Generates PLC data types from every '*.udt' file in a folder. The counterpart to
+        /// <see cref="ExportSourceTypes"/>; see <see cref="ImportSourceBlocks"/> for the effect of
+        /// <paramref name="preservePath"/>.
+        /// </summary>
+        public ImportedSourcesResult ImportSourceTypes(string softwarePath, string groupPath, string importPath, string regexName = "", bool preservePath = false, bool keepOnError = false)
+        {
+            return Operation.Run(_logger, nameof(ImportSourceTypes), PortalErrorCode.ImportFailed,
+                () =>
+                {
+                    ResolveTypeUserGroupForGenerate(softwarePath, groupPath);
+
+                    return ImportSourceFiles(softwarePath, importPath, groupPath, regexName, keepOnError, preservePath, includeBlocks: false, includeTypes: true);
+                },
+                ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath), ("regexName", regexName));
+        }
+
+        private ImportedSourcesResult ImportSourceFile(string softwarePath, string groupPath, string importPath, bool keepOnError, bool isType)
+        {
+            GetPlcSoftwareOrThrow(softwarePath);
+
+            if (!File.Exists(importPath))
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams,
+                    $"Source file '{importPath}' does not exist on the machine running this server.");
+            }
+
+            var extension = Path.GetExtension(importPath);
+
+            if (isType ? !IsTypeSourceExtension(extension) : !IsBlockSourceExtension(extension))
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams, isType
+                    ? $"'{importPath}' is not a PLC data type source: expected '.udt'. Use 'ImportSourceBlock' for '.db', '.awl' and '.scl' files."
+                    : $"'{importPath}' is not a block source: expected '.db', '.awl' or '.scl'. Use 'ImportSourceType' for '.udt' files.");
+            }
+
+            var option = keepOnError ? GenerateBlockOption.KeepOnError : GenerateBlockOption.None;
+            var result = new ImportedSourcesResult { Directory = Path.GetDirectoryName(Path.GetFullPath(importPath)) ?? string.Empty };
+
+            result.Items.AddRange(ImportOneSource(softwarePath, importPath, groupPath, option, isType));
+
+            _logger?.LogInformation(
+                "Source '{File}' imported into '{Software}': {Imported} object(s)",
+                importPath, softwarePath, result.Items.Count);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Shared walk of the three bulk imports: pick the files of the wanted kinds, work out the
+        /// target group of each, and import them one by one, collecting failures instead of aborting.
+        /// </summary>
+        private ImportedSourcesResult ImportSourceFiles(
+            string softwarePath,
+            string importPath,
+            string targetGroupPath,
+            string regexName,
+            bool keepOnError,
+            bool preservePath,
+            bool includeBlocks,
+            bool includeTypes)
+        {
+            var software = GetPlcSoftwareOrThrow(softwarePath);
+
+            if (!Directory.Exists(importPath))
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams,
+                    $"Import directory '{importPath}' does not exist.");
+            }
+
+            var blockRootName = software.BlockGroup?.Name ?? string.Empty;
+            var typeRootName = software.TypeGroup?.Name ?? string.Empty;
+            var option = keepOnError ? GenerateBlockOption.KeepOnError : GenerateBlockOption.None;
+
+            var result = new ImportedSourcesResult { Directory = importPath };
+
+            var files = Directory
+                .EnumerateFiles(importPath, "*.*", preservePath ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+                .Where(f =>
+                    (includeBlocks && IsBlockSourceExtension(Path.GetExtension(f))) ||
+                    (includeTypes && IsTypeSourceExtension(Path.GetExtension(f))))
+                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var file in files)
+            {
+                var extension = Path.GetExtension(file);
+                var isType = IsTypeSourceExtension(extension);
+                var name = Path.GetFileNameWithoutExtension(file);
+
+                if (!string.IsNullOrEmpty(regexName) && !MatchesRegex(name, regexName))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var groupPath = targetGroupPath;
+
+                    if (preservePath)
+                    {
+                        var below = StripSystemRootSegment(isType ? typeRootName : blockRootName, RelativeDirectory(importPath, file));
+
+                        groupPath = CombineGroupPath(targetGroupPath, below);
+                    }
+
+                    result.Items.AddRange(ImportOneSource(softwarePath, file, groupPath, option, isType));
+                }
+                catch (Exception ex)
+                {
+                    result.Failures.Add($"{name}{extension}: {ex.Message}");
+                    _logger?.LogWarning(ex, "Could not import source '{File}'", file);
+                }
+            }
+
+            _logger?.LogInformation(
+                "Sources imported from '{Directory}' into '{Software}': {Imported} object(s), {Failed} failed",
+                importPath, softwarePath, result.Items.Count, result.Failures.Count);
+
+            return result;
+        }
+
+        private static string CombineGroupPath(string parent, string child)
+        {
+            parent = NormalizeGroupPath(parent);
+            child = NormalizeGroupPath(child);
+
+            if (parent.Length == 0)
+            {
+                return child;
+            }
+
+            return child.Length == 0 ? parent : parent + "/" + child;
         }
 
         /// <summary>
@@ -1231,9 +1366,9 @@ namespace TiaMcpServer.Siemens
         /// default location; a target must resolve to a block USER group - the system root does
         /// not bind to the PlcBlockUserGroup overload.
         /// </summary>
-        public List<string> ImportSourceBlocks(string softwarePath, string sourcePath, string targetGroupPath = "", bool keepOnError = false)
+        public List<string> ImportExternalSource(string softwarePath, string sourcePath, string targetGroupPath = "", bool keepOnError = false)
         {
-            return Operation.Run(_logger, nameof(ImportSourceBlocks), PortalErrorCode.CreateFailed,
+            return Operation.Run(_logger, nameof(ImportExternalSource), PortalErrorCode.CreateFailed,
                 () =>
                 {
                     var source = GetExternalSource(softwarePath, sourcePath)

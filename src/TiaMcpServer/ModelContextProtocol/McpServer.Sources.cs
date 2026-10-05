@@ -334,15 +334,76 @@ namespace TiaMcpServer.ModelContextProtocol
         // project change stays in memory until SaveProject/SaveSession, per the SaveHint convention
         // shared by every [WriteTool] tool.
         //
-        // The bulk-import counterpart to 'ExportSources' (further up in this file): that tool
-        // writes a folder tree of *.db/*.awl/*.scl/*.udt files, this one walks it back into blocks
-        // and PLC data types via 'Portal.ImportSources'.
+        // The import counterparts to the ExportSource* tools further up in this file, one to one:
+        // ImportSourceBlock / ImportSourceType / ImportSourceBlocks / ImportSourceTypes read what
+        // ExportSourceBlock / ExportSourceType / ExportSourceBlocks / ExportSourceTypes wrote, and
+        // ImportSources walks a whole tree written by ExportSources back into blocks and PLC data
+        // types via 'Portal.ImportSources'. All five share ImportedSources for the response.
+        // 'ImportExternalSource' (in the external sources region below) is the different tool that
+        // compiles a source already registered in the project; it was named ImportSourceBlocks
+        // before that name went to the folder import.
 
         #region import sources (write)
 
         [WriteTool]
+        [McpServerTool(Name = "ImportSourceBlock", Title = "Import block from source", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Compile one block source file (*.db, *.awl or *.scl) into a block group - the counterpart to 'ExportSourceBlock'. Existing blocks of the same name are overwritten. A file that includes dependencies can generate several objects, all listed in 'Items'. 'ImportXmlBlock' is the equivalent for SimaticML files")]
+        public static ResponseImportedSources ImportSourceBlock(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("groupPath: root-relative block user group that receives the blocks, e.g. '0_OBs'. Empty uses the source's default location; the 'Program blocks' root itself is not allowed")] string groupPath,
+            [Description("importPath: full path of the *.db, *.awl or *.scl file on the machine running this server")] string importPath,
+            [Description("keepOnError: keep successfully generated objects even when others in the file fail. Default false, which rolls back the whole file on any error")] bool keepOnError = false)
+        {
+            return Guarded(nameof(ImportSourceBlock), () =>
+                ImportedSources(Portal.ImportSourceBlock(softwarePath, groupPath, importPath, keepOnError), importPath, keepOnError));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "ImportSourceType", Title = "Import type from source", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Compile one '*.udt' source file into a PLC data type group - the counterpart to 'ExportSourceType'. Existing types of the same name are overwritten. 'ImportXmlType' is the equivalent for SimaticML files")]
+        public static ResponseImportedSources ImportSourceType(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("groupPath: root-relative PLC data type user group that receives the types, e.g. 'Common'. Empty uses the source's default location; the 'PLC data types' root itself is not allowed")] string groupPath,
+            [Description("importPath: full path of the *.udt file on the machine running this server")] string importPath,
+            [Description("keepOnError: keep successfully generated objects even when others in the file fail. Default false, which rolls back the whole file on any error")] bool keepOnError = false)
+        {
+            return Guarded(nameof(ImportSourceType), () =>
+                ImportedSources(Portal.ImportSourceType(softwarePath, groupPath, importPath, keepOnError), importPath, keepOnError));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "ImportSourceBlocks", Title = "Import blocks from source", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Compile every block source file (*.db, *.awl, *.scl) of a folder into a block group - the counterpart to 'ExportSourceBlocks'. Existing blocks of the same name are overwritten. A file that fails is reported in 'Failures' instead of stopping the run. 'ImportSources' does blocks and PLC data types in one go")]
+        public static ResponseImportedSources ImportSourceBlocks(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("groupPath: root-relative block user group that receives the blocks, e.g. '0_OBs'. Empty uses each source's default location; the 'Program blocks' root itself is not allowed")] string groupPath,
+            [Description("importPath: directory on this machine that holds the *.db, *.awl and *.scl files")] string importPath,
+            [Description("regexName: optional regular expression, imports only files whose base name matches. Empty means all")] string regexName = "",
+            [Description("preservePath: also read the subfolders of importPath and put each file into the matching subgroup of groupPath, as 'ExportSourceBlocks' with preservePath writes them; a missing subgroup fails that file. Default false, which reads only importPath itself")] bool preservePath = false,
+            [Description("keepOnError: keep successfully generated objects even when others in a file fail. Default false, which rolls back a whole file on any error")] bool keepOnError = false)
+        {
+            return Guarded(nameof(ImportSourceBlocks), () =>
+                ImportedSources(Portal.ImportSourceBlocks(softwarePath, groupPath, importPath, regexName, preservePath, keepOnError), importPath, keepOnError));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "ImportSourceTypes", Title = "Import types from source", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Compile every '*.udt' source file of a folder into a PLC data type group - the counterpart to 'ExportSourceTypes'. Existing types of the same name are overwritten. A file that fails is reported in 'Failures' instead of stopping the run")]
+        public static ResponseImportedSources ImportSourceTypes(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("groupPath: root-relative PLC data type user group that receives the types, e.g. 'Common'. Empty uses each source's default location; the 'PLC data types' root itself is not allowed")] string groupPath,
+            [Description("importPath: directory on this machine that holds the *.udt files")] string importPath,
+            [Description("regexName: optional regular expression, imports only files whose base name matches. Empty means all")] string regexName = "",
+            [Description("preservePath: also read the subfolders of importPath and put each file into the matching subgroup of groupPath, as 'ExportSourceTypes' with preservePath writes them; a missing subgroup fails that file. Default false, which reads only importPath itself")] bool preservePath = false,
+            [Description("keepOnError: keep successfully generated objects even when others in a file fail. Default false, which rolls back a whole file on any error")] bool keepOnError = false)
+        {
+            return Guarded(nameof(ImportSourceTypes), () =>
+                ImportedSources(Portal.ImportSourceTypes(softwarePath, groupPath, importPath, regexName, preservePath, keepOnError), importPath, keepOnError));
+        }
+
+        [WriteTool]
         [McpServerTool(Name = "ImportSources", Title = "Import sources", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile every block and PLC data type source file (*.db, *.awl, *.scl, *.udt) under a folder tree back into the project - the counterpart to 'ExportSources'. Each file is placed into the block or PLC data type group its folder path implies, matching the layout 'ExportSources' writes; a folder whose group does not yet exist in the project fails that file rather than being created automatically. Existing blocks/types of the same name are overwritten")]
+         Description("Compile every block and PLC data type source file (*.db, *.awl, *.scl, *.udt) under a folder tree back into the project - the whole-PLC counterpart to 'ExportSources'. Each file is placed into the block or PLC data type group its folder path implies, matching the layout 'ExportSources' writes; a folder whose group does not yet exist in the project fails that file rather than being created automatically. Existing blocks/types of the same name are overwritten")]
         public static ResponseImportedSources ImportSources(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("importPath: directory on this machine to walk recursively for *.db, *.awl, *.scl and *.udt files")] string importPath,
@@ -350,32 +411,34 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("keepOnError: keep successfully generated objects from a file even when others in it fail; TIA Portal then reports no per-object success/failure for that file. Default false, which rolls back a whole file on any error")] bool keepOnError = false)
         {
             return Guarded(nameof(ImportSources), () =>
-            {
-                var result = Portal.ImportSources(softwarePath, importPath, regexName, keepOnError);
+                ImportedSources(Portal.ImportSources(softwarePath, importPath, regexName, keepOnError), importPath, keepOnError));
+        }
 
-                return new ResponseImportedSources
+        /// <summary>Shared response shaping for the five source import tools.</summary>
+        private static ResponseImportedSources ImportedSources(ImportedSourcesResult result, string importPath, bool keepOnError)
+        {
+            return new ResponseImportedSources
+            {
+                Directory = result.Directory,
+                Written = result.Written,
+                Items = result.Items.Select(i => new ResponseImportedSourceItem
                 {
-                    Directory = result.Directory,
-                    Written = result.Written,
-                    Items = result.Items.Select(i => new ResponseImportedSourceItem
-                    {
-                        Name = i.Name,
-                        Path = i.Path,
-                        Kind = i.Kind
-                    }).ToList(),
-                    Failures = result.Failures,
-                    Message = $"{result.Items.Count} object(s) imported from '{importPath}', {result.Failures.Count} failed. {SaveHint}",
-                    Meta = new JsonObject
-                    {
-                        ["timestamp"] = DateTime.Now,
-                        ["success"] = true,
-                        ["pendingSave"] = true,
-                        ["importedCount"] = result.Items.Count,
-                        ["failedCount"] = result.Failures.Count,
-                        ["keepOnError"] = keepOnError
-                    }
-                };
-            });
+                    Name = i.Name,
+                    Path = i.Path,
+                    Kind = i.Kind
+                }).ToList(),
+                Failures = result.Failures,
+                Message = $"{result.Items.Count} object(s) imported from '{importPath}', {result.Failures.Count} failed. {SaveHint}",
+                Meta = new JsonObject
+                {
+                    ["timestamp"] = DateTime.Now,
+                    ["success"] = true,
+                    ["pendingSave"] = true,
+                    ["importedCount"] = result.Items.Count,
+                    ["failedCount"] = result.Failures.Count,
+                    ["keepOnError"] = keepOnError
+                }
+            };
         }
 
         #endregion
@@ -514,17 +577,17 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "ImportSourceBlocks", Title = "Import source blocks", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile an external source file into program blocks and PLC data types. A target must be a block user group: blocks cannot be generated into the Program blocks root")]
-        public static ResponseGenerateBlocks ImportSourceBlocks(
+        [McpServerTool(Name = "ImportExternalSource", Title = "Import external source", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Compile an external source that is already registered in the PLC software into program blocks and PLC data types. To import a file from disk, use 'ImportSourceBlock' or 'ImportSourceType' instead. A target must be a block user group: blocks cannot be generated into the Program blocks root")]
+        public static ResponseGenerateBlocks ImportExternalSource(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("sourcePath: root-relative path of the external source, e.g. SourceGroup1/Source_1")] string sourcePath,
             [Description("targetGroupPath: optional root-relative block user group that receives the blocks; empty uses the source default location")] string targetGroupPath = "",
             [Description("keepOnError: keep successfully generated blocks even when others fail (default false)")] bool keepOnError = false)
         {
-            return Guarded(nameof(ImportSourceBlocks), () =>
+            return Guarded(nameof(ImportExternalSource), () =>
             {
-                var names = Portal.ImportSourceBlocks(softwarePath, sourcePath, targetGroupPath, keepOnError);
+                var names = Portal.ImportExternalSource(softwarePath, sourcePath, targetGroupPath, keepOnError);
 
                 return new ResponseGenerateBlocks
                 {

@@ -399,8 +399,92 @@ Use the ImportSources tool with these parameters:
 - keepOnError: {NormalizeBool(keepOnError)}";
         }
 
-        [McpServerPrompt(Name = "ImportSourceBlocks"), Description("Import blocks and PLC data types from source files")]
-        public static string ImportSourceBlocks(string softwarePath, string sourcePath, string targetGroupPath = "", string keepOnError = "false")
+        [McpServerPrompt(Name = "ImportSourceBlock"), Description("Import one block from a source file (.db, .scl or .awl)")]
+        public static string ImportSourceBlock(string softwarePath, string groupPath, string importPath, string keepOnError = "false")
+        {
+            return $@"Compile one block source file into a block group of PLC software (requires the server started with '--allow-write').
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC
+- groupPath: block user group that receives the blocks, e.g. '0_OBs'. Empty for the source's default location; the 'Program blocks' root itself is not allowed
+- importPath: full path of the .db, .scl or .awl file, typically one the ExportSourceBlock tool wrote
+- keepOnError: Use false (default) to roll back the whole file on any error, true to keep the objects that were generated successfully
+
+Use the ImportSourceBlock tool with these parameters:
+- softwarePath: {softwarePath}
+- groupPath: {groupPath}
+- importPath: {importPath}
+- keepOnError: {NormalizeBool(keepOnError)}";
+        }
+
+        [McpServerPrompt(Name = "ImportSourceType"), Description("Import one PLC data type from a .udt source file")]
+        public static string ImportSourceType(string softwarePath, string groupPath, string importPath, string keepOnError = "false")
+        {
+            return $@"Compile one '*.udt' source file into a PLC data type group of PLC software (requires the server started with '--allow-write').
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC
+- groupPath: PLC data type user group that receives the types, e.g. 'Common'. Empty for the source's default location; the 'PLC data types' root itself is not allowed
+- importPath: full path of the .udt file, typically one the ExportSourceType tool wrote
+- keepOnError: Use false (default) to roll back the whole file on any error, true to keep the objects that were generated successfully
+
+Use the ImportSourceType tool with these parameters:
+- softwarePath: {softwarePath}
+- groupPath: {groupPath}
+- importPath: {importPath}
+- keepOnError: {NormalizeBool(keepOnError)}";
+        }
+
+        [McpServerPrompt(Name = "ImportSourceBlocks"), Description("Import all block source files of a folder into a group")]
+        public static string ImportSourceBlocks(string softwarePath, string groupPath, string importPath, string regexName = "", string preservePath = "false", string keepOnError = "false")
+        {
+            return $@"Compile every block source file (.db, .scl, .awl) of a folder into a block group of PLC software (requires the server started with '--allow-write'). A file that fails is reported and the rest are still imported.
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC
+- groupPath: block user group that receives the blocks, e.g. '0_OBs'. Empty for each source's default location; the 'Program blocks' root itself is not allowed
+- importPath: folder with the source files, typically the one the ExportSourceBlocks tool wrote
+- regexName: empty for all, or e.g. 'FB_.*' to select files by base name
+- preservePath: Use false (default) to read only the files directly in importPath, true to also read its subfolders into the matching subgroups of groupPath (the groups must already exist)
+- keepOnError: Use false (default) to roll back a whole file on any error, true to keep the objects of a file that were generated successfully
+
+Use the ImportSources tool instead to import blocks and PLC data types in one go.
+
+Use the ImportSourceBlocks tool with these parameters:
+- softwarePath: {softwarePath}
+- groupPath: {groupPath}
+- importPath: {importPath}
+- regexName: {regexName}
+- preservePath: {NormalizeBool(preservePath)}
+- keepOnError: {NormalizeBool(keepOnError)}";
+        }
+
+        [McpServerPrompt(Name = "ImportSourceTypes"), Description("Import all .udt source files of a folder into a group")]
+        public static string ImportSourceTypes(string softwarePath, string groupPath, string importPath, string regexName = "", string preservePath = "false", string keepOnError = "false")
+        {
+            return $@"Compile every '*.udt' source file of a folder into a PLC data type group of PLC software (requires the server started with '--allow-write'). A file that fails is reported and the rest are still imported.
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC
+- groupPath: PLC data type user group that receives the types, e.g. 'Common'. Empty for each source's default location; the 'PLC data types' root itself is not allowed
+- importPath: folder with the .udt files, typically the one the ExportSourceTypes tool wrote
+- regexName: empty for all, or e.g. 'UDT_.*' to select files by base name
+- preservePath: Use false (default) to read only the files directly in importPath, true to also read its subfolders into the matching subgroups of groupPath (the groups must already exist)
+- keepOnError: Use false (default) to roll back a whole file on any error, true to keep the objects of a file that were generated successfully
+
+Use the ImportSources tool instead to import blocks and PLC data types in one go.
+
+Use the ImportSourceTypes tool with these parameters:
+- softwarePath: {softwarePath}
+- groupPath: {groupPath}
+- importPath: {importPath}
+- regexName: {regexName}
+- preservePath: {NormalizeBool(preservePath)}
+- keepOnError: {NormalizeBool(keepOnError)}";
+        }
+
+        [McpServerPrompt(Name = "ImportExternalSource"), Description("Compile an external source already in the project into blocks")]
+        public static string ImportExternalSource(string softwarePath, string sourcePath, string targetGroupPath = "", string keepOnError = "false")
         {
             return $@"Compile/import an external source that is already registered in PLC software into program blocks and PLC data types (requires the server started with '--allow-write').
 
@@ -410,9 +494,9 @@ Common parameter values:
 - targetGroupPath: optional block user group that receives the blocks, empty for the source's default location. The 'Program blocks' root itself is not allowed
 - keepOnError: Use false (default) to generate nothing when any object fails, true to keep the objects that were generated successfully
 
-Use the ImportSources tool instead to import a whole folder of source files in one go.
+Use the ImportSourceBlock or ImportSourceType tool instead to import a source file from disk, or ImportSources for a whole folder tree.
 
-Use the ImportSourceBlocks tool with these parameters:
+Use the ImportExternalSource tool with these parameters:
 - softwarePath: {softwarePath}
 - sourcePath: {sourcePath}
 - targetGroupPath: {targetGroupPath}

@@ -42,7 +42,7 @@ To enable write mode, add the argument to your client configuration, for example
 
 ## Tools
 
-Read-only tools (59) are always available.
+Read-only tools (62) are always available.
 
 | Area                          | Tools                                                                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -60,7 +60,7 @@ Read-only tools (59) are always available.
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                                                                      |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `ExportSources` |
 
-Write tools (40) require `--allow-write`.
+Write tools (44) require `--allow-write`.
 
 | Area                  | Tools                                                                                                                                                   |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -70,7 +70,7 @@ Write tools (40) require `--allow-write`.
 | Tag tables            | `CreateTagTable`, `DeleteTagTable`, `RenameTagTable`, `CreateTagTableGroup`, `DeleteTagTableGroup`, `ImportXmlTagTable`                                    |
 | Tags and constants    | `CreateTag`, `UpdateTag`, `DeleteTag`, `CreateUserConstant`, `UpdateUserConstant`, `DeleteUserConstant`                                                 |
 | Watch tables          | `CreateWatchTable`, `RenameWatchTable`, `DeleteWatchTable`, `CreateWatchTableGroup`, `DeleteWatchTableGroup`, `ImportWatchTable`                        |
-| External sources      | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `ImportSourceBlocks`, `ImportSources` |
+| External sources      | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `ImportExternalSource`, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes`, `ImportSources` |
 | Type documents (V21+) | `ImportTypeFromDocuments`, `ImportTypesFromDocuments`                                                                                                   |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
