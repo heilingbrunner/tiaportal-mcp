@@ -1,5 +1,8 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using TiaMcpServer.ModelContextProtocol;
 using TiaMcpServer.Siemens;
 
@@ -170,6 +173,106 @@ namespace TiaMcpServer.Test
                     $"'{displayNames[i - 1]}' must not come after '{displayNames[i]}'");
             }
         }
+
+        [TestMethod]
+        public void Test_708_EveryTool_HasAPromptOfTheSameName()
+        {
+            // Arrange
+            var toolNames = ToolMethods().Select(t => t.Name).ToList();
+            var promptNames = PromptMethods().Select(p => p.Name).ToList();
+
+            // Act
+            var withoutPrompt = toolNames.Except(promptNames).OrderBy(n => n).ToList();
+            var withoutTool = promptNames.Except(toolNames)
+                .Where(n => !n.StartsWith("ExportAll") && !n.StartsWith("ImportAll"))
+                .OrderBy(n => n)
+                .ToList();
+
+            // Assert
+            Assert.AreEqual(0, withoutPrompt.Count, "Tools without a prompt: " + string.Join(", ", withoutPrompt));
+            Assert.AreEqual(0, withoutTool.Count,
+                "Prompts without a tool (only the ExportAll*/ImportAll* shortcuts may exist): " + string.Join(", ", withoutTool));
+        }
+
+        [TestMethod]
+        public void Test_709_PromptBodies_UseExactlyTheToolParameterNames()
+        {
+            // Arrange
+            var tools = ToolMethods().ToDictionary(t => t.Name, t => t.Method);
+            var problems = new List<string>();
+
+            foreach (var prompt in PromptMethods().Where(p => tools.ContainsKey(p.Name)))
+            {
+                // Act: every prompt argument gets a distinct marker value
+                var arguments = prompt.Method.GetParameters().Select(p => (object)("v_" + p.Name)).ToArray();
+                var body = (string)prompt.Method.Invoke(null, arguments)!;
+
+                var lines = body.Replace("\r", string.Empty).Split('\n');
+                var useIndex = Array.FindLastIndex(lines, l => l.StartsWith("Use the ", StringComparison.Ordinal));
+                if (useIndex < 0)
+                {
+                    problems.Add($"{prompt.Name}: the body has no 'Use the <tool> tool' line");
+                    continue;
+                }
+
+                var passed = lines.Skip(useIndex + 1)
+                    .Select(l => Regex.Match(l, @"^- (\w+): "))
+                    .Where(m => m.Success)
+                    .Select(m => m.Groups[1].Value)
+                    .ToList();
+                var toolParameters = tools[prompt.Name].GetParameters().Where(IsClientParameter).ToList();
+
+                foreach (var unknown in passed.Except(toolParameters.Select(p => p.Name!)))
+                {
+                    problems.Add($"{prompt.Name}: the body passes '{unknown}', which is not a parameter of the tool");
+                }
+
+                foreach (var missing in toolParameters.Where(p => !p.HasDefaultValue).Select(p => p.Name!).Except(passed))
+                {
+                    problems.Add($"{prompt.Name}: the body does not pass the required tool parameter '{missing}'");
+                }
+            }
+
+            // Assert
+            Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
+        }
+
+        private static List<(string Name, MethodInfo Method, string? Title)> ToolMethods()
+        {
+            var result = new List<(string Name, MethodInfo Method, string? Title)>();
+
+            foreach (var method in typeof(McpServer).GetMethods(BindingFlags.Public | BindingFlags.Static))
+            {
+                var attribute = method.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>();
+                if (attribute != null)
+                {
+                    result.Add((attribute.Name ?? method.Name, method, attribute.Title));
+                }
+            }
+
+            return result;
+        }
+
+        private static List<(string Name, MethodInfo Method)> PromptMethods()
+        {
+            var result = new List<(string Name, MethodInfo Method)>();
+
+            foreach (var method in typeof(McpPrompts).GetMethods(BindingFlags.Public | BindingFlags.Static))
+            {
+                var attribute = method.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerPromptAttribute>();
+                if (attribute != null)
+                {
+                    result.Add((attribute.Name ?? method.Name, method));
+                }
+            }
+
+            return result;
+        }
+
+        // Parameters the SDK fills in (cancellation, progress) are not part of the tool's input.
+        private static bool IsClientParameter(ParameterInfo parameter) =>
+            parameter.ParameterType != typeof(System.Threading.CancellationToken)
+            && !(parameter.ParameterType.IsGenericType && parameter.ParameterType.GetGenericTypeDefinition() == typeof(IProgress<>));
 
         private static System.Collections.Generic.List<MethodInfo> WriteToolMethods() =>
             typeof(McpServer)
