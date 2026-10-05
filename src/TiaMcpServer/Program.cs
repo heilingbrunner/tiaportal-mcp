@@ -86,7 +86,7 @@ namespace TiaMcpServer
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Where(m => m.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>() != null)
                 .Where(m => allowWrite || m.GetCustomAttribute<WriteToolAttribute>() == null)
-                .Select(m => global::ModelContextProtocol.Server.McpServerTool.Create(m))
+                .Select(m => PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m)))
                 .ToList();
         }
 
@@ -143,13 +143,16 @@ namespace TiaMcpServer
                             "Exposes Siemens TIA Portal via Openness. Call 'Connect' first, then 'OpenProject' with an " +
                             "absolute .apXX project or .alsXX session path. Use 'GetProjectTree' or 'GetSoftwareTree' to " +
                             "discover the path strings that the other tools expect. Export and import tools operate on " +
-                            "the local file system of the machine running this server." +
+                            "the local file system of the machine running this server. Every request is independent: " +
+                            "when more than one TIA Portal instance is running, call 'GetPortals' and pass the chosen " +
+                            "'portalId' to 'Connect' and to every other tool." +
                             (WritePolicy.AllowWrite
                                 ? " Write mode is enabled: tools that create, rename or delete project objects are " +
                                   "available. Their changes stay in memory until 'SaveProject' (or 'SaveSession')."
                                 : string.Empty);
                     })
                     .WithStdioServerTransport()
+                    .WithRequestFilters(filters => filters.AddCallToolFilter(PortalSelection.Filter))
                     .WithTools(BuildTools(WritePolicy.AllowWrite))
                     .WithPrompts((IEnumerable<Type>)new[] { typeof(McpPrompts) });
 

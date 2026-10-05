@@ -206,6 +206,16 @@ namespace TiaMcpServer.ModelContextProtocol
 
     public class ResponseConnect : ResponseMessage
     {
+        /// <summary>
+        /// Process id of the attached TIA Portal instance. Pass it as 'portalId' to the other
+        /// tools when more than one instance is attached.
+        /// </summary>
+        public int? PortalId { get; set; }
+    }
+
+    public class ResponsePortals : ResponseMessage
+    {
+        public IEnumerable<TiaMcpServer.Siemens.PortalInstance>? Portals { get; set; }
     }
 
     public class ResponseDisconnect : ResponseMessage
@@ -214,6 +224,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
     public class ResponseState : ResponseMessage
     {
+        public int? PortalId { get; set; }
         public bool? IsConnected { get; set; }
         public string? Project { get; set; }
         public string? Session { get; set; }
@@ -457,6 +468,9 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>The project tree, so no follow-up GetProjectTree call is needed.</summary>
         public string? Tree { get; set; }
+
+        /// <summary>The TIA Portal instance the project was opened in; pass it on as 'portalId'.</summary>
+        public int? PortalId { get; set; }
     }
     #endregion
 

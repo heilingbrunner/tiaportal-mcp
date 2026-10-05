@@ -10,6 +10,8 @@ using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using TiaMcpServer.Siemens;
 
 namespace TiaMcpServer.ModelContextProtocol
@@ -53,29 +55,31 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region portal
 
-        [McpServerTool(Name = "Connect", Title = "Connect to TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false), Description("Connect to TIA-Portal")]
-        public static ResponseConnect Connect()
+        [McpServerTool(Name = "Connect", Title = "Connect to TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false),
+         Description("Connect to TIA-Portal and return its 'portalId'. Without 'portalId' it attaches to the only running instance, or starts one if none is running; with several running it fails and lists them")]
+        public static ResponseConnect Connect(
+            [Description("portalId: process id of the TIA Portal instance to attach to (see 'GetPortals'). Leave empty when at most one instance is running")] int? portalId = null)
         {
             Logger?.LogInformation("Connecting to TIA Portal...");
 
             try
             {
-                if (Portal.ConnectPortal())
+                var attachedId = Portal.AttachPortal(portalId);
+
+                return new ResponseConnect
                 {
-                    return new ResponseConnect
+                    Message = $"Connected to TIA-Portal instance {attachedId}",
+                    PortalId = attachedId,
+                    Meta = new JsonObject
                     {
-                        Message = "Connected to TIA-Portal",
-                        Meta = new JsonObject
-                        {
-                            ["timestamp"] = DateTime.Now,
-                            ["success"] = true
-                        }
-                    };
-                }
-                else
-                {
-                    throw new McpException("Failed to connect to TIA-Portal");
-                }
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(PortalSelection.Describe(pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
@@ -111,6 +115,32 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
+        [PortalIndependent]
+        [McpServerTool(Name = "GetPortals", Title = "List TIA Portal instances", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+         Description("List the running TIA-Portal instances with their 'portalId', open project path and whether this server is attached. Use it to choose the 'portalId' when more than one instance is running")]
+        public static ResponsePortals GetPortals()
+        {
+            try
+            {
+                var portals = Portal.GetPortals();
+
+                return new ResponsePortals
+                {
+                    Message = $"{portals.Count} TIA-Portal instance(s) running",
+                    Portals = portals,
+                    Meta = new JsonObject
+                    {
+                        ["timestamp"] = DateTime.Now,
+                        ["success"] = true
+                    }
+                };
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error listing TIA-Portal instances: {ex.Message}", ex);
+            }
+        }
+
         #endregion
 
         #region state
@@ -127,6 +157,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     return new ResponseState
                     {
                         Message = "TIA-Portal MCP server state retrieved",
+                        PortalId = state.PortalId,
                         IsConnected = state.IsConnected,
                         Project = state.Project,
                         Session = state.Session,
@@ -472,45 +503,64 @@ namespace TiaMcpServer.ModelContextProtocol
         #region lookup
 
         [McpServerTool(Name = "OpenTiaProject", Title = "Connect/open a project", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Connect to TIA Portal if not already connected, open the given project or session, and return the device and PLC software paths the other tools need. Replaces the Connect then OpenProject then GetProjectTree sequence")]
-        public static ResponseOpenTiaProject OpenTiaProject(
-            [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path)
+         Description("Connect to TIA Portal if not already connected, open the given project or session, and return the 'portalId' plus the device and PLC software paths the other tools need. Replaces the Connect then OpenProject then GetProjectTree sequence")]
+        public static async Task<ResponseOpenTiaProject> OpenTiaProject(
+            [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path,
+            [Description("portalId: process id of the TIA Portal instance to open it in (see 'GetPortals'). Leave empty when at most one instance is running")] int? portalId = null,
+            CancellationToken cancellationToken = default)
         {
             try
             {
-                var connected = Portal.IsConnected();
+                int attachedId;
+                bool wasAttached;
 
-                if (!connected && !Portal.ConnectPortal())
+                try
+                {
+                    // Attaching is unscoped, as in 'Connect': the instance may not be attached yet,
+                    // which is why this tool declares 'portalId' itself and bypasses the filter.
+                    attachedId = Portal.AttachPortal(portalId, out wasAttached);
+                }
+                catch (Exception ex) when (ex is not PortalException)
                 {
                     throw new McpException(
-                        "Failed to connect to TIA Portal. Run the 'Doctor' tool to check the installation and user group membership.");
+                        "Failed to connect to TIA Portal. Run the 'Doctor' tool to check the installation and user group membership.", ex);
                 }
 
-                // Reuse the existing tool rather than duplicating its extension validation and
-                // project/session branching; it also closes whatever was open first.
-                var opened = OpenProject(path);
-
-                var softwarePaths = CollectSoftwarePaths();
-
-                return new ResponseOpenTiaProject
-                {
-                    Message = $"{opened.Message}. PLC software: " +
-                              (softwarePaths.Count > 0 ? string.Join(", ", softwarePaths) : "none found"),
-                    ProjectPath = path,
-                    WasAlreadyConnected = connected,
-                    SoftwarePaths = softwarePaths,
-                    Tree = Portal.GetProjectTree(),
-                    Meta = Ok(new JsonObject { ["softwareCount"] = softwarePaths.Count })
-                };
+                // Everything after attaching runs scoped to that instance and under its lock.
+                return await Portal.RunScopedAsync(
+                    attachedId,
+                    () => new ValueTask<ResponseOpenTiaProject>(OpenAndDescribe(path, attachedId, wasAttached)),
+                    cancellationToken);
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(PortalSelection.Describe(pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error opening '{path}': {ex.Message}", ex);
             }
+        }
+
+        private static ResponseOpenTiaProject OpenAndDescribe(string path, int portalId, bool wasAttached)
+        {
+            // Reuse the existing tool rather than duplicating its extension validation and
+            // project/session branching; it also closes whatever was open first.
+            var opened = OpenProject(path);
+
+            var softwarePaths = CollectSoftwarePaths();
+
+            return new ResponseOpenTiaProject
+            {
+                Message = $"{opened.Message} in TIA-Portal instance {portalId}. PLC software: " +
+                          (softwarePaths.Count > 0 ? string.Join(", ", softwarePaths) : "none found"),
+                PortalId = portalId,
+                ProjectPath = path,
+                WasAlreadyConnected = wasAttached,
+                SoftwarePaths = softwarePaths,
+                Tree = Portal.GetProjectTree(),
+                Meta = Ok(new JsonObject { ["softwareCount"] = softwarePaths.Count })
+            };
         }
 
         #endregion

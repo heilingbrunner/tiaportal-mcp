@@ -22,11 +22,7 @@ namespace TiaMcpServer.Siemens
         // closing parantheses for regex characters ommitted, because they are not relevant for regex detection
         private readonly char[] _regexChars = ['.', '^', '$', '*', '+', '?', '(', '[', '{', '\\', '|'];
 
-        private TiaPortal? _portal;
-
-        private ProjectBase? _project;
-
-        private LocalSession? _session;
+        // _portal, _project and _session resolve per request - see Portal.Instances.cs
 
         private readonly ILogger<Portal>? _logger;
 
@@ -102,22 +98,18 @@ namespace TiaMcpServer.Siemens
 
         public void Dispose()
         {
-            try
+            foreach (var context in _contexts.Values.ToList())
             {
-                (_project as Project)?.Close();
-            }
-            catch (Exception)
-            {
-                // Console.WriteLine($"Error closing the project: {ex.Message}");
-            }
+                try
+                {
+                    (context.Project as Project)?.Close();
+                }
+                catch (Exception)
+                {
+                    // Console.WriteLine($"Error closing the project: {ex.Message}");
+                }
 
-            try
-            {
-                _portal?.Dispose();
-            }
-            catch (Exception)
-            {
-                // Console.WriteLine($"Error closing the portal: {ex.Message}");
+                Forget(context);
             }
         }
 
@@ -131,45 +123,22 @@ namespace TiaMcpServer.Siemens
 
             try
             {
-                _project = null;
-                _session = null;
-                _portal = null;
-
-                // connect to running TIA Portal
-                var processes = TiaPortal.GetProcesses();
-                if (processes.Any())
-                {
-                    _portal = processes.First().Attach();
-
-                    // check for existing local sessions
-                    if (_portal.LocalSessions.Any())
-                    {
-                        _session = _portal.LocalSessions.First();
-                        _project = _session.Project;
-                    }
-                    // checks for existing projects
-                    else if (_portal.Projects.Any())
-                    {
-                        _project = _portal.Projects.First();
-                    }
-
-                    return true;
-                }
-
-                // start new TIA Portal
-                _portal = new TiaPortal(TiaPortalMode.WithUserInterface);
+                // attaches to the only running instance or starts one; refuses to guess between several
+                AttachPortal(null);
 
                 return true;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger?.LogWarning(ex, "Connecting to TIA Portal failed");
+
                 return false;
             }
         }
 
         public bool IsConnected()
         {
-            return _portal != null;
+            return Current != null;
         }
 
         public bool DisconnectPortal()
@@ -178,11 +147,13 @@ namespace TiaMcpServer.Siemens
 
             try
             {
-                _project = null;
-                _session = null;
+                // only the instance of this request; other attached instances stay attached
+                var context = Current;
 
-                _portal?.Dispose();
-                _portal = null;
+                if (context != null)
+                {
+                    Forget(context);
+                }
 
                 return true;
             }
@@ -201,23 +172,17 @@ namespace TiaMcpServer.Siemens
         public State GetState()
         {
             _logger?.LogInformation("Getting TIA Portal state...");
-            if (_portal != null)
+            var context = Current;
+
+            if (context is not null)
             {
-                // check for existing local sessions
-                if (_portal.LocalSessions.Any())
-                {
-                    _session = _portal.LocalSessions.First();
-                    _project = _session.Project;
-                }
-                // checks for existing projects
-                else if (_portal.Projects.Any())
-                {
-                    _project = _portal.Projects.First();
-                }
+                // picks up a project opened in the UI, but keeps one that is still open
+                RefreshProject(context);
             }
 
             return new State
             {
+                PortalId = context?.Id,
                 IsConnected = IsConnected(),
                 Project = _project != null ? _project.Name : "-",
                 Session = _session != null ? _session.Project.Name : "-"

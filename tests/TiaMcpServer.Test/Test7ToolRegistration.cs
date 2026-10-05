@@ -77,6 +77,61 @@ namespace TiaMcpServer.Test
                 "[WriteTool] on a method that is not a tool has no effect: " + string.Join(", ", withoutToolAttribute));
         }
 
+        [TestMethod]
+        public void Test_703_BuildTools_AddsOptionalPortalIdToProjectTools()
+        {
+            // Arrange
+            var tools = Program.BuildTools(allowWrite: true).ToList();
+
+            // Act
+            var getTags = tools.Single(t => t.ProtocolTool.Name == SampleReadTool).ProtocolTool.InputSchema;
+            var hasPortalId = getTags.GetProperty("properties").TryGetProperty(PortalSelection.ArgumentName, out var portalId);
+            var isRequired = getTags.TryGetProperty("required", out var required) &&
+                             required.EnumerateArray().Any(r => r.GetString() == PortalSelection.ArgumentName);
+
+            // Assert
+            Assert.IsTrue(hasPortalId, "Project tools must accept 'portalId' to name their TIA Portal instance");
+            Assert.AreEqual("integer", portalId.GetProperty("type").GetString());
+            Assert.IsFalse(isRequired, "'portalId' must stay optional so single-instance clients need not pass it");
+        }
+
+        [TestMethod]
+        public void Test_704_BuildTools_LeavesConnectAndGetPortalsSchemasAlone()
+        {
+            // Arrange
+            var tools = Program.BuildTools(allowWrite: false).ToList();
+
+            // Act
+            var connect = tools.Single(t => t.ProtocolTool.Name == "Connect").ProtocolTool.InputSchema;
+            var getPortals = tools.Single(t => t.ProtocolTool.Name == "GetPortals").ProtocolTool.InputSchema;
+            var getPortalsHasPortalId = getPortals.TryGetProperty("properties", out var properties) &&
+                                        properties.TryGetProperty(PortalSelection.ArgumentName, out _);
+
+            // Assert
+            Assert.IsTrue(connect.GetProperty("properties").TryGetProperty(PortalSelection.ArgumentName, out _),
+                "Connect declares 'portalId' itself");
+            Assert.IsFalse(getPortalsHasPortalId, "GetPortals must work while several instances are attached");
+        }
+
+        [TestMethod]
+        public void Test_705_BuildTools_OpenTiaProjectDeclaresPortalIdButNotCancellationToken()
+        {
+            // Arrange
+            var tools = Program.BuildTools(allowWrite: false).ToList();
+
+            // Act
+            var properties = tools.Single(t => t.ProtocolTool.Name == "OpenTiaProject")
+                .ProtocolTool.InputSchema.GetProperty("properties");
+            var names = properties.EnumerateObject().Select(p => p.Name).ToList();
+
+            // Assert
+            Assert.IsTrue(names.Contains("path"));
+            Assert.IsTrue(names.Contains(PortalSelection.ArgumentName),
+                "OpenTiaProject attaches to the instance it is given, so it declares 'portalId' itself");
+            Assert.IsFalse(names.Any(n => n.IndexOf("cancellation", System.StringComparison.OrdinalIgnoreCase) >= 0),
+                "The CancellationToken is bound by the SDK, not exposed to the client");
+        }
+
         private static System.Collections.Generic.List<MethodInfo> WriteToolMethods() =>
             typeof(McpServer)
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
