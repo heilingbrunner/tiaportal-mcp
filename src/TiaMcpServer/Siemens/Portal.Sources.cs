@@ -368,8 +368,9 @@ namespace TiaMcpServer.Siemens
         // Generating TIA Portal external source files (*.scl, *.db, *.awl, *.udt) from blocks and
         // PLC data types.
         //
-        // Callers: the ExportSourceBlock / ExportSourceType / GenerateSources tools in
-        // McpServer.Sources.cs. Affected API: none existing - every member here is new.
+        // Callers: the ExportSourceBlock / ExportSourceBlocks / ExportSourceType /
+        // ExportSourceTypes / ExportSources tools in McpServer.Sources.cs. Affected API: none
+        // existing - every member here is new.
         //
         // This is the compiler's own source format, not the SimaticML XML of ExportXmlBlock nor the
         // SIMATIC Source Documents of ExportAsDocuments: the files written here are exactly what
@@ -511,17 +512,18 @@ namespace TiaMcpServer.Siemens
         /// a folder tree that mirrors the project groups: '&lt;exportPath&gt;/Program blocks/...'
         /// and '&lt;exportPath&gt;/PLC data types/...', one file per object.
         ///
-        /// The counterpart to <see cref="ExportPlcAsDocuments"/>, which snapshots the same tree
+        /// The whole-PLC form of <see cref="ExportSourceBlocks"/> and <see cref="ExportSourceTypes"/>
+        /// and the counterpart to <see cref="ExportPlcAsDocuments"/>, which snapshots the same tree
         /// as source documents and XML. This one produces the format TIA Portal can compile back
-        /// into blocks, at the cost of leaving out everything that has no source form - LAD, FBD
-        /// and GRAPH blocks among them.
+        /// into blocks - <see cref="ImportSources"/> reads such a tree back - at the cost of
+        /// leaving out everything that has no source form - LAD, FBD and GRAPH blocks among them.
         ///
         /// Skip-and-continue throughout: one object Openness refuses does not lose the rest, and
         /// every omission is reported with its reason rather than swallowed.
         /// </summary>
-        public GeneratedSourcesResult GenerateSources(string softwarePath, string exportPath, string regexName = "", bool withDependencies = false)
+        public GeneratedSourcesResult ExportSources(string softwarePath, string exportPath, string regexName = "", bool withDependencies = false)
         {
-            return Operation.Run(_logger, nameof(GenerateSources), PortalErrorCode.ExportFailed,
+            return Operation.Run(_logger, nameof(ExportSources), PortalErrorCode.ExportFailed,
                 () =>
                 {
                     // Fail before writing anything when the path is wrong.
@@ -544,12 +546,12 @@ namespace TiaMcpServer.Siemens
         /// <summary>
         /// Writes every block below a group, including all subgroups, as external source files.
         /// An empty <paramref name="groupPath"/> means the 'Program blocks' root, which makes it
-        /// the same as <see cref="GenerateSources"/> restricted to blocks.
+        /// the same as <see cref="ExportSources"/> restricted to blocks.
         ///
         /// With <paramref name="preservePath"/> the project groups are mirrored below
         /// '&lt;exportPath&gt;/Program blocks'; without it every file lands directly in
         /// '&lt;exportPath&gt;', so two blocks of the same name in different groups overwrite
-        /// each other. Skip-and-continue, like <see cref="GenerateSources"/>.
+        /// each other. Skip-and-continue, like <see cref="ExportSources"/>.
         /// </summary>
         public GeneratedSourcesResult ExportSourceBlocks(string softwarePath, string groupPath, string exportPath, bool withDependencies = false, bool preservePath = false)
         {
@@ -841,7 +843,7 @@ namespace TiaMcpServer.Siemens
         // From the former Portal.ImportSources.cs:
         // Importing TIA Portal external source files (*.scl, *.db, *.awl, *.udt) back into the
         // project as compiled blocks and PLC data types - the counterpart to
-        // ExportSourceBlock / ExportSourceType / GenerateSources further up in this file.
+        // ExportSourceBlock / ExportSourceType / ExportSources further up in this file.
         //
         // Callers: the ImportSources tool in McpServer.Sources.cs. Affected API: none
         // existing - every member here is new. CreateExternalSourceFromFile, DeleteExternalSource
@@ -856,11 +858,11 @@ namespace TiaMcpServer.Siemens
         // 2. compile it (PlcExternalSource.GenerateBlocksFromSource), which returns a mix of
         // PlcBlock and PlcType objects in one call - the source file's own content decides
         // what comes out, not the caller.
-        // This walks a whole folder tree - typically one GenerateSources just wrote - doing both
+        // This walks a whole folder tree - typically one ExportSources just wrote - doing both
         // steps per file and deleting the scratch external source afterward, so nothing but the
         // generated blocks and types remains in the project.
         //
-        // Group placement mirrors the layout GenerateSources writes: a file at
+        // Group placement mirrors the layout ExportSources writes: a file at
         // '<importPath>/Program blocks/<groups>/<Name>.scl' is generated into block user
         // group '<groups>'. A missing group is reported as a failure for that file rather than
         // created automatically - the group structure is expected to already exist, because these
@@ -882,7 +884,7 @@ namespace TiaMcpServer.Siemens
         /// <summary>
         /// Walks a folder tree of external source files and generates a block or PLC data type
         /// from each, into the group its folder path implies. The compilable counterpart to
-        /// GenerateSources: skip-and-continue throughout, so one bad file does not lose the rest
+        /// ExportSources: skip-and-continue throughout, so one bad file does not lose the rest
         /// of the tree.
         /// </summary>
         public ImportedSourcesResult ImportSources(string softwarePath, string importPath, string regexName = "", bool keepOnError = false)

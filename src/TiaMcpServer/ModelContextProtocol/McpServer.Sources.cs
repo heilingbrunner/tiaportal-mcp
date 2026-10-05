@@ -146,7 +146,7 @@ namespace TiaMcpServer.ModelContextProtocol
         // compiled back. These files can - 'CreateExternalSourceFromFile' plus
         // 'ImportSourceBlocks' is the return path.
 
-        #region generate source
+        #region export source
 
         [McpServerTool(Name = "ExportSourceBlock", Title = "Export block as source", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Write one program block as a TIA Portal external source file, in the format the compiler reads back. The extension follows the block: '.db' for data blocks, '.scl' for SCL blocks, '.awl' for STL blocks. Only those three can be generated - LAD, FBD and GRAPH blocks have no source form and are rejected with a reason, for which 'ExportXmlBlock' (SimaticML) or 'ExportAsDocuments' is the alternative")]
@@ -208,17 +208,17 @@ namespace TiaMcpServer.ModelContextProtocol
                 exportPath);
         }
 
-        [McpServerTool(Name = "GenerateSources", Title = "Generate sources",Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Write every block and PLC data type of one PLC software as external source files into a folder tree that mirrors the project groups: '<exportPath>/Program blocks/...' and '<exportPath>/PLC data types/...', one file per object. The compilable counterpart to 'ExportPlcAsDocuments'. Objects with no source form (LAD, FBD, GRAPH), inconsistent objects and know-how protected ones are reported in 'Skipped' instead of failing the run")]
-        public static ResponseGeneratedSources GenerateSources(
+        [McpServerTool(Name = "ExportSources", Title = "Export sources", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Write every block and PLC data type of one PLC software as external source files into a folder tree that mirrors the project groups: '<exportPath>/Program blocks/...' and '<exportPath>/PLC data types/...', one file per object. The whole-PLC counterpart to 'ExportSourceBlocks' and 'ExportSourceTypes' and the compilable counterpart to 'ExportPlcAsDocuments'; 'ImportSources' reads such a tree back. Objects with no source form (LAD, FBD, GRAPH), inconsistent objects and know-how protected ones are reported in 'Skipped' instead of failing the run")]
+        public static ResponseGeneratedSources ExportSources(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("exportPath: directory on this machine that receives the tree; existing files of the same name are overwritten")] string exportPath,
-            [Description("regexName: optional regular expression, generates only objects whose name matches. Empty means all")] string regexName = "",
+            [Description("regexName: optional regular expression, exports only objects whose name matches. Empty means all")] string regexName = "",
             [Description("withDependencies: also write every object each one uses into its file. Default false, which keeps one object per file")] bool withDependencies = false)
         {
             try
             {
-                var result = Portal.GenerateSources(softwarePath, exportPath, regexName, withDependencies);
+                var result = Portal.ExportSources(softwarePath, exportPath, regexName, withDependencies);
 
                 return new ResponseGeneratedSources
                 {
@@ -334,7 +334,7 @@ namespace TiaMcpServer.ModelContextProtocol
         // project change stays in memory until SaveProject/SaveSession, per the SaveHint convention
         // shared by every [WriteTool] tool.
         //
-        // The bulk-import counterpart to 'GenerateSources' (McpServer.GenerateSource.cs): that tool
+        // The bulk-import counterpart to 'ExportSources' (further up in this file): that tool
         // writes a folder tree of *.db/*.awl/*.scl/*.udt files, this one walks it back into blocks
         // and PLC data types via 'Portal.ImportSources'.
 
@@ -342,7 +342,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "ImportSources", Title = "Import sources", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile every block and PLC data type source file (*.db, *.awl, *.scl, *.udt) under a folder tree back into the project - the counterpart to 'GenerateSources'. Each file is placed into the block or PLC data type group its folder path implies, matching the layout 'GenerateSources' writes; a folder whose group does not yet exist in the project fails that file rather than being created automatically. Existing blocks/types of the same name are overwritten")]
+         Description("Compile every block and PLC data type source file (*.db, *.awl, *.scl, *.udt) under a folder tree back into the project - the counterpart to 'ExportSources'. Each file is placed into the block or PLC data type group its folder path implies, matching the layout 'ExportSources' writes; a folder whose group does not yet exist in the project fails that file rather than being created automatically. Existing blocks/types of the same name are overwritten")]
         public static ResponseImportedSources ImportSources(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("importPath: directory on this machine to walk recursively for *.db, *.awl, *.scl and *.udt files")] string importPath,

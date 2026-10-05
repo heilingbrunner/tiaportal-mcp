@@ -388,7 +388,7 @@ Use the ImportBlocksFromDocuments tool with these parameters:
 
 Common parameter values:
 - softwarePath: e.g. 'PLC_1' for hardware PLC
-- importPath: folder to walk recursively, typically the tree the GenerateSources tool wrote. Each file goes into the block or PLC data type group its folder path implies; the group must already exist
+- importPath: folder to walk recursively, typically the tree the ExportSources tool wrote. Each file goes into the block or PLC data type group its folder path implies; the group must already exist
 - regexName: empty for all, or e.g. 'FB_.*' to select files by base name (use one file name to import a single object)
 - keepOnError: Use false (default) to roll back a whole file on any error, true to keep the objects of a file that were generated successfully
 
@@ -1647,18 +1647,18 @@ Use the ExportSourceTypes tool with these parameters:
 - preservePath: {preservePath}";
         }
 
-        [McpServerPrompt(Name = "GenerateSources"), Description("Generate source files for all blocks and PLC data types")]
-        public static string GenerateSources(string softwarePath, string exportPath, string regexName = "", string withDependencies = "false")
+        [McpServerPrompt(Name = "ExportSources"), Description("Export all blocks and PLC data types as source files")]
+        public static string ExportSources(string softwarePath, string exportPath, string regexName = "", string withDependencies = "false")
         {
-            return $@"Write every block and PLC data type of one PLC software as external source files into a folder tree that mirrors the project groups: '<exportPath>/Program blocks/...' and '<exportPath>/PLC data types/...', one file per object. The compilable counterpart to 'ExportPlcAsDocuments'. Objects with no source form (LAD, FBD, GRAPH), inconsistent objects and know-how protected ones are reported in 'Skipped' instead of failing the run.
+            return $@"Write every block and PLC data type of one PLC software as external source files into a folder tree that mirrors the project groups: '<exportPath>/Program blocks/...' and '<exportPath>/PLC data types/...', one file per object. The whole-PLC counterpart to 'ExportSourceBlocks' and 'ExportSourceTypes' and the compilable counterpart to 'ExportPlcAsDocuments'; 'ImportSources' reads such a tree back. Objects with no source form (LAD, FBD, GRAPH), inconsistent objects and know-how protected ones are reported in 'Skipped' instead of failing the run.
 
 Common parameter values:
 - softwarePath: defines the path in the project structure to the PLC software
 - exportPath: directory on this machine that receives the tree; existing files of the same name are overwritten
-- regexName: optional regular expression, generates only objects whose name matches. Empty means all
+- regexName: optional regular expression, exports only objects whose name matches. Empty means all
 - withDependencies: also write every object each one uses into its file. Default false, which keeps one object per file
 
-Use the GenerateSources tool with these parameters:
+Use the ExportSources tool with these parameters:
 - softwarePath: {softwarePath}
 - exportPath: {exportPath}
 - regexName: {regexName}

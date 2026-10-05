@@ -1209,27 +1209,27 @@ namespace TiaMcpServer.Test
         }
 
         /// <summary>
-        /// GenerateSources is the whole-PLC counterpart of ExportSourceBlock: one file per
+        /// ExportSources is the whole-PLC counterpart of ExportSourceBlock: one file per
         /// generatable block and PLC data type, with the objects that have no source form reported
         /// as skipped rather than failing the run.
         /// </summary>
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "", "")]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, "^DB_Block_1$", "DB_Block_1")]
-        public void Test_492_GenerateSources(string projectPath, string softwarePath, string regexName, string expectedName)
+        public void Test_492_ExportSources(string projectPath, string softwarePath, string regexName, string expectedName)
         {
             if (_portal == null)
             {
                 Assert.Fail("TiaPortal instance is not initialized");
             }
 
-            var exportPath = NewTempDirectory("GenerateSources");
+            var exportPath = NewTempDirectory("ExportSources");
 
             Assert.IsTrue(Common.OpenProject(_portal, projectPath), "Failed to open the project");
 
             try
             {
-                var result = _portal.GenerateSources(softwarePath, exportPath, regexName);
+                var result = _portal.ExportSources(softwarePath, exportPath, regexName);
 
                 Console.WriteLine($"Generated {result.Files.Count} file(s) in {result.Directory}: " +
                                   $"{result.Written["blocks"]} block(s), {result.Written["types"]} type(s), " +

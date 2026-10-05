@@ -36,8 +36,9 @@
   prompts and permission allow-lists that name the old tools must be updated. The prompts
   `ExportBlocks` and `ExportTypes` are renamed to `ExportXmlBlocks` and `ExportXmlTypes` as well.
   Likewise the source file exports follow the Export naming: `GenerateBlockSource` to
-  `ExportSourceBlock` and `GenerateTypeSource` to `ExportSourceType` (tools and `Portal` methods;
-  `GenerateSources` and `ImportSources` keep their names). `GenerateBlocksFromSource` is now
+  `ExportSourceBlock`, `GenerateTypeSource` to `ExportSourceType` and `GenerateSources` to
+  `ExportSources` (tools, prompts and `Portal` methods; `ImportSources` keeps its name; the
+  tool title is now "Export sources"). `GenerateBlocksFromSource` is now
   `ImportSourceBlocks` (tool and `Portal` method; the Siemens API method of the same name is unaffected).
   The tag and watch table exports follow suit: `ExportTagTable` is now `ExportXmlTagTable` and
   `ExportWatchTable` is now `ExportXmlWatchTable` (tool, response type, `Portal` method and
