@@ -117,16 +117,22 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [PortalIndependent]
         [McpServerTool(Name = "GetPortals", Title = "Get portals", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("List the running TIA-Portal instances with their 'portalId', open project path and whether this server is attached. Use it to choose the 'portalId' when more than one instance is running")]
+         Description("List the running TIA-Portal instances with their 'portalId', open project path and whether this server is attached. The top-level 'portalId' is the attached instance tools use by default (empty when none or several are attached). Use it to choose the 'portalId' when more than one instance is running")]
         public static ResponsePortals GetPortals()
         {
             try
             {
                 var portals = Portal.GetPortals();
 
+                // the one instance tools use without 'portalId'; none or several attached: no default
+                var attached = portals.Where(p => p.IsAttached).Select(p => p.PortalId).ToList();
+                int? portalId = attached.Count == 1 ? attached[0] : null;
+
                 return new ResponsePortals
                 {
-                    Message = $"{portals.Count} TIA-Portal instance(s) running",
+                    Message = $"{portals.Count} TIA-Portal instance(s) running" +
+                              (portalId is int id ? $", attached to {id}" : attached.Count > 1 ? $", {attached.Count} attached" : ", none attached"),
+                    PortalId = portalId,
                     Portals = portals,
                     Meta = new JsonObject
                     {
