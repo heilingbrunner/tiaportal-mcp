@@ -41,7 +41,7 @@ namespace TiaMcpServer.Siemens
                     PlcType? type = null;
 
                     var group = GetPlcTypeGroupByPath(softwarePath, path);
-                    if (group != null)
+                    if (group is not null)
                     {
                         if (regexName.IndexOfAny(_regexChars) >= 0)
                         {

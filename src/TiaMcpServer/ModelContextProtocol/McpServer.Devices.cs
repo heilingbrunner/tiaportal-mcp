@@ -22,7 +22,7 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 var device = Portal.GetDevice(devicePath);
 
-                if (device != null)
+                if (device is not null)
                 {
                     var attributes = Helper.GetAttributeList(device);
 
@@ -58,7 +58,7 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 var deviceItem = Portal.GetDeviceItem(deviceItemPath);
 
-                if (deviceItem != null)
+                if (deviceItem is not null)
                 {
                     var attributes = Helper.GetAttributeList(deviceItem);
 

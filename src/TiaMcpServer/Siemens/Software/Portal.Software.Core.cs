@@ -116,7 +116,7 @@ namespace TiaMcpServer.Siemens
             if (_project.Devices != null)
             {
                 softwareContainer = GetSoftwareContainerInDevices(_project.Devices, pathSegments, index);
-                if (softwareContainer != null)
+                if (softwareContainer is not null)
                 {
                     return softwareContainer;
                 }
@@ -126,7 +126,7 @@ namespace TiaMcpServer.Siemens
             if (_project.DeviceGroups != null)
             {
                 softwareContainer = GetSoftwareContainerInGroups(_project.DeviceGroups, pathSegments, index);
-                if (softwareContainer != null)
+                if (softwareContainer is not null)
                 {
                     return softwareContainer;
                 }
@@ -153,13 +153,13 @@ namespace TiaMcpServer.Siemens
                 // a pc based plc has a Device.Name = 'PC-System_1' or something like that, which is visible in the TIA-Portal IDE
                 // use segment to find device
                 device = devices.FirstOrDefault(d => d.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
-                if (device != null)
+                if (device is not null)
                 {
                     // then use next segment to find device item
                     deviceItem = device.DeviceItems.FirstOrDefault(di => di.Name.Equals(nextSegment, StringComparison.OrdinalIgnoreCase));
                     // but here we use next segment to find device item
                     softwareContainer = GetSoftwareContainerInDeviceItem(deviceItem, pathSegments, index + 1);
-                    if (softwareContainer != null)
+                    if (softwareContainer is not null)
                     {
                         return softwareContainer;
                     }
@@ -170,7 +170,7 @@ namespace TiaMcpServer.Siemens
                 deviceItem = devices
                     .SelectMany(d => d.DeviceItems)
                     .FirstOrDefault(di => di.Name.Equals(segment, StringComparison.OrdinalIgnoreCase));
-                if (deviceItem != null)
+                if (deviceItem is not null)
                 {
                     return GetSoftwareContainerInDeviceItem(deviceItem, pathSegments, index);
                 }
@@ -191,11 +191,11 @@ namespace TiaMcpServer.Siemens
             if (groups != null)
             {
                 var group = groups.FirstOrDefault(g => g.Name.Equals(segment));
-                if (group != null)
+                if (group is not null)
                 {
                     // when segment matched
                     softwareContainer = GetSoftwareContainerInDevices(group.Devices, pathSegments, index + 1);
-                    if (softwareContainer != null)
+                    if (softwareContainer is not null)
                     {
                         return softwareContainer;
                     }

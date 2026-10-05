@@ -116,7 +116,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 return new ResponseExportTypesAsDocuments
                 {
                     Message = $"Document export completed: {exported} PLC data types with regex '{regexName}' exported from '{softwarePath}' to '{exportPath}'",
-                    Items = outcome.Exported.Where(e => e.Type != null).Select(e => ToTypeInfo(e.Type!)).ToList(),
+                    Items = outcome.Exported.Where(e => e.Type is not null).Select(e => ToTypeInfo(e.Type!)).ToList(),
                     Documents = outcome.Exported.Select(e => ToDocumentFiles(e.Documents)).ToList(),
                     Inconsistent = outcome.Inconsistent.Select(ToTypeInfo).ToList(),
                     Failures = outcome.Failures,

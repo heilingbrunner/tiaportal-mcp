@@ -160,7 +160,7 @@ namespace TiaMcpServer.Siemens
                 {
                     var paths = new List<string>();
 
-                    if (_project == null)
+                    if (_project is null)
                     {
                         return paths;
                     }

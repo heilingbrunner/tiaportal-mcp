@@ -23,7 +23,7 @@ namespace TiaMcpServer.ModelContextProtocol
             try
             {
                 var type = Portal.GetType(softwarePath, typePath);
-                if (type != null)
+                if (type is not null)
                 {
                     var attributes = Helper.GetAttributeList(type);
 
@@ -122,7 +122,7 @@ namespace TiaMcpServer.ModelContextProtocol
             try
             {
                 var type = Portal.ExportXmlType(softwarePath, typePath, exportPath, preservePath);
-                if (type != null)
+                if (type is not null)
                 {
                     return new ResponseExportXmlType
                     {

@@ -50,7 +50,7 @@ namespace TiaMcpServer.Siemens
                         block.Name,
                         maxChars,
                         dir => ExportAsDocuments(softwarePath, blockPath, dir),
-                        dir => ExportXmlBlock(softwarePath, blockPath, dir) != null);
+                        dir => ExportXmlBlock(softwarePath, blockPath, dir) is not null);
                 },
                 ("softwarePath", softwarePath), ("blockPath", blockPath), ("format", format));
         }
@@ -77,7 +77,7 @@ namespace TiaMcpServer.Siemens
                         type.Name,
                         maxChars,
                         dir => ExportTypeAsDocuments(softwarePath, typePath, dir).Files.Count > 0,
-                        dir => ExportXmlType(softwarePath, dir, typePath) != null);
+                        dir => ExportXmlType(softwarePath, dir, typePath) is not null);
                 },
                 ("softwarePath", softwarePath), ("typePath", typePath), ("format", format));
         }

@@ -22,7 +22,7 @@ namespace TiaMcpServer.ModelContextProtocol
             try
             {
                 var software = Portal.GetPlcSoftware(softwarePath);
-                if (software != null)
+                if (software is not null)
                 {
 
                     var attributes = Helper.GetAttributeList(software);

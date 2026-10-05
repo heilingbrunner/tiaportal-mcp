@@ -25,7 +25,7 @@ namespace TiaMcpServer.ModelContextProtocol
             try
             {
                 var block = Portal.GetBlock(softwarePath, blockPath);
-                if (block != null)
+                if (block is not null)
                 {
                     var attributes = Helper.GetAttributeList(block);
 
@@ -127,7 +127,7 @@ namespace TiaMcpServer.ModelContextProtocol
             try
             {
                 var rootGroup = Portal.GetBlockRootGroup(softwarePath);
-                if (rootGroup != null)
+                if (rootGroup is not null)
                 {
                     var hierarchy = Helper.BuildBlockHierarchy(rootGroup, Portal);
                     return new ResponseBlocksWithHierarchy
@@ -164,7 +164,7 @@ namespace TiaMcpServer.ModelContextProtocol
             try
             {
                 var block = Portal.ExportXmlBlock(softwarePath, blockPath, exportPath, preservePath);
-                if (block != null)
+                if (block is not null)
                 {
                     return new ResponseExportXmlBlock
                     {

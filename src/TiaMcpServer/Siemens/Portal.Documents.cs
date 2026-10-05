@@ -854,7 +854,7 @@ namespace TiaMcpServer.Siemens
                     DocumentImportResult? result = null;
                     try
                     {
-                        result = (group != null)
+                        result = (group is not null)
                             ? group.Blocks.ImportFromDocuments(dir, fileNameWithoutExtension, option)
                             : plcSoftware.BlockGroup.Blocks.ImportFromDocuments(dir, fileNameWithoutExtension, option);
                     }
@@ -863,7 +863,7 @@ namespace TiaMcpServer.Siemens
                         throw new PortalException(PortalErrorCode.ExportFailed, $"EngineeringNotSupportedException at file '{fileNameWithoutExtension}'. {ex.Message}", null, ex);
                     }
 
-                    if (result != null && result.State == DocumentResultState.Success)
+                    if (result is not null && result.State == DocumentResultState.Success)
                     {
                         return true;
                     }
@@ -922,7 +922,7 @@ namespace TiaMcpServer.Siemens
 
                         try
                         {
-                            var result = (group != null)
+                            var result = (group is not null)
                                 ? group.Blocks.ImportFromDocuments(dir, name, option)
                                 : plcSoftware.BlockGroup.Blocks.ImportFromDocuments(dir, name, option);
 

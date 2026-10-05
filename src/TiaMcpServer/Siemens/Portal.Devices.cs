@@ -104,7 +104,7 @@ namespace TiaMcpServer.Siemens
             DeviceUserGroupComposition? groups = _project.DeviceGroups;
             DeviceUserGroup? group = groups?.FirstOrDefault(g => g.Name.Equals(pathSegments[0], StringComparison.OrdinalIgnoreCase));
 
-            if (group == null)
+            if (group is null)
             {
                 return null;
             }
@@ -120,7 +120,7 @@ namespace TiaMcpServer.Siemens
 
                 // Try to find subgroup
                 group = group.Groups.FirstOrDefault(g => g.Name.Equals(pathSegments[i], StringComparison.OrdinalIgnoreCase));
-                if (group == null)
+                if (group is null)
                 {
                     break;
                 }
@@ -131,7 +131,7 @@ namespace TiaMcpServer.Siemens
 
         private DeviceItem? GetDeviceItemByPath(string deviceItemPath)
         {
-            if (_project == null || _project.Devices == null)
+            if (_project is null || _project.Devices == null)
             {
                 return null;
             }
@@ -149,11 +149,11 @@ namespace TiaMcpServer.Siemens
             {
                 deviceItem = GetDeviceItemFromDevice(pathSegments, devices, index);
 
-                if (deviceItem == null)
+                if (deviceItem is null)
                 {
                     // search in groups
                     var group = groups?.FirstOrDefault(g => g.Name.Equals(pathSegments[index], StringComparison.OrdinalIgnoreCase));
-                    if (group != null)
+                    if (group is not null)
                     {
                         devices = group.Devices;
                         if (devices != null)
@@ -161,7 +161,7 @@ namespace TiaMcpServer.Siemens
                             deviceItem = GetDeviceItemFromDevice(pathSegments, devices, index + 1);
                         }
 
-                        if (deviceItem != null)
+                        if (deviceItem is not null)
                         {
                             return deviceItem;
                         }
@@ -171,7 +171,7 @@ namespace TiaMcpServer.Siemens
                         devices = group.Devices;
                     }
                 }
-                else
+                else if (deviceItem is not null)
                 {
                     return deviceItem;
                 }

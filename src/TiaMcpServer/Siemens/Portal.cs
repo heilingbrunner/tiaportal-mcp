@@ -321,8 +321,8 @@ namespace TiaMcpServer.Siemens
                 Path = project.Path,
                 Type = project.GetType().Name,
                 IsMultiuserProject = project is MultiuserProject,
-                IsLocalSession = _session != null,
-                IsLocalProject = _session == null
+                IsLocalSession = _session is not null,
+                IsLocalProject = _session is null
             };
 
             return info;
@@ -408,7 +408,7 @@ namespace TiaMcpServer.Siemens
                 return false;
             }
 
-            if (_session != null)
+            if (_session is not null)
             {
                 _project = null;
                 _session?.Close();
@@ -425,21 +425,21 @@ namespace TiaMcpServer.Siemens
                 {
                     // Session is already open  
                     _session = _portal?.LocalSessions.FirstOrDefault(s => s.Project.Name == sessionName);
-                    if (_session != null)
+                    if (_session is not null)
                     {
                         // Correctly cast MultiuserProject to Project  
                         _project = _session.Project;
-                        return _project != null;
+                        return _project is not null;
                     }
                 }
                 else
                 {
                     _session = _portal?.LocalSessions.Open(new FileInfo(localSessionPath));
-                    if (_session != null)
+                    if (_session is not null)
                     {
                         // Correctly cast MultiuserProject to Project  
                         _project = _session.Project;
-                        return _project != null;
+                        return _project is not null;
                     }
                 }
             }

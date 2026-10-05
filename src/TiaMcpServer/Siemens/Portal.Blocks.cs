@@ -34,7 +34,7 @@ namespace TiaMcpServer.Siemens
             {
                 var blockGroup = plcSoftware?.BlockGroup;
 
-                if (blockGroup != null)
+                if (blockGroup is not null)
                 {
                     var path = blockPath.Contains("/") ? blockPath.Substring(0, blockPath.LastIndexOf("/")) : string.Empty;
                     var regexName = blockPath.Contains("/") ? blockPath.Substring(blockPath.LastIndexOf("/") + 1) : blockPath;
@@ -42,7 +42,7 @@ namespace TiaMcpServer.Siemens
                     PlcBlock? block = null;
 
                     var group = GetPlcBlockGroupByPath(softwarePath, path);
-                    if (group != null)
+                    if (group is not null)
                     {
                         if (regexName.IndexOfAny(_regexChars) >= 0)
                         {
