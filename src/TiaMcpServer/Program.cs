@@ -136,7 +136,7 @@ namespace TiaMcpServer
                         {
                             Name = "TiaMcpServer",
                             Title = "TIA Portal MCP Server",
-                            Version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0"
+                            Version = TiaMcpServer.Siemens.Diagnostics.ServerVersion
                         };
 
                         serverOptions.ServerInstructions =

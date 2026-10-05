@@ -21,6 +21,8 @@ namespace TiaMcpServer.Siemens
     /// </summary>
     public sealed class DiagnosticsReport
     {
+        /// <summary>Assembly version of TiaMcpServer.exe, e.g. "0.2.0.0".</summary>
+        public string? ServerVersion { get; set; }
         public bool IsConnected { get; set; }
         public int ActiveTiaMajorVersion { get; set; }
         public string? ProjectName { get; set; }
@@ -58,6 +60,13 @@ namespace TiaMcpServer.Siemens
             "Portal.exe"
         };
 
+        /// <summary>
+        /// Assembly version of TiaMcpServer.exe (AssemblyVersion in TiaMcpServer.csproj). Also
+        /// reported to clients as ServerInfo.Version, so both always show the same value.
+        /// </summary>
+        public static string ServerVersion =>
+            typeof(Diagnostics).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+
         public static DiagnosticsReport Run(Portal portal, bool allowWrite = false)
         {
             if (portal == null)
@@ -70,8 +79,11 @@ namespace TiaMcpServer.Siemens
             var installations = GetInstalledTiaPortalVersions();
             var userInGroup = GetUserInGroup();
 
+            var serverVersion = ServerVersion;
+
             var status = $"Diagnose:";
 
+            status += $"\n├─ Server: TiaMcpServer {serverVersion}";
             status += $"\n├─ Connected = {isConnected}";
 
             if (projectName != null || projectPath != null)
@@ -108,6 +120,7 @@ namespace TiaMcpServer.Siemens
 
             return new DiagnosticsReport
             {
+                ServerVersion = serverVersion,
                 IsConnected = isConnected,
                 ActiveTiaMajorVersion = Openness.TiaMajorVersion,
                 ProjectName = projectName,

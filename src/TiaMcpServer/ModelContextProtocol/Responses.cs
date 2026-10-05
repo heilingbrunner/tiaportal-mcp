@@ -247,6 +247,9 @@ namespace TiaMcpServer.ModelContextProtocol
     public class ResponseDoctor : ResponseMessage
     {
         public string? Report { get; set; }
+
+        /// <summary>Assembly version of TiaMcpServer.exe, e.g. "0.2.0.0".</summary>
+        public string? ServerVersion { get; set; }
         public bool? IsConnected { get; set; }
         public int? ActiveTiaMajorVersion { get; set; }
         public string? ProjectName { get; set; }

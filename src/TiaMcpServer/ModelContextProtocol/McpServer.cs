@@ -196,6 +196,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     Message = "TIA-Portal environment diagnosed",
                     Report = report.Text,
+                    ServerVersion = report.ServerVersion,
                     IsConnected = report.IsConnected,
                     ActiveTiaMajorVersion = report.ActiveTiaMajorVersion,
                     ProjectName = report.ProjectName,

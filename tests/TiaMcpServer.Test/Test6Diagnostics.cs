@@ -42,6 +42,10 @@ namespace TiaMcpServer.Test
             StringAssert.Contains(report.Text, "Active Version: V" + Settings.TiaMajorVersion);
             StringAssert.Contains(report.Text, "Siemens TIA Openness");
 
+            var expectedVersion = typeof(Portal).Assembly.GetName().Version.ToString();
+            Assert.AreEqual(expectedVersion, report.ServerVersion, "Server version must be the assembly version");
+            StringAssert.Contains(report.Text, "Server: TiaMcpServer " + expectedVersion);
+
             Console.WriteLine(report.Text);
         }
 
@@ -80,6 +84,8 @@ namespace TiaMcpServer.Test
             Assert.IsNotNull(response.Installations);
             Assert.IsTrue(response.Installations!.Any(i => i.MajorVersion == Settings.TiaMajorVersion),
                 $"TIA Portal V{Settings.TiaMajorVersion} missing from the structured content");
+            Assert.AreEqual(typeof(McpServer).Assembly.GetName().Version.ToString(), response.ServerVersion,
+                "ResponseDoctor must report the assembly version of TiaMcpServer.exe");
 
             Console.WriteLine(response.Report);
         }
