@@ -8,7 +8,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         #region Basic Connection Templates
 
-        [McpServerPrompt(Name = "Doctor"), Description("Diagnose the TIA Portal environment")]
+        [McpServerPrompt(Name = "Doctor"), Description("Doctor runs diagnostics on the TIA Portal environment")]
         public static string Doctor()
         {
             return @"Diagnose the TIA Portal environment.

@@ -116,7 +116,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [PortalIndependent]
-        [McpServerTool(Name = "GetPortals", Title = "List TIA Portal instances", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+        [McpServerTool(Name = "GetPortals", Title = "Get portals", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
          Description("List the running TIA-Portal instances with their 'portalId', open project path and whether this server is attached. Use it to choose the 'portalId' when more than one instance is running")]
         public static ResponsePortals GetPortals()
         {
@@ -182,10 +182,10 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "Doctor", Title = "Diagnose the TIA Portal environment", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Diagnose the TIA-Portal environment: connection, open project, active and installed TIA-Portal versions, Openness user group membership")]
+        [McpServerTool(Name = "Doctor", Title = "Doctor runs diagnostics on the environment", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Diagnose the TIA-Portal environment: connection, open project, active and installed TIA-Portal versions, Openness user group membership")]
         public static ResponseDoctor Doctor()
         {
-            Logger?.LogInformation("Running TIA Portal diagnostics...");
+            Logger?.LogInformation("Running doctor diagnostics...");
 
             try
             {
