@@ -237,6 +237,57 @@ namespace TiaMcpServer.Test
             Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
         }
 
+        [TestMethod]
+        public void Test_710_PromptDescriptionsAndToolTitles_FollowTheStyleRules()
+        {
+            // Arrange
+            var problems = new List<string>();
+
+            // Act
+            foreach (var prompt in PromptMethods())
+            {
+                var text = prompt.Method.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()?.Description;
+                problems.AddRange(StyleProblems("prompt description", prompt.Name, text, 80));
+            }
+
+            foreach (var tool in ToolMethods())
+            {
+                problems.AddRange(StyleProblems("tool title", tool.Name, tool.Title, 40));
+            }
+
+            // Assert
+            Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
+        }
+
+        [TestMethod]
+        public void Test_711_Descriptions_AddInformationAndUseStandardSpelling()
+        {
+            // Arrange
+            var problems = new List<string>();
+
+            // Act
+            foreach (var tool in ToolMethods())
+            {
+                var description = tool.Method.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()?.Description ?? string.Empty;
+
+                if (string.Equals(description.TrimEnd('.'), tool.Title, StringComparison.OrdinalIgnoreCase))
+                {
+                    problems.Add($"{tool.Name}: the description only repeats the title '{tool.Title}'");
+                }
+
+                problems.AddRange(SpellingProblems("tool description", tool.Name, description));
+            }
+
+            foreach (var prompt in PromptMethods())
+            {
+                var description = prompt.Method.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()?.Description ?? string.Empty;
+                problems.AddRange(SpellingProblems("prompt description", prompt.Name, description));
+            }
+
+            // Assert
+            Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
+        }
+
         private static List<(string Name, MethodInfo Method, string? Title)> ToolMethods()
         {
             var result = new List<(string Name, MethodInfo Method, string? Title)>();
@@ -273,6 +324,43 @@ namespace TiaMcpServer.Test
         private static bool IsClientParameter(ParameterInfo parameter) =>
             parameter.ParameterType != typeof(System.Threading.CancellationToken)
             && !(parameter.ParameterType.IsGenericType && parameter.ParameterType.GetGenericTypeDefinition() == typeof(IProgress<>));
+
+        private static IEnumerable<string> StyleProblems(string kind, string name, string? text, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                yield return $"{name}: the {kind} is empty";
+                yield break;
+            }
+
+            if (!char.IsUpper(text![0]))
+            {
+                yield return $"{name}: the {kind} must start with an uppercase letter: '{text}'";
+            }
+
+            if (text.EndsWith("."))
+            {
+                yield return $"{name}: the {kind} must not end with a period: '{text}'";
+            }
+
+            if (text.Length > maxLength)
+            {
+                yield return $"{name}: the {kind} is {text.Length} characters, the limit is {maxLength}: '{text}'";
+            }
+        }
+
+        private static IEnumerable<string> SpellingProblems(string kind, string name, string text)
+        {
+            if (text.Contains("plc software"))
+            {
+                yield return $"{name}: the {kind} says 'plc software', write 'PLC software'";
+            }
+
+            if (text.Contains("TIA-Portal"))
+            {
+                yield return $"{name}: the {kind} says 'TIA-Portal', write 'TIA Portal'";
+            }
+        }
 
         private static System.Collections.Generic.List<MethodInfo> WriteToolMethods() =>
             typeof(McpServer)

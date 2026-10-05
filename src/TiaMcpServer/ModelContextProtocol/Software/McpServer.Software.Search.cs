@@ -15,7 +15,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "FindInCode", Title = "Find in code", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
          Description("Search the actual source text of program blocks and PLC data types with a regular expression - every other filter in this server matches object names only. Returns the object path, line number and the matching line. Each call exports the candidate objects behind the scenes, so narrow a large PLC with 'nameFilter'")]
         public static ResponseCodeSearch FindInCode(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("pattern: regular expression matched against each line, case-insensitive. Plain text works too")] string pattern,
             [Description("nameFilter: optional regular expression on object names, to limit which objects are searched. Empty (default) searches all of them")] string nameFilter = "",
             [Description("maxResults: stop after this many matching lines (default 200)")] int maxResults = 200)

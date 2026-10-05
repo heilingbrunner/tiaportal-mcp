@@ -15,7 +15,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "GetSoftwareTree", Title = "Get software tree", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get the structure/tree of a given PLC software showing program blocks, PLC data types, PLC tags, watch and force tables, and external source files")]
         public static ResponseSoftwareTree GetSoftwareTree(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("sections: optional comma separated subset of 'blocks,types,tags,watch,sources' to keep the output small; defaults to 'all'")] string sections = "all")
         {
             try

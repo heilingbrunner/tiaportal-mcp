@@ -14,7 +14,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         #region devices
 
-        [McpServerTool(Name = "GetDeviceInfo", Title = "Get device info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get info from a device from the current project/session")]
+        [McpServerTool(Name = "GetDeviceInfo", Title = "Get device info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show name, description and attributes of one device in the current project or session")]
         public static ResponseDeviceInfo GetDeviceInfo(
             [Description("devicePath: defines the path in the project structure to the device")] string devicePath)
         {
@@ -50,7 +50,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetDeviceItemInfo", Title = "Get device item info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get info from a device item from the current project/session")]
+        [McpServerTool(Name = "GetDeviceItemInfo", Title = "Get device item info", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show name, description and attributes of one device item in the current project or session")]
         public static ResponseDeviceItemInfo GetDeviceItemInfo(
             [Description("deviceItemPath: defines the path in the project structure to the device item")] string deviceItemPath)
         {
@@ -86,7 +86,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "GetDevices", Title = "Get devices", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get a list of all devices in the project/session")]
+        [McpServerTool(Name = "GetDevices", Title = "Get devices", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List all devices of the current project or session")]
         public static ResponseDevices GetDevices()
         {
             try

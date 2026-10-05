@@ -56,7 +56,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region portal
 
         [McpServerTool(Name = "Connect", Title = "Connect to TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false),
-         Description("Connect to TIA-Portal and return its 'portalId'. Without 'portalId' it attaches to the only running instance, or starts one if none is running; with several running it fails and lists them")]
+         Description("Connect to TIA Portal and return its 'portalId'. Without 'portalId' it attaches to the only running instance, or starts one if none is running; with several running it fails and lists them")]
         public static ResponseConnect Connect(
             [Description("portalId: process id of the TIA Portal instance to attach to (see 'GetPortals'). Leave empty when at most one instance is running")] int? portalId = null)
         {
@@ -87,7 +87,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "Disconnect", Title = "Disconnect from TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false), Description("Disconnect from TIA-Portal")]
+        [McpServerTool(Name = "Disconnect", Title = "Disconnect from TIA Portal", Destructive = false, Idempotent = true, OpenWorld = false), Description("Disconnect from a TIA Portal instance (the one named by portalId, or the only attached one). Other attached instances stay connected")]
         public static ResponseDisconnect Disconnect()
         {
             try
@@ -117,7 +117,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [PortalIndependent]
         [McpServerTool(Name = "GetPortals", Title = "Get portals", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("List the running TIA-Portal instances with their 'portalId', open project path and whether this server is attached. The top-level 'portalId' is the attached instance tools use by default (empty when none or several are attached). Use it to choose the 'portalId' when more than one instance is running")]
+         Description("List the running TIA Portal instances with their 'portalId', open project path and whether this server is attached. The top-level 'portalId' is the attached instance tools use by default (empty when none or several are attached). Use it to choose the 'portalId' when more than one instance is running")]
         public static ResponsePortals GetPortals()
         {
             try
@@ -151,7 +151,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region state
 
-        [McpServerTool(Name = "GetState", Title = "Get server state", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get the state of the TIA-Portal MCP server")]
+        [McpServerTool(Name = "GetState", Title = "Get server state", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show the portalId this server is attached to, whether it is connected, the open project and session, and whether write mode (--allow-write) is enabled")]
         public static ResponseState GetState()
         {
             try
@@ -188,7 +188,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "Doctor", Title = "Doctor runs diagnostics on the environment", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Diagnose the TIA-Portal environment: connection, open project, active and installed TIA-Portal versions, Openness user group membership")]
+        [McpServerTool(Name = "Doctor", Title = "Run Doctor diagnostics", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Diagnose the TIA Portal environment: server version, connection, open project, active and installed TIA Portal versions, Openness user group membership")]
         public static ResponseDoctor Doctor()
         {
             Logger?.LogInformation("Running doctor diagnostics...");
@@ -235,7 +235,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region project/session
 
-        [McpServerTool(Name = "GetProject", Title = "Get open project", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get open local project/session")]
+        [McpServerTool(Name = "GetProject", Title = "Get open project", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("List the projects and local sessions open in the connected TIA Portal, with name and path")]
         public static ResponseGetProjects GetProjects()
         {
             try
@@ -276,9 +276,9 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "OpenProject", Title = "Open project/session", Destructive = false, Idempotent = true, OpenWorld = false), Description("Open a TIA-Portal local project/session")]
+        [McpServerTool(Name = "OpenProject", Title = "Open project/session", Destructive = true, Idempotent = true, OpenWorld = false), Description("Open a local project (.apXX) or local session (.alsXX) in the connected TIA Portal and make it the current project. Closes the project or session that is open first. Needs a prior Connect; OpenTiaProject connects and opens in one call")]
         public static ResponseOpenProject OpenProject(
-            [Description("path: defines the path where to the project/session")] string path)
+            [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path)
         {
             try
             {
@@ -328,7 +328,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "SaveProject", Title = "Save project", Destructive = true, Idempotent = true, OpenWorld = false), Description("Save the current TIA-Portal local project/session")]
+        [McpServerTool(Name = "SaveProject", Title = "Save project", Destructive = true, Idempotent = true, OpenWorld = false), Description("Save the current local project or local session")]
         public static ResponseSaveProject SaveProject()
         {
             try
@@ -378,9 +378,9 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "SaveAsProject", Title = "Save project as", Destructive = true, Idempotent = true, OpenWorld = false), Description("Save current TIA-Portal project/session with a new name")]
+        [McpServerTool(Name = "SaveAsProject", Title = "Save project as", Destructive = true, Idempotent = true, OpenWorld = false), Description("Save the current local project to a new location. Not possible for local sessions")]
         public static ResponseSaveAsProject SaveAsProject(
-            [Description("newProjectPath: defines the new path where to save the project")] string newProjectPath)
+            [Description("newProjectPath: target directory on the machine running this server that receives the saved project")] string newProjectPath)
         {
             try
             {
@@ -415,7 +415,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "CloseProject", Title = "Close project", Destructive = true, Idempotent = true, OpenWorld = false), Description("Close the current TIA-Portal project/session")]
+        [McpServerTool(Name = "CloseProject", Title = "Close project", Destructive = true, Idempotent = true, OpenWorld = false), Description("Close the current local project or local session. Save first to keep changes")]
         public static ResponseCloseProject CloseProject()
         {
             try
@@ -474,7 +474,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region devices
 
-        [McpServerTool(Name = "GetProjectTree", Title = "Get project tree", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Get project structure as a tree view on current local project/session")]
+        [McpServerTool(Name = "GetProjectTree", Title = "Get project tree", ReadOnly = true, OpenWorld = false, UseStructuredContent = true), Description("Show the structure of the current project or session as a tree of devices, device items, groups and PLC/HMI software. Use it to find the device and software paths other tools expect")]
         public static ResponseProjectTree GetProjectTree()
         {
             try
@@ -594,7 +594,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "PreviewImport", Title = "Preview import", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
          Description("Report what importing a directory would create, overwrite or collide with, without touching the project. Checks each file against the objects already in the PLC, including the rule that a PLC data type name must be unique across the whole PLC - importing an existing type name into a different group fails even with importOption 'Override'")]
         public static ResponseImportPreview PreviewImport(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("importPath: directory holding the files to import (.s7dcl source documents or .xml)")] string importPath,
             [Description("kind: what the files contain - 'type' for PLC data types, 'block' for program blocks")] string kind,
             [Description("groupPath: the group the import would target; empty means the root of that area. A leading system folder segment is accepted")] string groupPath = "")

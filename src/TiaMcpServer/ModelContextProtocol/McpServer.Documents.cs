@@ -36,7 +36,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "ExportTypeAsDocuments", Title = "Export type as documents", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Export type as documents (.s7dcl plus an optional .s7res)")]
         public static ResponseExportTypeAsDocuments ExportTypeAsDocuments(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("typePath: root-relative path of the PLC data type, e.g. 'Common/BtnTyp_X'. Use 'GetTypes' to list them")] string typePath,
             [Description("exportPath: directory on this machine that receives the document files")] string exportPath,
             [Description("preservePath: recreate the group structure below exportPath, inside the 'PLC data types' system folder as TIA Portal names it in the current interface language")] bool preservePath = false)
@@ -68,7 +68,7 @@ namespace TiaMcpServer.ModelContextProtocol
          Description("Export types as documents (.s7dcl plus optional .s7res)")]
         public static async Task<ResponseExportTypesAsDocuments> ExportTypesAsDocuments(
             IProgress<ProgressNotificationValue> progress,
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("exportPath: directory on this machine that receives the document files")] string exportPath,
             [Description("regexName: name or regular expression selecting the types. Use empty string (default) to export all")] string regexName = "",
             [Description("preservePath: recreate the group structure below exportPath, inside the 'PLC data types' system folder as TIA Portal names it in the current interface language")] bool preservePath = false)
@@ -190,7 +190,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "ImportTypeFromDocuments", Title = "Import type from documents", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Import type from documents (.s7dcl plus an optional .s7res)")]
         public static ResponseImportTypeFromDocuments ImportTypeFromDocuments(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("groupPath: root-relative PLC data type group that receives the type; empty uses the PLC data types root. A leading 'PLC data types' segment, as written by preservePath exports, is accepted and ignored")] string groupPath,
             [Description("importPath: directory containing the document files")] string importPath,
             [Description("fileNameWithoutExtension: base name of the document set, e.g. 'BtnTyp_X'")] string fileNameWithoutExtension,
@@ -217,7 +217,7 @@ namespace TiaMcpServer.ModelContextProtocol
          Description("Import types from documents (.s7dcl plus an optional .s7res)")]
         public static async Task<ResponseImportTypesFromDocuments> ImportTypesFromDocuments(
             IProgress<ProgressNotificationValue> progress,
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("groupPath: root-relative PLC data type group that receives the types; empty uses the PLC data types root. A leading 'PLC data types' segment is accepted and ignored")] string groupPath,
             [Description("importPath: directory containing the document files")] string importPath,
             [Description("regexName: name or regular expression selecting the document sets. Use empty string (default) to import all")] string regexName = "",
@@ -291,12 +291,12 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region documents
 
-        [McpServerTool(Name = "ExportAsDocuments", Title = "Export as documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export as documents (.s7dcl/.s7res) from a block in the plc software to path")]
+        [McpServerTool(Name = "ExportAsDocuments", Title = "Export as documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export as documents (.s7dcl/.s7res) from a block in the PLC software to path")]
         public static ResponseExportAsDocuments ExportAsDocuments(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("blockPath: defines the path in the project structure to the block")] string blockPath,
             [Description("exportPath: defines the path where to export the documents")] string exportPath,
-            [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
+            [Description("preservePath: preserves the path/structure of the PLC software")] bool preservePath = false)
         {
             try
             {
@@ -327,13 +327,13 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportBlocksAsDocuments", Title = "Export blocks as documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export as documents (.s7dcl/.s7res) from blocks in the plc software to path")]
+        [McpServerTool(Name = "ExportBlocksAsDocuments", Title = "Export blocks as documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Export as documents (.s7dcl/.s7res) from blocks in the PLC software to path")]
         public static async Task<ResponseExportBlocksAsDocuments> ExportBlocksAsDocuments(
             IProgress<ProgressNotificationValue> progress,
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("exportPath: defines the path where to export the documents")] string exportPath,
             [Description("regexName: defines the name or regular expression to find the block. Use empty string (default) to find all")] string regexName = "",
-            [Description("preservePath: preserves the path/structure of the plc software")] bool preservePath = false)
+            [Description("preservePath: preserves the path/structure of the PLC software")] bool preservePath = false)
         {
             var startTime = DateTime.Now;
             
@@ -448,7 +448,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "ImportFromDocuments", Title = "Import from documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import from documents (.s7dcl/.s7res)")]
         public static ResponseImportFromDocuments ImportFromDocuments(
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("groupPath: optional path within the PLC program where the block should be placed (empty for root)")] string groupPath,
             [Description("importPath: directory containing the document files (.s7dcl/.s7res)")] string importPath,
             [Description("fileNameWithoutExtension: name of the block file without extension") ] string fileNameWithoutExtension,
@@ -511,7 +511,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "ImportBlocksFromDocuments", Title = "Import blocks from documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import blocks from documents (.s7dcl/.s7res)")]
         public static async Task<ResponseImportBlocksFromDocuments> ImportBlocksFromDocuments(
             IProgress<ProgressNotificationValue> progress,
-            [Description("softwarePath: defines the path in the project structure to the plc software")] string softwarePath,
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("groupPath: optional path within the PLC program where the blocks should be placed (empty for root)")] string groupPath,
             [Description("importPath: directory containing the document files (.s7dcl/.s7res)")] string importPath,
             [Description("regexName: name or regular expression to select block files (empty for all)")] string regexName = "",
