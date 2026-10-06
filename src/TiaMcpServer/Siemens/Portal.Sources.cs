@@ -108,8 +108,12 @@ namespace TiaMcpServer.Siemens
         /// </summary>
         private sealed class SourceScope : IDisposable
         {
-            public SourceScope()
+            private readonly ILogger? _logger;
+
+            public SourceScope(ILogger? logger = null)
             {
+                _logger = logger;
+
                 Directory = System.IO.Path.Combine(
                     System.IO.Path.GetTempPath(), "TiaMcpServer", Guid.NewGuid().ToString("N"));
 
@@ -127,9 +131,11 @@ namespace TiaMcpServer.Siemens
                         System.IO.Directory.Delete(Directory, recursive: true);
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    // Best effort - the OS cleans the temp path eventually.
+                    // Best effort - the OS cleans the temp path eventually, and a cleanup
+                    // failure must never hide the result or exception that actually matters.
+                    _logger?.LogWarning(ex, "Could not remove scratch directory '{Directory}'", Directory);
                 }
             }
         }
@@ -163,7 +169,7 @@ namespace TiaMcpServer.Siemens
                 throw new PortalException(PortalErrorCode.InvalidParams, "'maxChars' must be greater than zero.");
             }
 
-            using (var scope = new SourceScope())
+            using (var scope = new SourceScope(_logger))
             {
                 var used = wantsDocument ? "document" : "xml";
 
@@ -861,6 +867,8 @@ namespace TiaMcpServer.Siemens
         // 2. compile it (PlcExternalSource.GenerateBlocksFromSource), which returns a mix of
         // PlcBlock and PlcType objects in one call - the source file's own content decides
         // what comes out, not the caller.
+        // Step 1 hands TIA Portal a UTF-8-with-BOM copy of the file, never the file itself, so
+        // non-ASCII text survives sources saved without a BOM (SourceFileEncoding).
         // This walks a whole folder tree - typically one ExportSources just wrote - doing both
         // steps per file and deleting the scratch external source afterward, so nothing but the
         // generated blocks and types remains in the project.
@@ -1306,7 +1314,16 @@ namespace TiaMcpServer.Siemens
                             $"Source file '{filePath}' does not exist on the machine running this server.");
                     }
 
-                    return group.ExternalSources.CreateFromFile(name, filePath);
+                    // Never the caller's file itself: TIA Portal reads a source without BOM as
+                    // ANSI, which garbles every non-ASCII character. See SourceFileEncoding.
+                    // CreateFromFile copies the content into the project, so the scratch copy
+                    // can go as soon as it returns.
+                    using (var scope = new SourceScope(_logger))
+                    {
+                        var normalized = SourceFileEncoding.WriteUtf8BomCopy(filePath, scope.Directory);
+
+                        return group.ExternalSources.CreateFromFile(name, normalized);
+                    }
                 },
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("name", name), ("filePath", filePath));
         }
