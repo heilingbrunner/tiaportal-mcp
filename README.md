@@ -19,6 +19,28 @@ A MCP server which connects to Siemens TIA Portal.
 | `--logging <1\|2\|3>`     | `1` stderr, `2` debug output, `3` Windows event log. Omit for no logging. |
 | `--doctor`                | Print the environment report and exit without starting the MCP server.    |
 | `--allow-write`           | Register the project-mutating tools. Omitted by default; see below.       |
+| `--project-path <file>`   | Preset for the `path` argument of `OpenProject` / `OpenTiaProject`. See below. |
+| `--software-path <path>`  | Preset for the `softwarePath` tool argument, e.g. `PLC_1`. See below.     |
+| `--export-path <path>`    | Preset for the `exportPath` tool argument. See below.                     |
+| `--preserve-path <bool>`  | Preset for the `preservePath` tool argument (`true` or `false`). See below. |
+| `--with-dependencies <bool>` | Preset for the `withDependencies` argument of the `ExportSource*` tools (`true` or `false`). See below. |
+
+## Presetting tool arguments
+
+`softwarePath`, `exportPath`, `preservePath` and `withDependencies` (the `ExportSource*` tools) appear in many tools, `path` (the project file) in
+`OpenProject` and `OpenTiaProject`. Set them once in the `args`
+of the MCP server entry in your client's JSON configuration and the model no longer has to pass them:
+
+```json
+"args": ["--project-path", "D:\\Projects\\Plant\\Plant.ap21", "--software-path", "PLC_1", "--export-path", "D:\\Export", "--preserve-path", "true"]
+```
+
+- A preset argument becomes optional in `tools/list`; a tool call that omits it (or sends `null`) uses
+  the preset. A value passed in the call always overrides the preset.
+- Without a preset nothing changes: the argument stays required.
+- `GetState` lists the active presets in `Presets`.
+- A single `--software-path` only fits a project with one PLC; pass `softwarePath` explicitly otherwise.
+- Prompts (slash commands) are not affected.
 
 ## Write mode
 
@@ -252,25 +274,105 @@ These are not gaps in this server - the underlying API offers no operation for t
   - This server targets `net48` (required by TIA Openness), so Streamable HTTP cannot be hosted from this process.
   - A separate .NET 8+ proxy process would be required to expose this server over HTTP.
 
-## Copilot Chat
+## Client configuration
 
-- Example mcp.json, when using VS Code extension [TIA-Portal MCP-Server](https://marketplace.visualstudio.com/items?itemName=JHeilingbrunner.vscode-tiaportal-mcp) and TIA-Portal V18
+The server runs locally over `stdio`, so every client starts `TiaMcpServer.exe` itself. Use the
+absolute path of the executable (`<path-to>` below) and double the backslashes in JSON. All
+arguments from [Command Line Arguments](#command-line-arguments) go into `args`; the presets
+(`--project-path`, `--software-path`, `--export-path`, ...) and `--allow-write` are optional.
+
+### GitHub Copilot (VS Code)
+
+- Workspace file `.vscode/mcp.json` (or `MCP: Open User Configuration` for all workspaces). The
+  root key is `servers`. Example with the VS Code extension
+  [TIA-Portal MCP-Server](https://marketplace.visualstudio.com/items?itemName=JHeilingbrunner.vscode-tiaportal-mcp)
+  and TIA-Portal V21:
+
   ```json
   {
-      "servers": {
-          "vscode-tiaportal-mcp": {
-          "command": "c:\\Users\\<user>\\.vscode\\extensions\\jheilingbrunner.vscode-tiaportal-mcp-<version>\\srv\\net48\\TiaMcpServer.exe",
-          "args": [
-              "--tia-major-version",
-              "18"
-          ],
-          "env": {}
-          }
+    "servers": {
+      "tia-mcp-server": {
+        "type": "stdio",
+        "command": "c:\\Users\\<user>\\.vscode\\extensions\\jheilingbrunner.vscode-tiaportal-mcp-<version>\\srv\\net48\\TiaMcpServer.exe",
+        "args": [
+          "--tia-major-version", "21",
+          "--project-path", "D:\\Projects\\Plant\\Plant.ap21",
+          "--software-path", "PLC_1",
+          "--export-path", "${workspaceFolder}\\export",
+          "--preserve-path", "true",
+          "--allow-write"
+        ],
+        "env": {}
       }
+    }
   }
   ```
 
-## Claude Desktop
+  Then switch Copilot Chat to *Agent* mode and enable the server's tools in the tools picker.
+
+### Claude Code
+
+- Project scope, file `.mcp.json` in the repository root (checked in, shared with the team). The
+  root key is `mcpServers`:
+
+  ```json
+  {
+    "mcpServers": {
+      "tia-mcp-server": {
+        "type": "stdio",
+        "command": "<path-to>\\TiaMcpServer.exe",
+        "args": [
+          "--tia-major-version", "21",
+          "--project-path", "D:\\Projects\\Plant\\Plant.ap21",
+          "--software-path", "PLC_1",
+          "--export-path", "${workspaceFolder}\\export",
+          "--preserve-path", "true",
+          "--allow-write"
+        ],
+        "env": {}
+      }
+    }
+  }
+  ```
+
+- The same from the command line (`--scope user` for all projects, `--scope project` writes
+  `.mcp.json`, `--scope local` is the default and private). Everything after `--` is the command:
+
+  ```powershell
+  claude mcp add tia-mcp-server --scope project -- "<path-to>\TiaMcpServer.exe" --tia-major-version 21 --project-path "D:\Projects\Plant\Plant.ap21" --software-path PLC_1 --export-path "D:\Export"
+  ```
+
+  Check it with `claude mcp list` or `/mcp` inside Claude Code.
+
+### Gemini CLI
+
+- `~/.gemini/settings.json` (user) or `.gemini/settings.json` in the project (project scope). The
+  root key is `mcpServers`:
+
+  ```json
+  {
+    "mcpServers": {
+      "tia-mcp-server": {
+        "command": "<path-to>\\TiaMcpServer.exe",
+        "args": [
+          "--tia-major-version", "21",
+          "--project-path", "D:\\Projects\\Plant\\Plant.ap21",
+          "--software-path", "PLC_1",
+          "--export-path", "D:\\Export",
+          "--preserve-path", "true"
+        ],
+        "env": {},
+        "timeout": 120000
+      }
+    }
+  }
+  ```
+
+  `timeout` is in milliseconds; raise it for long exports or compiles. Check it with `/mcp` inside
+  Gemini CLI. Do not set `"trust": true` together with `--allow-write`, because that skips the
+  confirmation prompt for the project-changing tools.
+
+### Claude Desktop
 
 - Create/Edit to add/remove server to `C:\Users\<user>\AppData\Roaming\Claude\claude_desktop_config.json`:
 

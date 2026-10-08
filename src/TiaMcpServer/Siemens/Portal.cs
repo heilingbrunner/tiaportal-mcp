@@ -219,48 +219,109 @@ namespace TiaMcpServer.Siemens
 
         public bool OpenProject(string projectPath)
         {
+            return OpenProject(projectPath, out _);
+        }
+
+        /// <summary>
+        /// Opens the project, or adopts it when this TIA Portal instance already has it open
+        /// (matched by file path, so a project opened in the UI is used as it is and not closed
+        /// and reopened). Only a project that is not yet open closes the current project/session.
+        /// </summary>
+        public bool OpenProject(string projectPath, out bool wasAlreadyOpen)
+        {
             _logger?.LogInformation($"Opening project: {projectPath}");
+
+            wasAlreadyOpen = false;
 
             if (IsPortalNull())
             {
                 return false;
             }
 
-            if (_project != null)
-            {
-                (_project as Project)?.Close();
-                _project = null;
-            }
-
-            if (_session != null)
-            {
-                _session.Close();
-                _session = null;
-            }
-
             try
             {
-                var projects = GetProjects();
-                var projectName = Path.GetFileNameWithoutExtension(projectPath);
+                var open = FindOpenProject(projectPath);
 
-                if (!string.IsNullOrEmpty(projectName) && projects.Any(p => p.Name.Equals(projectName)))
+                if (open != null)
                 {
-                    // Project is already open
-                    _project = _portal?.Projects.FirstOrDefault(p => p.Name == projectName);
+                    // Openness hands out a new wrapper object per access, so identity needs
+                    // Equals (as in RefreshProject), not ReferenceEquals - otherwise the project
+                    // we are about to use would be closed here as "another" project.
+                    if (_project != null && !_project.Equals(open))
+                    {
+                        (_project as Project)?.Close();
+                    }
 
-                    return _project != null;
+                    if (_session != null)
+                    {
+                        _session.Close();
+                        _session = null;
+                    }
+
+                    _project = open;
+                    wasAlreadyOpen = true;
+
+                    return true;
                 }
-                else
+
+                if (_project != null)
                 {
-                    // see [5.3.1 Projekt öffnen, S.113]
-                    _project = _portal?.Projects.OpenWithUpgrade(new FileInfo(projectPath));
-
-                    return _project != null;
+                    (_project as Project)?.Close();
+                    _project = null;
                 }
+
+                if (_session != null)
+                {
+                    _session.Close();
+                    _session = null;
+                }
+
+                // see [5.3.1 Projekt öffnen, S.113]
+                _project = _portal?.Projects.OpenWithUpgrade(new FileInfo(projectPath));
+
+                return _project != null;
             }
             catch (Exception)
             {
                 return false;
+            }
+        }
+
+        private ProjectBase? FindOpenProject(string projectPath)
+        {
+            var fullPath = Path.GetFullPath(projectPath);
+            var name = Path.GetFileNameWithoutExtension(projectPath);
+            var projects = GetProjects();
+
+            // the path is exact; the file name is the fallback when the API reports the path differently
+            var found = projects.FirstOrDefault(p => HasPath(p, fullPath))
+                ?? projects.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+
+            if (found == null)
+            {
+                _logger?.LogInformation("Project '{Path}' is not open; open projects: {Open}",
+                    fullPath, string.Join("; ", projects.Select(p => $"{p.Name} ({SafePath(p)})")));
+            }
+
+            return found;
+        }
+
+        private static bool HasPath(ProjectBase project, string fullPath)
+        {
+            var path = SafePath(project);
+
+            return path != null && string.Equals(Path.GetFullPath(path), fullPath, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string? SafePath(ProjectBase project)
+        {
+            try
+            {
+                return project.Path?.FullName;
+            }
+            catch (Exception)
+            {
+                return null;
             }
         }
 
@@ -366,18 +427,22 @@ namespace TiaMcpServer.Siemens
 
         public bool OpenSession(string localSessionPath)
         {
+            return OpenSession(localSessionPath, out _);
+        }
+
+        /// <summary>
+        /// Opens the local session, or adopts it when it is already open in this TIA Portal
+        /// instance. The current session is closed only when another one has to be opened.
+        /// </summary>
+        public bool OpenSession(string localSessionPath, out bool wasAlreadyOpen)
+        {
             _logger?.LogInformation($"Opening session: {localSessionPath}");
+
+            wasAlreadyOpen = false;
 
             if (IsPortalNull())
             {
                 return false;
-            }
-
-            if (_session is not null)
-            {
-                _project = null;
-                _session?.Close();
-                _session = null;
             }
 
             try
@@ -385,10 +450,19 @@ namespace TiaMcpServer.Siemens
                 var sessions = GetSessions();
                 var projectName = Path.GetFileNameWithoutExtension(localSessionPath);
                 var sessionName = Regex.Replace(projectName, @"_(LS|ES)_\d$", string.Empty, RegexOptions.IgnoreCase);
+                var isOpen = !string.IsNullOrEmpty(sessionName) && sessions.Any(s => s.Name.Equals(sessionName));
 
-                if (!string.IsNullOrEmpty(sessionName) && sessions.Any(s => s.Name.Equals(sessionName)))
+                if (!isOpen && _session is not null)
                 {
-                    // Session is already open  
+                    _project = null;
+                    _session.Close();
+                    _session = null;
+                }
+
+                if (isOpen)
+                {
+                    // Session is already open
+                    wasAlreadyOpen = true;
                     _session = _portal?.LocalSessions.FirstOrDefault(s => s.Project.Name == sessionName);
                     if (_session is not null)
                     {

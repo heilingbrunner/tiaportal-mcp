@@ -168,6 +168,10 @@ namespace TiaMcpServer.ModelContextProtocol
                         Project = state.Project,
                         Session = state.Session,
                         AllowWrite = WritePolicy.AllowWrite,
+                        Presets = ToolDefaults.Presets.Count == 0
+                            ? null
+                            : new JsonObject(ToolDefaults.Presets.Select(p =>
+                                new KeyValuePair<string, JsonNode?>(p.Key, JsonValue.Create(p.Value)))),
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
@@ -282,8 +286,6 @@ namespace TiaMcpServer.ModelContextProtocol
         {
             try
             {
-                Portal.CloseProject();
-
                 // get project extension
                 string extension = Path.GetExtension(path).ToLowerInvariant();
 
@@ -295,21 +297,27 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
 
                 bool success = false;
+                bool wasAlreadyOpen = false;
 
+                // An already open project or session is used as it is; the current one is only
+                // closed when another has to be opened (Portal.OpenProject/OpenSession decide).
                 if (extension.StartsWith(".ap"))
                 {
-                    success = Portal.OpenProject(path);
+                    success = Portal.OpenProject(path, out wasAlreadyOpen);
                 }
                 if (extension.StartsWith(".als"))
                 {
-                    success = Portal.OpenSession(path);
+                    Portal.CloseProject();
+                    success = Portal.OpenSession(path, out wasAlreadyOpen);
                 }
 
                 if (success)
                 {
                     return new ResponseOpenProject
                     {
-                        Message = $"Project '{path}' opened",
+                        Message = wasAlreadyOpen
+                            ? $"Project '{path}' was already open and is used"
+                            : $"Project '{path}' opened",
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,

@@ -25,6 +25,9 @@ namespace TiaMcpServer
             // host registers its tool types.
             WritePolicy.AllowWrite = options.AllowWrite;
 
+            // Before the host registers its tool types: Apply reads the presets.
+            ToolDefaults.Configure(options);
+
             if (Engineering.TiaMajorVersion >= 20)
             {
                 Openness.Initialize(Engineering.TiaMajorVersion);
@@ -86,7 +89,7 @@ namespace TiaMcpServer
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Where(m => m.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>() != null)
                 .Where(m => allowWrite || m.GetCustomAttribute<WriteToolAttribute>() == null)
-                .Select(m => PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m)))
+                .Select(m => ToolDefaults.Apply(m, PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m))))
                 .ToList();
         }
 
@@ -146,6 +149,10 @@ namespace TiaMcpServer
                             "the local file system of the machine running this server. Every request is independent: " +
                             "when more than one TIA Portal instance is running, call 'GetPortals' and pass the chosen " +
                             "'portalId' to 'Connect' and to every other tool." +
+                            (ToolDefaults.Presets.Count > 0
+                                ? " The server presets " + string.Join(", ", ToolDefaults.Presets.Keys.OrderBy(k => k, StringComparer.Ordinal)) +
+                                  ": leave them out of a call to use the preset, pass a value to override it. 'GetState' shows the presets."
+                                : string.Empty) +
                             (WritePolicy.AllowWrite
                                 ? " Write mode is enabled: tools that create, rename or delete project objects are " +
                                   "available. Their changes stay in memory until 'SaveProject' (or 'SaveSession')."
@@ -155,6 +162,7 @@ namespace TiaMcpServer
                     .WithRequestFilters(filters =>
                     {
                         filters.AddCallToolFilter(PortalSelection.Filter);
+                        filters.AddCallToolFilter(ToolDefaults.Filter);
                         filters.AddListToolsFilter(ToolOrdering.Filter);
                         filters.AddGetPromptFilter(PromptArguments.Filter);
                     })

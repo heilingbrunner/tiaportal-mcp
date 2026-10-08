@@ -240,6 +240,12 @@ namespace TiaMcpServer.ModelContextProtocol
         /// tools are not registered at all, so a client can tell why they are missing.
         /// </summary>
         public bool? AllowWrite { get; set; }
+
+        /// <summary>
+        /// The tool arguments preset on the command line ('--software-path', '--export-path',
+        /// '--preserve-path'); a call may omit them. Null when no preset is configured.
+        /// </summary>
+        public System.Text.Json.Nodes.JsonObject? Presets { get; set; }
     }
 
     public class ResponseTiaInstallation

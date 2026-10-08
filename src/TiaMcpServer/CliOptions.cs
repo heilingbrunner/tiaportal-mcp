@@ -6,6 +6,11 @@
         public int? Logging { get; set; } // "stdio" or "http"
         public bool Doctor { get; set; } // print environment diagnostics and exit
         public bool AllowWrite { get; set; } // register the project-mutating tools
+        public string? ProjectPath { get; set; } // preset for the 'path' tool argument (project file)
+        public string? SoftwarePath { get; set; } // preset for the 'softwarePath' tool argument
+        public string? ExportPath { get; set; } // preset for the 'exportPath' tool argument
+        public bool? PreservePath { get; set; } // preset for the 'preservePath' tool argument
+        public bool? WithDependencies { get; set; } // preset for the 'withDependencies' tool argument
 
         public static CliOptions ParseArgs(string[] args)
         {
@@ -31,6 +36,48 @@
                     case "-allow-write":
                     case "--allow-write":
                         options.AllowWrite = true;
+                        break;
+
+                    case "-project-path":
+                    case "--project-path":
+                        if (i + 1 < args.Length && !string.IsNullOrWhiteSpace(args[i + 1]))
+                        {
+                            options.ProjectPath = args[++i];
+                        }
+                        break;
+
+                    case "-software-path":
+                    case "--software-path":
+                        if (i + 1 < args.Length && !string.IsNullOrWhiteSpace(args[i + 1]))
+                        {
+                            options.SoftwarePath = args[++i];
+                        }
+                        break;
+
+                    case "-export-path":
+                    case "--export-path":
+                        if (i + 1 < args.Length && !string.IsNullOrWhiteSpace(args[i + 1]))
+                        {
+                            options.ExportPath = args[++i];
+                        }
+                        break;
+
+                    case "-preserve-path":
+                    case "--preserve-path":
+                        if (i + 1 < args.Length && bool.TryParse(args[i + 1], out bool p))
+                        {
+                            options.PreservePath = p;
+                            i++;
+                        }
+                        break;
+
+                    case "-with-dependencies":
+                    case "--with-dependencies":
+                        if (i + 1 < args.Length && bool.TryParse(args[i + 1], out bool d))
+                        {
+                            options.WithDependencies = d;
+                            i++;
+                        }
                         break;
 
                     case "-logging":

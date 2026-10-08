@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- __Preset tool arguments__: the new command line arguments `--project-path`, `--software-path`,
+  `--export-path`, `--preserve-path` and `--with-dependencies` preset the `path`, `softwarePath`, `exportPath`, `preservePath` and `withDependencies` arguments of every tool
+  that declares them. A preset argument is no longer `required` in the tool schema and is filled in when
+  a call omits it; a value in the call still wins. Without the arguments nothing changes. `GetState`
+  reports the active presets. Prompts are unchanged.
+
+### Fixed
+
+- __`OpenProject` / `OpenTiaProject` reuse an already open project__: the tool used to close the current
+  project before looking for the requested one, so an open project was always closed and reopened. The
+  lookup now runs first and matches by file path (not by name), so a project already open in the TIA Portal
+  instance, also one opened in the UI, is used as it is; the response says so. The same applies to local
+  sessions (`.alsXX`). Another project is still closed only when a different one has to be opened.
+
 ### Changed
 
 - __`Portal` partial classes consolidated__: the 18 `Portal.*.cs` files are now `Portal.cs`,
