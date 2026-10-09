@@ -33,7 +33,7 @@ namespace TiaMcpServer.Test
         public void Test_800_ParseArgs_ReadsThePresets()
         {
             // Arrange
-            var args = new[] { "--project-path", @"D:\Projects\My Plant\Plant.ap21", "--software-path", "PC-System_1/Software PLC_1", "-export-path", @"D:\My Export", "--preserve-path", "true", "--with-dependencies", "true" };
+            var args = new[] { "--project-path", @"D:\Projects\My Plant\Plant.ap21", "--software-path", "PC-System_1/Software PLC_1", "-export-path", @"D:\My Export", "--preserve-path", "--with-dependencies" };
 
             // Act
             var options = CliOptions.ParseArgs(args);
@@ -47,13 +47,17 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        public void Test_801_ParseArgs_IgnoresAnInvalidPreserveValue()
+        public void Test_801_ParseArgs_FlagsAreOffWhenAbsentAndHonourAnExplicitValue()
         {
             // Act
-            var options = CliOptions.ParseArgs(new[] { "--preserve-path", "maybe" });
+            var absent = CliOptions.ParseArgs(new[] { "--allow-write" });
+            var explicitFalse = CliOptions.ParseArgs(new[] { "--preserve-path", "false", "--with-dependencies" });
 
             // Assert
-            Assert.IsNull(options.PreservePath);
+            Assert.IsNull(absent.PreservePath, "an absent flag leaves the tool default");
+            Assert.IsNull(absent.WithDependencies);
+            Assert.AreEqual(false, explicitFalse.PreservePath);
+            Assert.AreEqual(true, explicitFalse.WithDependencies);
         }
 
         [TestMethod]

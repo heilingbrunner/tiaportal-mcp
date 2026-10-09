@@ -22,8 +22,8 @@ A MCP server which connects to Siemens TIA Portal.
 | `--project-path <file>`   | Preset for the `path` argument of `OpenProject` / `OpenTiaProject`. See below. |
 | `--software-path <path>`  | Preset for the `softwarePath` tool argument, e.g. `PLC_1`. See below.     |
 | `--export-path <path>`    | Preset for the `exportPath` tool argument. See below.                     |
-| `--preserve-path <bool>`  | Preset for the `preservePath` tool argument (`true` or `false`). See below. |
-| `--with-dependencies <bool>` | Preset for the `withDependencies` argument of the `ExportSource*` tools (`true` or `false`). See below. |
+| `--preserve-path`         | Flag: `preservePath` defaults to `true` for the export tools. See below.  |
+| `--with-dependencies`     | Flag: `withDependencies` defaults to `true` for the `ExportSource*` tools. See below. |
 
 ## Presetting tool arguments
 
@@ -32,7 +32,7 @@ A MCP server which connects to Siemens TIA Portal.
 of the MCP server entry in your client's JSON configuration and the model no longer has to pass them:
 
 ```json
-"args": ["--project-path", "D:\\Projects\\Plant\\Plant.ap21", "--software-path", "PLC_1", "--export-path", "D:\\Export", "--preserve-path", "true"]
+"args": ["--project-path", "D:\\Projects\\Plant\\Plant.ap21", "--software-path", "PLC_1", "--export-path", "D:\\Export", "--preserve-path", "--with-dependencies"]
 ```
 
 - A preset argument becomes optional in `tools/list`; a tool call that omits it (or sends `null`) uses
@@ -299,7 +299,8 @@ arguments from [Command Line Arguments](#command-line-arguments) go into `args`;
           "--project-path", "D:\\Projects\\Plant\\Plant.ap21",
           "--software-path", "PLC_1",
           "--export-path", "${workspaceFolder}\\export",
-          "--preserve-path", "true",
+          "--preserve-path",
+          "--with-dependencies",
           "--allow-write"
         ],
         "env": {}
@@ -325,8 +326,9 @@ arguments from [Command Line Arguments](#command-line-arguments) go into `args`;
           "--tia-major-version", "21",
           "--project-path", "D:\\Projects\\Plant\\Plant.ap21",
           "--software-path", "PLC_1",
-          "--export-path", "${workspaceFolder}\\export",
-          "--preserve-path", "true",
+          "--export-path", "${CLAUDE_PROJECT_DIR}\\export",
+          "--preserve-path",
+          "--with-dependencies",
           "--allow-write"
         ],
         "env": {}
@@ -335,11 +337,14 @@ arguments from [Command Line Arguments](#command-line-arguments) go into `args`;
   }
   ```
 
+  `${CLAUDE_PROJECT_DIR}` is expanded by Claude Code to the project root; use an absolute path if
+  your Claude Code version does not.
+
 - The same from the command line (`--scope user` for all projects, `--scope project` writes
   `.mcp.json`, `--scope local` is the default and private). Everything after `--` is the command:
 
   ```powershell
-  claude mcp add tia-mcp-server --scope project -- "<path-to>\TiaMcpServer.exe" --tia-major-version 21 --project-path "D:\Projects\Plant\Plant.ap21" --software-path PLC_1 --export-path "D:\Export"
+  claude mcp add tia-mcp-server --scope project -- "<path-to>\TiaMcpServer.exe" --tia-major-version 21 --project-path "D:\Projects\Plant\Plant.ap21" --software-path PLC_1 --export-path "D:\Export" --preserve-path --with-dependencies
   ```
 
   Check it with `claude mcp list` or `/mcp` inside Claude Code.
@@ -359,7 +364,8 @@ arguments from [Command Line Arguments](#command-line-arguments) go into `args`;
           "--project-path", "D:\\Projects\\Plant\\Plant.ap21",
           "--software-path", "PLC_1",
           "--export-path", "D:\\Export",
-          "--preserve-path", "true"
+          "--preserve-path",
+          "--with-dependencies"
         ],
         "env": {},
         "timeout": 120000

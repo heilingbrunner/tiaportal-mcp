@@ -5,7 +5,7 @@
 ### Added
 
 - __Preset tool arguments__: the new command line arguments `--project-path`, `--software-path`,
-  `--export-path`, `--preserve-path` and `--with-dependencies` preset the `path`, `softwarePath`, `exportPath`, `preservePath` and `withDependencies` arguments of every tool
+  `--export-path`, `--preserve-path` and `--with-dependencies` (the last two are flags, like `--allow-write`) preset the `path`, `softwarePath`, `exportPath`, `preservePath` and `withDependencies` arguments of every tool
   that declares them. A preset argument is no longer `required` in the tool schema and is filled in when
   a call omits it; a value in the call still wins. Without the arguments nothing changes. `GetState`
   reports the active presets. Prompts are unchanged.

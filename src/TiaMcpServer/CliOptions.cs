@@ -64,20 +64,12 @@
 
                     case "-preserve-path":
                     case "--preserve-path":
-                        if (i + 1 < args.Length && bool.TryParse(args[i + 1], out bool p))
-                        {
-                            options.PreservePath = p;
-                            i++;
-                        }
+                        options.PreservePath = ReadFlag(args, ref i);
                         break;
 
                     case "-with-dependencies":
                     case "--with-dependencies":
-                        if (i + 1 < args.Length && bool.TryParse(args[i + 1], out bool d))
-                        {
-                            options.WithDependencies = d;
-                            i++;
-                        }
+                        options.WithDependencies = ReadFlag(args, ref i);
                         break;
 
                     case "-logging":
@@ -91,6 +83,20 @@
                 }
             }
             return options;
+        }
+
+        // A flag like '--allow-write': its presence turns it on. A following 'true'/'false' is still
+        // honoured, so an older '--preserve-path false' is not read as "on".
+        private static bool ReadFlag(string[] args, ref int i)
+        {
+            if (i + 1 < args.Length && bool.TryParse(args[i + 1], out bool value))
+            {
+                i++;
+
+                return value;
+            }
+
+            return true;
         }
     }
 }
