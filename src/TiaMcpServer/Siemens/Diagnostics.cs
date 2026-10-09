@@ -31,6 +31,9 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>Whether the server was started with --allow-write.</summary>
         public bool AllowWrite { get; set; }
+
+        /// <summary>All command line options with their effective value, in display order.</summary>
+        public IReadOnlyList<KeyValuePair<string, string>> Options { get; set; } = new List<KeyValuePair<string, string>>();
         public IReadOnlyList<TiaInstallation> Installations { get; set; } = new List<TiaInstallation>();
         public string? Text { get; set; }
     }
@@ -67,7 +70,7 @@ namespace TiaMcpServer.Siemens
         public static string ServerVersion =>
             typeof(Diagnostics).Assembly.GetName().Version?.ToString() ?? "0.0.0";
 
-        public static DiagnosticsReport Run(Portal portal, bool allowWrite = false)
+        public static DiagnosticsReport Run(Portal portal, bool allowWrite = false, CliOptions? cliOptions = null)
         {
             if (portal == null)
             {
@@ -116,7 +119,15 @@ namespace TiaMcpServer.Siemens
             }
 
             status += $"\n├─ User in 'Siemens TIA Openness' user group: {userInGroup}";
-            status += $"\n└─ Write mode (--allow-write): {(allowWrite ? "enabled" : "disabled, read-only tools only")}";
+            status += $"\n├─ Write mode (--allow-write): {(allowWrite ? "enabled" : "disabled, read-only tools only")}";
+
+            var options = (cliOptions ?? new CliOptions()).Describe();
+            status += $"\n└─ Command line options:";
+            for (int i = 0; i < options.Count; i++)
+            {
+                var prefix = i == options.Count - 1 ? "   └─" : "   ├─";
+                status += $"\n{prefix} {options[i].Key} = {options[i].Value}";
+            }
 
             return new DiagnosticsReport
             {
@@ -127,6 +138,7 @@ namespace TiaMcpServer.Siemens
                 ProjectPath = projectPath,
                 IsUserInGroup = userInGroup,
                 AllowWrite = allowWrite,
+                Options = options,
                 Installations = installations,
                 Text = status
             };

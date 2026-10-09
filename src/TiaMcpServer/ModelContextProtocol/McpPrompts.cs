@@ -20,6 +20,9 @@ The report shows:
 - Installed TIA Portal versions: every installed version >= V21 with its installation path, plus a check
   that the Openness assemblies ('Engineering') and the Portal executable ('Portal') are present
 - User in 'Siemens TIA Openness' user group: required for any Openness access
+- Write mode: whether the server was started with --allow-write
+- Command line options: every option the server was started with (the args of the MCP client's JSON config),
+  with its effective value or '(not set)'. Variables such as ${workspaceFolder} are already resolved by the client.
 
 Start here when a connection fails: a missing user group membership, a missing installation or an
 active version that is not installed are the usual causes.

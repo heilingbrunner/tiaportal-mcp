@@ -1,4 +1,6 @@
-﻿namespace TiaMcpServer
+﻿using System.Collections.Generic;
+
+namespace TiaMcpServer
 {
     public class CliOptions
     {
@@ -11,6 +13,9 @@
         public string? ExportPath { get; set; } // preset for the 'exportPath' tool argument
         public bool? PreservePath { get; set; } // preset for the 'preservePath' tool argument
         public bool? WithDependencies { get; set; } // preset for the 'withDependencies' tool argument
+
+        /// <summary>The options this process was started with; set by Program.Main so the Doctor tool can report them.</summary>
+        public static CliOptions Current { get; set; } = new CliOptions();
 
         public static CliOptions ParseArgs(string[] args)
         {
@@ -83,6 +88,29 @@
                 }
             }
             return options;
+        }
+
+        /// <summary>
+        /// Every command line option with its effective value, for the diagnostics. Options that
+        /// were not given are listed as "(not set)" so the report shows the full set.
+        /// </summary>
+        public IReadOnlyList<KeyValuePair<string, string>> Describe()
+        {
+            const string notSet = "(not set)";
+
+            return new List<KeyValuePair<string, string>>
+            {
+                new("--tia-major-version", TiaMajorVersion?.ToString() ?? notSet),
+                new("--logging", Logging?.ToString() ?? notSet),
+                new("--allow-write", AllowWrite ? "true" : "false"),
+                new("--doctor", Doctor ? "true" : "false"),
+                new("--project-path", ProjectPath ?? notSet),
+                new("--software-path", SoftwarePath ?? notSet),
+                new("--export-path", ExportPath ?? notSet),
+                // The tools default both arguments to false, so an unset flag is effectively false.
+                new("--preserve-path", (PreservePath ?? false) ? "true" : "false"),
+                new("--with-dependencies", (WithDependencies ?? false) ? "true" : "false")
+            };
         }
 
         // A flag like '--allow-write': its presence turns it on. A following 'true'/'false' is still

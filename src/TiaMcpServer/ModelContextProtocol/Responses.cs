@@ -268,6 +268,9 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? ProjectPath { get; set; }
         public bool? IsUserInGroup { get; set; }
         public bool? AllowWrite { get; set; }
+
+        /// <summary>All command line options (from the client's JSON config args) with their effective value.</summary>
+        public System.Text.Json.Nodes.JsonObject? Options { get; set; }
         public IEnumerable<ResponseTiaInstallation>? Installations { get; set; }
     }
 

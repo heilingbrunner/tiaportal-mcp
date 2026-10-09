@@ -18,6 +18,7 @@ namespace TiaMcpServer
         public static async Task Main(string[] args)
         {
             var options = CliOptions.ParseArgs(args);
+            CliOptions.Current = options;
 
             Engineering.TiaMajorVersion = options.TiaMajorVersion ?? 21;
 
@@ -64,7 +65,7 @@ namespace TiaMcpServer
             try
             {
                 // Fully qualified: 'Diagnostics' alone would collide with the System.Diagnostics namespace.
-                var report = TiaMcpServer.Siemens.Diagnostics.Run(new Portal(), WritePolicy.AllowWrite);
+                var report = TiaMcpServer.Siemens.Diagnostics.Run(new Portal(), WritePolicy.AllowWrite, CliOptions.Current);
 
                 Console.WriteLine(report.Text);
             }
