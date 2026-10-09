@@ -1694,7 +1694,7 @@ Use the ExportPlcAsDocuments tool with these parameters:
 - exportPath: {exportPath}";
         }
 
-        [McpServerPrompt(Name = "ExportSourceBlocks"), Description("Export all blocks below a group as source files")]
+        [McpServerPrompt(Name = "ExportSourceBlocks"), Description("Export all blocks, optionally only those matching a name regex, as source files (blocks only, no PLC data types)")]
         public static string ExportSourceBlocks(string softwarePath, string groupPath, string exportPath, string withDependencies = "false", string preservePath = "false", string regexName = "")
         {
             return $@"Write every program block below a block group, including all subgroups, as TIA Portal external source files. Blocks with no source form (LAD, FBD, GRAPH), inconsistent blocks and know-how protected ones are reported in 'Skipped' instead of failing the run.
@@ -1716,7 +1716,7 @@ Use the ExportSourceBlocks tool with these parameters:
 - regexName: {regexName}";
         }
 
-        [McpServerPrompt(Name = "ExportSourceTypes"), Description("Export all PLC data types below a group as .udt source files")]
+        [McpServerPrompt(Name = "ExportSourceTypes"), Description("Export all PLC data types, optionally only those matching a name regex, as .udt source files (types only, no blocks)")]
         public static string ExportSourceTypes(string softwarePath, string groupPath, string exportPath, string withDependencies = "false", string preservePath = "false", string regexName = "")
         {
             return $@"Write every PLC data type below a type group, including all subgroups, as '*.udt' external source files. Inconsistent and know-how protected types are reported in 'Skipped' instead of failing the run.

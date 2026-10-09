@@ -179,7 +179,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "ExportSourceBlocks", Title = "Export blocks as source", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Write every program block below a block group, including all subgroups, as TIA Portal external source files. Blocks with no source form (LAD, FBD, GRAPH), inconsistent blocks and know-how protected ones are reported in 'Skipped' instead of failing the run. The recursive counterpart to 'ExportSourceBlock'")]
+         Description("Use this to export blocks (and only blocks, no PLC data types) as source files, all of them or only those matching a name pattern. Writes every program block below a block group, including all subgroups, as TIA Portal external source files. To export only some blocks pass 'regexName' (a regular expression on the block name, e.g. '.+HMI_.+'): the server filters while exporting, so never export everything to a temporary folder and copy the matching files afterwards. Blocks with no source form (LAD, FBD, GRAPH), inconsistent blocks and know-how protected ones are reported in 'Skipped' instead of failing the run. The recursive counterpart to 'ExportSourceBlock'")]
         public static ResponseGeneratedSources ExportSourceBlocks(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("groupPath: root-relative path of the block group to export recursively, e.g. '0_OBs'. Empty means all blocks below 'Program blocks'")] string groupPath,
@@ -195,7 +195,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "ExportSourceTypes", Title = "Export types as source", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Write every PLC data type below a type group, including all subgroups, as '*.udt' external source files. Inconsistent and know-how protected types are reported in 'Skipped' instead of failing the run. The recursive counterpart to 'ExportSourceType'")]
+         Description("Use this to export PLC data types (and only types, no blocks) as source files, all of them or only those matching a name pattern. Writes every PLC data type below a type group, including all subgroups, as '*.udt' external source files. To export only some types pass 'regexName' (a regular expression on the type name): the server filters while exporting, so never export everything to a temporary folder and copy the matching files afterwards. Inconsistent and know-how protected types are reported in 'Skipped' instead of failing the run. The recursive counterpart to 'ExportSourceType'")]
         public static ResponseGeneratedSources ExportSourceTypes(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("groupPath: root-relative path of the type group to export recursively, e.g. 'Common'. Empty means all types below 'PLC data types'")] string groupPath,
@@ -211,7 +211,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "ExportSources", Title = "Export sources", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Write every block and PLC data type of one PLC software as external source files into a folder tree that mirrors the project groups: '<exportPath>/Program blocks/...' and '<exportPath>/PLC data types/...', one file per object. The whole-PLC counterpart to 'ExportSourceBlocks' and 'ExportSourceTypes' and the compilable counterpart to 'ExportPlcAsDocuments'; 'ImportSources' reads such a tree back. Objects with no source form (LAD, FBD, GRAPH), inconsistent objects and know-how protected ones are reported in 'Skipped' instead of failing the run")]
+         Description("Use this only when blocks AND PLC data types are wanted together; for only blocks use 'ExportSourceBlocks', for only types use 'ExportSourceTypes'. Writes every block and PLC data type of one PLC software as external source files into a folder tree that mirrors the project groups: '<exportPath>/Program blocks/...' and '<exportPath>/PLC data types/...', one file per object. The whole-PLC counterpart to 'ExportSourceBlocks' and 'ExportSourceTypes' and the compilable counterpart to 'ExportPlcAsDocuments'; 'ImportSources' reads such a tree back. The 'regexName' filter applies to blocks and types alike; to filter only blocks or only types use 'ExportSourceBlocks' or 'ExportSourceTypes' with 'regexName'. Objects with no source form (LAD, FBD, GRAPH), inconsistent objects and know-how protected ones are reported in 'Skipped' instead of failing the run")]
         public static ResponseGeneratedSources ExportSources(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("exportPath: directory on this machine that receives the tree; existing files of the same name are overwritten")] string exportPath,
