@@ -102,7 +102,44 @@ Write tools (44) require `--allow-write`.
 Paths used by these tools are **root-relative**: `1_Tests/FC_Block_1`, not
 `Program blocks/1_Tests/FC_Block_1`. Use `GetProjectTree` and `GetSoftwareTree` to discover them.
 
-## Prompts (slash commands)
+## Example Prompts using natural language
+
+Example prompts using natural language with preset parameters in json config file.
+
+```json
+{
+    "servers": {
+      "tia-mcp-server": {
+        "type": "stdio",
+        "command": "E:\\Labor\\GitHub\\tiaportal-mcp\\src\\TiaMcpServer\\bin\\Debug\\net48\\TiaMcpServer.exe",
+        "args": [
+          "--tia-major-version", "21",
+          "--project-path", "<path-to-project>\\<project-name>.(ap21|als21)",
+          "--software-path", "<software-path>",
+          "--export-path", "${workspaceFolder}\\export",
+          "--preserve-path",
+          "--allow-write"
+        ],
+        "env": {}
+      }
+    }
+}
+```
+
+Prompts:
+
+- 'open tia project'
+- 'export all types to sources'
+- 'export all blocks as sources'
+- 'export blocks as sources, which match regex name pattern ".+HMI_.+"'
+- 'export all tags'
+- 'import modified type sources'
+- 'save project'
+- 'compile project'
+- 'close project'
+- 'show doctor diagnostics for tia'
+
+## Prompts using slash commands
 
 Every tool has a prompt of the same name that you can start as a slash command, for example
 `/mcp__tia-mcp-server__OpenProject D:\Siemens\Test\TestProject1_V21.ap21`. The part after `mcp__` is
