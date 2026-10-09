@@ -57,14 +57,15 @@ namespace TiaMcpServer.ModelContextProtocol
                 presets[ExportPath] = JsonSerializer.SerializeToElement(options.ExportPath);
             }
 
-            if (options.PreservePath != null)
+            // The tools default both flags to false, so only 'true' needs a preset.
+            if (options.PreservePath)
             {
-                presets[PreservePath] = JsonSerializer.SerializeToElement(options.PreservePath.Value);
+                presets[PreservePath] = JsonSerializer.SerializeToElement(true);
             }
 
-            if (options.WithDependencies != null)
+            if (options.WithDependencies)
             {
-                presets[WithDependencies] = JsonSerializer.SerializeToElement(options.WithDependencies.Value);
+                presets[WithDependencies] = JsonSerializer.SerializeToElement(true);
             }
 
             Presets = presets;

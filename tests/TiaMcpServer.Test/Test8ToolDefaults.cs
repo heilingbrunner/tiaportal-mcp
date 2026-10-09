@@ -54,8 +54,8 @@ namespace TiaMcpServer.Test
             var explicitFalse = CliOptions.ParseArgs(new[] { "--preserve-path", "false", "--with-dependencies" });
 
             // Assert
-            Assert.IsNull(absent.PreservePath, "an absent flag leaves the tool default");
-            Assert.IsNull(absent.WithDependencies);
+            Assert.IsFalse(absent.PreservePath, "an absent flag is false, the tool default");
+            Assert.IsFalse(absent.WithDependencies);
             Assert.AreEqual(false, explicitFalse.PreservePath);
             Assert.AreEqual(true, explicitFalse.WithDependencies);
         }

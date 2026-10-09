@@ -11,8 +11,8 @@ namespace TiaMcpServer
         public string? ProjectPath { get; set; } // preset for the 'path' tool argument (project file)
         public string? SoftwarePath { get; set; } // preset for the 'softwarePath' tool argument
         public string? ExportPath { get; set; } // preset for the 'exportPath' tool argument
-        public bool? PreservePath { get; set; } // preset for the 'preservePath' tool argument
-        public bool? WithDependencies { get; set; } // preset for the 'withDependencies' tool argument
+        public bool PreservePath { get; set; } // preset for the 'preservePath' tool argument (only when true)
+        public bool WithDependencies { get; set; } // preset for the 'withDependencies' tool argument (only when true)
 
         /// <summary>The options this process was started with; set by Program.Main so the Doctor tool can report them.</summary>
         public static CliOptions Current { get; set; } = new CliOptions();
@@ -101,15 +101,14 @@ namespace TiaMcpServer
             return new List<KeyValuePair<string, string>>
             {
                 new("--tia-major-version", TiaMajorVersion?.ToString() ?? notSet),
-                new("--logging", Logging?.ToString() ?? notSet),
-                new("--allow-write", AllowWrite ? "true" : "false"),
-                new("--doctor", Doctor ? "true" : "false"),
                 new("--project-path", ProjectPath ?? notSet),
                 new("--software-path", SoftwarePath ?? notSet),
                 new("--export-path", ExportPath ?? notSet),
-                // The tools default both arguments to false, so an unset flag is effectively false.
-                new("--preserve-path", (PreservePath ?? false) ? "true" : "false"),
-                new("--with-dependencies", (WithDependencies ?? false) ? "true" : "false")
+                new("--logging", Logging?.ToString() ?? notSet),
+                new("--doctor", Doctor ? "true" : "false"),
+                new("--allow-write", AllowWrite ? "true" : "false"),
+                new("--preserve-path", PreservePath ? "true" : "false"),
+                new("--with-dependencies", WithDependencies ? "true" : "false")
             };
         }
 
