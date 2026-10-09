@@ -140,7 +140,7 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
-        /// Exports one tag table to '&lt;exportPath&gt;/&lt;table&gt;.xml', or, with
+        /// Exports one tag table to '&lt;exportPath&gt;/PLC tags/&lt;table&gt;.xml', or, with
         /// <paramref name="preservePath"/>, to
         /// '&lt;exportPath&gt;/PLC tags/&lt;groups&gt;/&lt;table&gt;.xml' - the system group name
         /// as TIA Portal reports it in the current interface language, the same way block and
@@ -156,9 +156,12 @@ namespace TiaMcpServer.Siemens
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Tag table not found at '{tagTablePath}'. Use 'GetTagTables' to list the available tables.");
 
+                    // Always below the system group folder ('PLC tags'); preservePath adds the table's groups.
+                    var pathWithRoot = GetTagTablePath(table, includeSystemRoot: true).Replace('/', '\\');
+                    var rootName = pathWithRoot.Split('\\')[0];
                     var target = preservePath
-                        ? Path.Combine(exportPath, GetTagTablePath(table, includeSystemRoot: true).Replace('/', '\\') + ".xml")
-                        : Path.Combine(exportPath, $"{table.Name}.xml");
+                        ? Path.Combine(exportPath, pathWithRoot + ".xml")
+                        : Path.Combine(exportPath, rootName, $"{table.Name}.xml");
 
                     var directory = Path.GetDirectoryName(target);
                     if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -537,7 +540,13 @@ namespace TiaMcpServer.Siemens
                 ("softwarePath", softwarePath), ("groupPath", groupPath));
         }
 
-        public bool ImportXmlTagTable(string softwarePath, string groupPath, string importPath, bool overwrite = true)
+        /// <summary>
+        /// Imports one tag table XML file. A rooted <paramref name="importPath"/> is used as is; a
+        /// relative one is looked up in '&lt;exportPath&gt;/PLC tags/' (the folder
+        /// <see cref="ExportXmlTagTable"/> writes to, in the current interface language) when
+        /// <paramref name="exportPath"/> is given.
+        /// </summary>
+        public bool ImportXmlTagTable(string softwarePath, string groupPath, string importPath, bool overwrite = true, string exportPath = "")
         {
             return Operation.Run(_logger, nameof(ImportXmlTagTable), PortalErrorCode.ImportFailed,
                 () =>
@@ -545,6 +554,13 @@ namespace TiaMcpServer.Siemens
                     var group = GetTagTableGroupByPath(softwarePath, groupPath)
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Tag table group not found at '{groupPath}'.");
+
+                    if (!Path.IsPathRooted(importPath) && !string.IsNullOrWhiteSpace(exportPath))
+                    {
+                        var rootName = GetTagTableRootGroup(softwarePath)?.Name ?? "PLC tags";
+
+                        importPath = Path.Combine(exportPath, rootName, importPath);
+                    }
 
                     if (!File.Exists(importPath))
                     {

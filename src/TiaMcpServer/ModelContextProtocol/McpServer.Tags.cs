@@ -178,7 +178,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "ExportXmlTagTable", Title = "Export tag table as XML", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Export one PLC tag table as an XML file into exportPath, below its tag table group folders when preservePath is true")]
+         Description("Export one PLC tag table as an XML file into the 'PLC tags' folder below exportPath, below its tag table group folders when preservePath is true")]
         public static ResponseExportXmlTagTable ExportXmlTagTable(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("tagTablePath: root-relative path of the tag table, e.g. 'TagGroup1/Table1'")] string tagTablePath,
@@ -558,12 +558,13 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseImported ImportXmlTagTable(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("groupPath: root-relative tag table group that receives the table; empty uses the PLC tags root. A leading 'PLC tags' segment, as written by preservePath exports, is accepted and ignored")] string groupPath,
-            [Description("importPath: full path of the XML file to import")] string importPath,
-            [Description("overwrite: replace an existing tag table of the same name (default true)")] bool overwrite = true)
+            [Description("importPath: full path of the XML file to import, or a path relative to the 'PLC tags' folder below exportPath (the layout ExportXmlTagTable writes)")] string importPath,
+            [Description("overwrite: replace an existing tag table of the same name (default true)")] bool overwrite = true,
+            [Description("exportPath: directory that holds the 'PLC tags' folder; only used to resolve a relative importPath")] string exportPath = "")
         {
             return Guarded(nameof(ImportXmlTagTable), () =>
             {
-                Portal.ImportXmlTagTable(softwarePath, groupPath, importPath, overwrite);
+                Portal.ImportXmlTagTable(softwarePath, groupPath, importPath, overwrite, exportPath);
                 return Imported("Tag table", groupPath, importPath);
             });
         }

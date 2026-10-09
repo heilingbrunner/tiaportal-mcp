@@ -448,7 +448,10 @@ namespace TiaMcpServer.Test
                 }
                 else
                 {
-                    Assert.AreEqual(candidate.Name + ".xml", relative, "Without preservePath the file must sit directly in the export folder");
+                    var segments = relative.Split('\\', '/');
+
+                    Assert.AreEqual(2, segments.Length, "Without preservePath the file must sit directly in the system group folder");
+                    Assert.AreEqual(candidate.Name + ".xml", segments[1], "The file is named after the table");
                 }
             }
             finally
