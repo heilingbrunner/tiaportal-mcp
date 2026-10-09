@@ -559,7 +559,7 @@ namespace TiaMcpServer.Siemens
         /// '&lt;exportPath&gt;', so two blocks of the same name in different groups overwrite
         /// each other. Skip-and-continue, like <see cref="ExportSources"/>.
         /// </summary>
-        public GeneratedSourcesResult ExportSourceBlocks(string softwarePath, string groupPath, string exportPath, bool withDependencies = false, bool preservePath = false)
+        public GeneratedSourcesResult ExportSourceBlocks(string softwarePath, string groupPath, string exportPath, bool withDependencies = false, bool preservePath = false, string regexName = "")
         {
             return Operation.Run(_logger, nameof(ExportSourceBlocks), PortalErrorCode.ExportFailed,
                 () =>
@@ -577,7 +577,7 @@ namespace TiaMcpServer.Siemens
                     }
 
                     var blocks = new List<PlcBlock>();
-                    GetBlocksRecursive(group, blocks);
+                    GetBlocksRecursive(group, blocks, regexName);
 
                     var result = new GeneratedSourcesResult { Directory = exportPath };
 
@@ -589,7 +589,7 @@ namespace TiaMcpServer.Siemens
 
                     return result;
                 },
-                ("softwarePath", softwarePath), ("groupPath", groupPath), ("exportPath", exportPath));
+                ("softwarePath", softwarePath), ("groupPath", groupPath), ("exportPath", exportPath), ("regexName", regexName));
         }
 
         /// <summary>
@@ -597,7 +597,7 @@ namespace TiaMcpServer.Siemens
         /// An empty <paramref name="groupPath"/> means the 'PLC data types' root. See
         /// <see cref="ExportSourceBlocks"/> for the effect of <paramref name="preservePath"/>.
         /// </summary>
-        public GeneratedSourcesResult ExportSourceTypes(string softwarePath, string groupPath, string exportPath, bool withDependencies = false, bool preservePath = false)
+        public GeneratedSourcesResult ExportSourceTypes(string softwarePath, string groupPath, string exportPath, bool withDependencies = false, bool preservePath = false, string regexName = "")
         {
             return Operation.Run(_logger, nameof(ExportSourceTypes), PortalErrorCode.ExportFailed,
                 () =>
@@ -615,7 +615,7 @@ namespace TiaMcpServer.Siemens
                     }
 
                     var types = new List<PlcType>();
-                    GetTypesRecursive(group, types);
+                    GetTypesRecursive(group, types, regexName);
 
                     var result = new GeneratedSourcesResult { Directory = exportPath };
 
@@ -627,7 +627,7 @@ namespace TiaMcpServer.Siemens
 
                     return result;
                 },
-                ("softwarePath", softwarePath), ("groupPath", groupPath), ("exportPath", exportPath));
+                ("softwarePath", softwarePath), ("groupPath", groupPath), ("exportPath", exportPath), ("regexName", regexName));
         }
 
         private void GenerateBlocks(

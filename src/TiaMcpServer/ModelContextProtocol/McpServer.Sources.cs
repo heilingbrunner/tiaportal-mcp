@@ -185,10 +185,11 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("groupPath: root-relative path of the block group to export recursively, e.g. '0_OBs'. Empty means all blocks below 'Program blocks'")] string groupPath,
             [Description("exportPath: directory on this machine that receives the files; existing files of the same name are overwritten")] string exportPath,
             [Description("withDependencies: also write every object each block uses into its file. Default false, which keeps one object per file")] bool withDependencies = false,
-            [Description("preservePath: mirror the project groups below '<exportPath>/Program blocks'. Default false, which writes straight into exportPath, so blocks of the same name in different groups overwrite each other")] bool preservePath = false)
+            [Description("preservePath: mirror the project groups below '<exportPath>/Program blocks'. Default false, which writes straight into exportPath, so blocks of the same name in different groups overwrite each other")] bool preservePath = false,
+            [Description("regexName: optional regular expression, exports only blocks whose name matches (e.g. '.+HMI_.+'). Filtering happens during the export, so no temporary export or file copying is needed. Empty means all")] string regexName = "")
         {
             return GeneratedMany(
-                () => Portal.ExportSourceBlocks(softwarePath, groupPath, exportPath, withDependencies, preservePath),
+                () => Portal.ExportSourceBlocks(softwarePath, groupPath, exportPath, withDependencies, preservePath, regexName),
                 $"Block sources below '{groupPath}'",
                 exportPath);
         }
@@ -200,10 +201,11 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("groupPath: root-relative path of the type group to export recursively, e.g. 'Common'. Empty means all types below 'PLC data types'")] string groupPath,
             [Description("exportPath: directory on this machine that receives the files; existing files of the same name are overwritten")] string exportPath,
             [Description("withDependencies: also write every data type each one uses into its file. Default false")] bool withDependencies = false,
-            [Description("preservePath: mirror the project groups below '<exportPath>/PLC data types'. Default false, which writes straight into exportPath, so types of the same name in different groups overwrite each other")] bool preservePath = false)
+            [Description("preservePath: mirror the project groups below '<exportPath>/PLC data types'. Default false, which writes straight into exportPath, so types of the same name in different groups overwrite each other")] bool preservePath = false,
+            [Description("regexName: optional regular expression, exports only types whose name matches. Filtering happens during the export. Empty means all")] string regexName = "")
         {
             return GeneratedMany(
-                () => Portal.ExportSourceTypes(softwarePath, groupPath, exportPath, withDependencies, preservePath),
+                () => Portal.ExportSourceTypes(softwarePath, groupPath, exportPath, withDependencies, preservePath, regexName),
                 $"Type sources below '{groupPath}'",
                 exportPath);
         }

@@ -12,6 +12,10 @@
 
 ### Fixed
 
+- __`ExportSourceBlocks` / `ExportSourceTypes` filter by name__: both tools now take an optional `regexName`
+  (also on the prompts) and apply it while collecting the objects. Before, only `ExportSources` could filter,
+  and it always exports blocks and types together, so a request like "export all blocks matching `.+HMI_.+`"
+  ended in exporting everything to a temporary folder and copying the matching files.
 - __`OpenProject` / `OpenTiaProject` reuse an already open project__: the tool used to close the current
   project before looking for the requested one, so an open project was always closed and reopened. The
   lookup now runs first and matches by file path (not by name), so a project already open in the TIA Portal

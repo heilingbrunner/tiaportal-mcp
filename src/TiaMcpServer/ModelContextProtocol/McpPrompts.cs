@@ -1695,7 +1695,7 @@ Use the ExportPlcAsDocuments tool with these parameters:
         }
 
         [McpServerPrompt(Name = "ExportSourceBlocks"), Description("Export all blocks below a group as source files")]
-        public static string ExportSourceBlocks(string softwarePath, string groupPath, string exportPath, string withDependencies = "false", string preservePath = "false")
+        public static string ExportSourceBlocks(string softwarePath, string groupPath, string exportPath, string withDependencies = "false", string preservePath = "false", string regexName = "")
         {
             return $@"Write every program block below a block group, including all subgroups, as TIA Portal external source files. Blocks with no source form (LAD, FBD, GRAPH), inconsistent blocks and know-how protected ones are reported in 'Skipped' instead of failing the run.
 
@@ -1705,17 +1705,19 @@ Common parameter values:
 - exportPath: directory on this machine that receives the files; existing files of the same name are overwritten
 - withDependencies: also write every object each block uses into its file. Default false
 - preservePath: mirror the project groups below '<exportPath>/Program blocks'. Default false, which writes straight into exportPath
+- regexName: optional regular expression, exports only blocks whose name matches; filtered during the export. Empty means all
 
 Use the ExportSourceBlocks tool with these parameters:
 - softwarePath: {softwarePath}
 - groupPath: {groupPath}
 - exportPath: {exportPath}
 - withDependencies: {withDependencies}
-- preservePath: {preservePath}";
+- preservePath: {preservePath}
+- regexName: {regexName}";
         }
 
         [McpServerPrompt(Name = "ExportSourceTypes"), Description("Export all PLC data types below a group as .udt source files")]
-        public static string ExportSourceTypes(string softwarePath, string groupPath, string exportPath, string withDependencies = "false", string preservePath = "false")
+        public static string ExportSourceTypes(string softwarePath, string groupPath, string exportPath, string withDependencies = "false", string preservePath = "false", string regexName = "")
         {
             return $@"Write every PLC data type below a type group, including all subgroups, as '*.udt' external source files. Inconsistent and know-how protected types are reported in 'Skipped' instead of failing the run.
 
@@ -1725,13 +1727,15 @@ Common parameter values:
 - exportPath: directory on this machine that receives the files; existing files of the same name are overwritten
 - withDependencies: also write every data type each one uses into its file. Default false
 - preservePath: mirror the project groups below '<exportPath>/PLC data types'. Default false, which writes straight into exportPath
+- regexName: optional regular expression, exports only types whose name matches; filtered during the export. Empty means all
 
 Use the ExportSourceTypes tool with these parameters:
 - softwarePath: {softwarePath}
 - groupPath: {groupPath}
 - exportPath: {exportPath}
 - withDependencies: {withDependencies}
-- preservePath: {preservePath}";
+- preservePath: {preservePath}
+- regexName: {regexName}";
         }
 
         [McpServerPrompt(Name = "ExportSources"), Description("Export all blocks and PLC data types as source files")]
