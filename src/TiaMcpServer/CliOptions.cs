@@ -13,6 +13,7 @@ namespace TiaMcpServer
         public string? ExportPath { get; set; } // preset for the 'exportPath' tool argument
         public bool PreservePath { get; set; } // preset for the 'preservePath' tool argument (only when true)
         public bool WithDependencies { get; set; } // preset for the 'withDependencies' tool argument (only when true)
+        public bool ForcePresets { get; set; } // the 'path', 'softwarePath' and 'exportPath' presets cannot be overridden by a call
 
         /// <summary>The options this process was started with; set by Program.Main so the Doctor tool can report them.</summary>
         public static CliOptions Current { get; set; } = new CliOptions();
@@ -77,6 +78,11 @@ namespace TiaMcpServer
                         options.WithDependencies = ReadFlag(args, ref i);
                         break;
 
+                    case "-force-presets":
+                    case "--force-presets":
+                        options.ForcePresets = ReadFlag(args, ref i);
+                        break;
+
                     case "-logging":
                     case "--logging":
                         if (i + 1 < args.Length && int.TryParse(args[i + 1], out int l))
@@ -108,7 +114,8 @@ namespace TiaMcpServer
                 new("--doctor", Doctor ? "true" : "false"),
                 new("--allow-write", AllowWrite ? "true" : "false"),
                 new("--preserve-path", PreservePath ? "true" : "false"),
-                new("--with-dependencies", WithDependencies ? "true" : "false")
+                new("--with-dependencies", WithDependencies ? "true" : "false"),
+                new("--force-presets", ForcePresets ? "true" : "false")
             };
         }
 

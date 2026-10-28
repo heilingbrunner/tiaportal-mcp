@@ -20,5 +20,11 @@ namespace TiaMcpServer.ModelContextProtocol
         /// '--preserve-path'); a call may omit them. Null when no preset is configured.
         /// </summary>
         public System.Text.Json.Nodes.JsonObject? Presets { get; set; }
+
+        /// <summary>
+        /// The presets a call cannot override ('--force-presets'); they are not tool arguments.
+        /// Null when nothing is forced.
+        /// </summary>
+        public string[]? ForcedPresets { get; set; }
     }
 }

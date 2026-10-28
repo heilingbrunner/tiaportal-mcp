@@ -30,6 +30,7 @@ A MCP server which connects to Siemens TIA Portal.
 | `--doctor`                | Print the environment report and exit without starting the MCP server.                |
 | `--preserve-path`         | Flag: `preservePath` defaults to `true` for the export tools. See below.              |
 | `--with-dependencies`     | Flag: `withDependencies` defaults to `true` for the `ExportSource*` tools. See below. |
+| `--force-presets`         | Flag: the `path`, `softwarePath` and `exportPath` presets cannot be overridden. See below. |
 | `--allow-write`           | Register the project-mutating tools. Omitted by default; see below.                   |
 
 ## Presetting tool arguments
@@ -42,7 +43,7 @@ of the MCP server entry in your client's JSON configuration and the model no lon
 "args": ["--project-path", "D:\\Projects\\Plant\\Plant.ap21", "--software-path", "PLC_1", "--export-path", "D:\\Export", "--preserve-path", "--with-dependencies"]
 ```
 
-- A preset argument becomes optional in `tools/list`; a tool call that omits it (or sends `null`) uses
+- A preset argument becomes optional in `tools/list`; a tool call that omits it (or sends `null` or an empty string) uses
   the preset. A value passed in the call always overrides the preset.
 - Without a preset nothing changes: the argument stays required.
 - `GetState` lists the active presets in `Presets`.
@@ -51,7 +52,15 @@ of the MCP server entry in your client's JSON configuration and the model no lon
   import works below `<exportPath>/<softwarePath>/`, e.g. `D:\Export\Group1\PLC_1\Program blocks\...`,
   `...\PLC data types\...` and `...\PLC tags\...`; each `/` in `softwarePath` is a folder level. Imports that
   take the full path of a single file are unaffected.
-- Prompts (slash commands) are not affected.
+- Prompts (slash commands) use the presets too: an argument with a preset is optional in the prompt list and
+  is filled in when left out. Claude Code fills prompt arguments by position, so to override only `exportPath`
+  pass `softwarePath` as well.
+- With `--force-presets` the `path`, `softwarePath` and `exportPath` presets that are set become binding: they are
+  removed from `tools/list` and from the prompt arguments, and a call that still sends them is overwritten with the
+  preset. `preservePath` and `withDependencies` stay overridable. `OpenProject` can then only open the preset
+  project. `GetState` lists them in `ForcedPresets`. The option only fixes these arguments, it is not a sandbox:
+  the `importPath` / `filePath` of the import tools and the names inside `blockPath` are not restricted.
+  In a slash command, type only the arguments that are still listed.
 
 ## Write mode
 

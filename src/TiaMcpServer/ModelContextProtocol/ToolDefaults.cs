@@ -36,7 +36,16 @@ namespace TiaMcpServer.ModelContextProtocol
 
         private static readonly Dictionary<string, string[]> _presetArguments = new(StringComparer.Ordinal);
 
+        private static readonly ISet<string> _noneForced = new HashSet<string>(StringComparer.Ordinal);
+
         public static IReadOnlyDictionary<string, JsonElement> Presets { get; private set; } = _none;
+
+        /// <summary>
+        /// The preset arguments a call cannot override ('--force-presets'): those of 'path',
+        /// 'softwarePath' and 'exportPath' that have a preset. They are hidden from the tool schema.
+        /// Empty without the option.
+        /// </summary>
+        public static ISet<string> Forced { get; private set; } = _noneForced;
 
         public static void Configure(CliOptions options)
         {
@@ -69,6 +78,10 @@ namespace TiaMcpServer.ModelContextProtocol
             }
 
             Presets = presets;
+
+            Forced = options.ForcePresets
+                ? new HashSet<string>(new[] { Path, SoftwarePath, ExportPath }.Where(presets.ContainsKey), StringComparer.Ordinal)
+                : _noneForced;
         }
 
         public static McpServerTool Apply(MethodInfo method, McpServerTool tool)
@@ -107,11 +120,15 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 foreach (var name in names)
                 {
-                    if (properties[name] is JsonObject property)
+                    if (Forced.Contains(name))
+                    {
+                        properties.Remove(name);
+                    }
+                    else if (properties[name] is JsonObject property)
                     {
                         var description = property["description"]?.GetValue<string>();
                         property["description"] = (description == null ? string.Empty : description + ". ") +
-                            "Optional: the server has a preset that is used when omitted";
+                            "Optional: the server has a preset that is used when omitted or empty";
                     }
                 }
             }
@@ -147,7 +164,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     var arguments = context.Params!.Arguments ?? new Dictionary<string, JsonElement>();
 
-                    FillMissing(arguments, names, Presets);
+                    FillMissing(arguments, names, Presets, Forced);
                     context.Params.Arguments = arguments;
                 }
 
@@ -155,13 +172,15 @@ namespace TiaMcpServer.ModelContextProtocol
             };
 
         /// <summary>
-        /// Adds the preset of each named argument that the call omitted or sent as null. A value
-        /// the caller did send is never replaced.
+        /// Adds the preset of each named argument that the call omitted or sent as null or blank.
+        /// A value the caller did send is never replaced, except for the forced arguments, which
+        /// always take the preset.
         /// </summary>
         public static void FillMissing(
             IDictionary<string, JsonElement> arguments,
             IEnumerable<string> names,
-            IReadOnlyDictionary<string, JsonElement> presets)
+            IReadOnlyDictionary<string, JsonElement> presets,
+            ISet<string>? forced = null)
         {
             foreach (var name in names)
             {
@@ -170,12 +189,32 @@ namespace TiaMcpServer.ModelContextProtocol
                     continue;
                 }
 
-                if (!arguments.TryGetValue(name, out var given) ||
-                    given.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+                // A forced argument takes the preset whatever the call sent
+                if (forced != null && forced.Contains(name))
+                {
+                    arguments[name] = preset;
+                    continue;
+                }
+
+                if (!arguments.TryGetValue(name, out var given) || IsOmitted(given))
                 {
                     arguments[name] = preset;
                 }
             }
+        }
+
+        /// <summary>
+        /// True for a value that counts as "not given": null, undefined, or a blank string (models
+        /// often send "" instead of leaving the argument out).
+        /// </summary>
+        public static bool IsOmitted(JsonElement value)
+        {
+            return value.ValueKind switch
+            {
+                JsonValueKind.Null or JsonValueKind.Undefined => true,
+                JsonValueKind.String => string.IsNullOrWhiteSpace(value.GetString()),
+                _ => false
+            };
         }
     }
 }

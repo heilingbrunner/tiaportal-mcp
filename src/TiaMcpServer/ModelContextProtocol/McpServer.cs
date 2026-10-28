@@ -172,6 +172,9 @@ namespace TiaMcpServer.ModelContextProtocol
                             ? null
                             : new JsonObject(ToolDefaults.Presets.Select(p =>
                                 new KeyValuePair<string, JsonNode?>(p.Key, JsonValue.Create(p.Value)))),
+                        ForcedPresets = ToolDefaults.Forced.Count == 0
+                            ? null
+                            : ToolDefaults.Forced.OrderBy(n => n, StringComparer.Ordinal).ToArray(),
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,

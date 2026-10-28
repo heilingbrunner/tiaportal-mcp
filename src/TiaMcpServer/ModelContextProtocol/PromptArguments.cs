@@ -59,7 +59,8 @@ namespace TiaMcpServer.ModelContextProtocol
                         a => a.Key,
                         a => a.Value.ValueKind == JsonValueKind.String ? a.Value.GetString() ?? string.Empty : a.Value.GetRawText());
 
-                    var requoted = Requote(declaredNames, typed);
+                    // Claude Code maps the typed words to the listed arguments, which exclude the forced ones
+                    var requoted = Requote(VisibleNames(declaredNames), typed);
 
                     if (requoted != null)
                     {
@@ -72,8 +73,110 @@ namespace TiaMcpServer.ModelContextProtocol
                     }
                 }
 
+                if (parameters != null
+                    && ToolDefaults.Presets.Count > 0
+                    && _declared.Value.TryGetValue(parameters.Name, out var names))
+                {
+                    var filled = parameters.Arguments ?? new Dictionary<string, JsonElement>();
+
+                    FillPresets(filled, names, ToolDefaults.Presets, ToolDefaults.Forced);
+                    parameters.Arguments = filled;
+                }
+
                 return next(context, cancellationToken);
             };
+
+        /// <summary>
+        /// Marks the arguments that have a server preset as optional in 'prompts/list', so the
+        /// client lets a slash command leave them out. Without presets nothing changes.
+        /// </summary>
+        public static McpRequestFilter<ListPromptsRequestParams, ListPromptsResult> ListFilter =>
+            next => async (context, cancellationToken) =>
+            {
+                var result = await next(context, cancellationToken);
+
+                if (ToolDefaults.Presets.Count > 0)
+                {
+                    MarkPresetsOptional(result.Prompts, ToolDefaults.Presets, ToolDefaults.Forced);
+                }
+
+                return result;
+            };
+
+        /// <summary>
+        /// Sets Required=false on each prompt argument that has a preset. Idempotent, because the
+        /// prompt objects are shared between calls.
+        /// </summary>
+        public static void MarkPresetsOptional(
+            IEnumerable<Prompt> prompts,
+            IReadOnlyDictionary<string, JsonElement> presets,
+            ISet<string>? forced = null)
+        {
+            foreach (var prompt in prompts)
+            {
+                if (prompt.Arguments == null)
+                {
+                    continue;
+                }
+
+                // A forced argument is not offered at all
+                if (forced != null)
+                {
+                    foreach (var hidden in prompt.Arguments.Where(a => forced.Contains(a.Name)).ToList())
+                    {
+                        prompt.Arguments.Remove(hidden);
+                    }
+                }
+
+                foreach (var argument in prompt.Arguments.Where(a => presets.ContainsKey(a.Name)))
+                {
+                    argument.Required = false;
+
+                    if (argument.Description == null || !argument.Description.EndsWith(PresetHint, StringComparison.Ordinal))
+                    {
+                        argument.Description = (argument.Description == null ? string.Empty : argument.Description + ". ") + PresetHint;
+                    }
+                }
+            }
+        }
+
+        /// <summary>The declared argument names without the forced ones: what the client lists and fills by position.</summary>
+        private static IReadOnlyList<string> VisibleNames(IReadOnlyList<string> declaredNames)
+        {
+            return ToolDefaults.Forced.Count == 0
+                ? declaredNames
+                : declaredNames.Where(n => !ToolDefaults.Forced.Contains(n)).ToList();
+        }
+
+        private const string PresetHint = "Optional: the server has a preset that is used when omitted or empty";
+
+        /// <summary>
+        /// Adds the preset (as text, like every prompt argument) for each declared argument the
+        /// caller left out or sent blank. A value the caller did send is never replaced.
+        /// </summary>
+        public static void FillPresets(
+            IDictionary<string, JsonElement> arguments,
+            IEnumerable<string> declaredNames,
+            IReadOnlyDictionary<string, JsonElement> presets,
+            ISet<string>? forced = null)
+        {
+            foreach (var name in declaredNames)
+            {
+                if (!presets.TryGetValue(name, out var preset))
+                {
+                    continue;
+                }
+
+                var isForced = forced != null && forced.Contains(name);
+
+                if (isForced || !arguments.TryGetValue(name, out var given) || ToolDefaults.IsOmitted(given))
+                {
+                    var text = preset.ValueKind == JsonValueKind.String ? preset.GetString() ?? string.Empty : preset.GetRawText();
+
+                    arguments[name] = JsonSerializer.SerializeToElement(text);
+                }
+            }
+        }
 
         /// <summary>
         /// Joins the pieces of double-quoted values and assigns the result by position. Returns

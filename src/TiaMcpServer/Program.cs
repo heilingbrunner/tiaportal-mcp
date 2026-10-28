@@ -150,9 +150,13 @@ namespace TiaMcpServer
                             "the local file system of the machine running this server. Every request is independent: " +
                             "when more than one TIA Portal instance is running, call 'GetPortals' and pass the chosen " +
                             "'portalId' to 'Connect' and to every other tool." +
-                            (ToolDefaults.Presets.Count > 0
-                                ? " The server presets " + string.Join(", ", ToolDefaults.Presets.Keys.OrderBy(k => k, StringComparer.Ordinal)) +
+                            (ToolDefaults.Presets.Keys.Any(k => !ToolDefaults.Forced.Contains(k))
+                                ? " The server presets " + string.Join(", ", ToolDefaults.Presets.Keys.Where(k => !ToolDefaults.Forced.Contains(k)).OrderBy(k => k, StringComparer.Ordinal)) +
                                   ": leave them out of a call to use the preset, pass a value to override it. 'GetState' shows the presets."
+                                : string.Empty) +
+                            (ToolDefaults.Forced.Count > 0
+                                ? " The server fixes " + string.Join(", ", ToolDefaults.Forced.OrderBy(k => k, StringComparer.Ordinal)) +
+                                  ": they are not arguments of the tools and cannot be overridden."
                                 : string.Empty) +
                             (WritePolicy.AllowWrite
                                 ? " Write mode is enabled: tools that create, rename or delete project objects are " +
@@ -166,6 +170,7 @@ namespace TiaMcpServer
                         filters.AddCallToolFilter(ToolDefaults.Filter);
                         filters.AddListToolsFilter(ToolOrdering.Filter);
                         filters.AddGetPromptFilter(PromptArguments.Filter);
+                        filters.AddListPromptsFilter(PromptArguments.ListFilter);
                     })
                     .WithTools(BuildTools(WritePolicy.AllowWrite))
                     .WithPrompts((IEnumerable<Type>)new[] { typeof(McpPrompts) });
