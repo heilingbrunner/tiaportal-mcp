@@ -457,7 +457,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "ImportSources", Title = "Import sources", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile every block and PLC data type source file (*.db, *.awl, *.scl, *.udt) under a folder tree back into the project - the whole-PLC counterpart to 'ExportSources'. Each file is placed into the block or PLC data type group its folder path implies, matching the layout 'ExportSources' writes; a folder whose group does not yet exist in the project fails that file rather than being created automatically. Existing blocks/types of the same name are overwritten. 'ImportPlcProgram' also imports the XML files of LAD blocks")]
+         Description("Compile every block and PLC data type source file (*.db, *.awl, *.scl, *.udt) under a folder tree back into the project - the whole-PLC counterpart to 'ExportSources'. Each file is placed into the block or PLC data type group its folder path implies, matching the layout 'ExportSources' writes; a folder whose group does not yet exist in the project fails that file rather than being created automatically. Existing blocks/types of the same name are overwritten. 'OverwritePlcProgram' also imports the XML files of LAD blocks")]
         public static ResponseImportedSources ImportSources(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("importPath: directory on this machine to walk recursively for *.db, *.awl, *.scl and *.udt files; read from <importPath>/<softwarePath>/")] string importPath,

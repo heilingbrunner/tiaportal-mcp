@@ -6,6 +6,18 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         public string? Directory { get; set; }
 
+        /// <summary>True when nothing was imported; 'Planned' says what a real run would do.</summary>
+        public bool? DryRun { get; set; }
+
+        /// <summary>Dry run only: each file that would be imported and whether it creates or overwrites its object.</summary>
+        public IEnumerable<ResponsePlannedProgramItem>? Planned { get; set; }
+
+        /// <summary>ImportPlcProgramChanges only: files git reports as deleted; they cannot be imported.</summary>
+        public IEnumerable<string>? Deleted { get; set; }
+
+        /// <summary>ImportPlcProgramChanges only: how many files git reports as changed below the folder.</summary>
+        public int? Changed { get; set; }
+
         /// <summary>Objects imported per area (blocks, types) and per format (source, xml).</summary>
         public IDictionary<string, int>? Written { get; set; }
 

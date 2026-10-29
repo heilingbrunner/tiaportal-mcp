@@ -8,7 +8,7 @@ using TiaMcpServer.Siemens;
 namespace TiaMcpServer.Test
 {
     /// <summary>
-    /// Tests for the rules behind ExportPlcProgram / ImportPlcProgram: which format a block gets,
+    /// Tests for the rules behind ExportPlcProgram / OverwritePlcProgram: which format a block gets,
     /// what a file of the import tree is, and the retry rounds. These tests do not connect to TIA
     /// Portal and do not open a project.
     /// </summary>
@@ -201,9 +201,86 @@ namespace TiaMcpServer.Test
 
             // Assert
             CollectionAssert.Contains(readOnly, "ExportPlcProgram");
-            CollectionAssert.DoesNotContain(readOnly, "ImportPlcProgram", "importing changes the project, so it needs --allow-write");
+            foreach (var name in new[] { "OverwritePlcProgram", "ImportPlcProgramChanges" })
+            {
+                CollectionAssert.DoesNotContain(readOnly, name, "overwriting changes the project, so it needs --allow-write");
+                CollectionAssert.Contains(withWrite, name);
+            }
+
             CollectionAssert.Contains(withWrite, "ExportPlcProgram");
-            CollectionAssert.Contains(withWrite, "ImportPlcProgram");
+        }
+
+        [TestMethod]
+        public void Test_931_ImportTools_PreviewByDefault()
+        {
+            foreach (var name in new[] { nameof(McpServer.OverwritePlcProgram), nameof(McpServer.ImportPlcProgramChanges) })
+            {
+                // Arrange
+                var method = typeof(McpServer).GetMethod(name)!;
+
+                // Act
+                var dryRun = method.GetParameters().Single(p => p.Name == "dryRun");
+
+                // Assert
+                Assert.IsTrue(dryRun.HasDefaultValue, name);
+                Assert.AreEqual(true, dryRun.DefaultValue, $"{name} must not change the project unless dryRun=false is passed");
+            }
+        }
+
+        [TestMethod]
+        public void Test_932_ImportDescriptions_TellTheAgentItReplacesAndToPreviewFirst()
+        {
+            foreach (var name in new[] { nameof(McpServer.OverwritePlcProgram), nameof(McpServer.ImportPlcProgramChanges) })
+            {
+                // Act
+                var description = typeof(McpServer).GetMethod(name)!
+                    .GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false)
+                    .Cast<System.ComponentModel.DescriptionAttribute>()
+                    .Single().Description;
+
+                // Assert
+                StringAssert.Contains(description, "REPLACED", name);
+                StringAssert.Contains(description, "dryRun", name);
+                StringAssert.Contains(description, "yes, import", name);
+                StringAssert.Contains(description, "save project", name);
+            }
+        }
+
+        [TestMethod]
+        public void Test_934_Descriptions_SteerEditedFilesToImportPlcProgramChanges()
+        {
+            // Arrange
+            string Description(string name) => typeof(McpServer).GetMethod(name)!
+                .GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false)
+                .Cast<System.ComponentModel.DescriptionAttribute>()
+                .Single().Description;
+
+            // Act
+            var whole = Description(nameof(McpServer.OverwritePlcProgram));
+            var changes = Description(nameof(McpServer.ImportPlcProgramChanges));
+
+            // Assert
+            StringAssert.Contains(whole, "ONLY when the user explicitly wants the WHOLE program", "the full-tree tool is not the default");
+            StringAssert.Contains(whole, nameof(McpServer.ImportPlcProgramChanges), "it points to the tool for edited files");
+            StringAssert.Contains(changes, "by default", "the changes tool is the default for edited files");
+            StringAssert.Contains(changes, nameof(McpServer.OverwritePlcProgram), "it points to the tool for the whole folder");
+        }
+
+        [TestMethod]
+        public void Test_933_ImportPrompts_DescribeThePreviewWorkflow()
+        {
+            foreach (var body in new[]
+            {
+                McpPrompts.OverwritePlcProgram("PLC_1", "C:\\export"),
+                McpPrompts.ImportPlcProgramChanges("PLC_1", "C:\\export")
+            })
+            {
+                // Assert
+                StringAssert.Contains(body, "dryRun true");
+                StringAssert.Contains(body, "yes, import", "the import needs an explicit confirmation");
+                StringAssert.Contains(body, "save project", "saving needs an explicit request, not an automatic call");
+                StringAssert.Contains(body, "- dryRun: true", "the prompt passes dryRun=true unless asked otherwise");
+            }
         }
     }
 }

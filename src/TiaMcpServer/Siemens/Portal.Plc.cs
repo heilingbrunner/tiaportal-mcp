@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using TiaMcpServer.Git;
 
 namespace TiaMcpServer.Siemens
 {
@@ -17,9 +18,10 @@ namespace TiaMcpServer.Siemens
         // - LAD blocks as SimaticML ('.xml'), because Openness generates no source for them.
         // Everything else (FBD, GRAPH, ...) is skipped and reported with its reason.
         //
-        // Callers: the ExportPlcProgram / ImportPlcProgram tools in McpServer.Plc.cs. Affected API:
-        // none existing - the members are new. File I/O: ExportPlcProgram writes a tree below
-        // '<exportPath>/<softwarePath>/', ImportPlcProgram reads one.
+        // Callers: the ExportPlcProgram / OverwritePlcProgram / ImportPlcProgramChanges tools in
+        // McpServer.Plc.cs. Affected API: none existing - the members are new. File I/O:
+        // ExportPlcProgram writes a tree below '<exportPath>/<softwarePath>/', the import
+        // tools read one; ImportPlcProgramChanges reads only the files git reports as changed.
         //
         // Both formats share one folder layout, the project groups below the localized system
         // folders ('Program blocks/<groups>', 'PLC data types/<groups>'), so an XML file lies next to
@@ -28,6 +30,10 @@ namespace TiaMcpServer.Siemens
         //
         // The export reuses GenerateTypes / GenerateBlocks of ExportSources; the import reuses
         // ImportOneSource of ImportSources and ImportBlocksFromXmlFile of ImportXmlBlock.
+        //
+        // Both import tools replace objects of the same name in the open project, so they
+        // preview by default: with dryRun they only classify the files and say, per object,
+        // whether it would be created or overwritten. Nothing in the project changes then.
 
         #region export
 
@@ -148,80 +154,233 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
-        /// Imports a tree written by ExportPlcProgram: '.udt' as PLC data types, '.db', '.awl' and
-        /// '.scl' as block sources, '.xml' below the block folder as blocks. Each file goes into the
-        /// group its folder implies, which must already exist. Existing objects of the same name
-        /// are overwritten. Files are imported in rounds (see PlcProgram.RunRounds), so objects
-        /// that depend on each other across both formats still come in; what never succeeds is
-        /// reported in Failures with the last error.
+        /// Overwrites the program of a PLC with a tree written by ExportPlcProgram: '.udt' as PLC
+        /// data types, '.db', '.awl' and '.scl' as block sources, '.xml' below the block folder as
+        /// blocks. Each file goes into the group its folder implies, which must already exist.
+        /// Existing objects of the same name are replaced. Files are imported in rounds (see
+        /// PlcProgram.RunRounds), so objects that depend on each other across both formats still
+        /// come in; what never succeeds is reported in Failures with the last error. With
+        /// <paramref name="dryRun"/> nothing is imported; Planned lists what would be.
         /// </summary>
-        public PlcProgramImportResult ImportPlcProgram(string softwarePath, string importPath, string regexName = "", bool keepOnError = false)
+        public PlcProgramImportResult OverwritePlcProgram(string softwarePath, string importPath, string regexName = "", bool keepOnError = false, bool dryRun = true)
         {
-            return Operation.Run(_logger, nameof(ImportPlcProgram), PortalErrorCode.ImportFailed,
+            return Operation.Run(_logger, nameof(OverwritePlcProgram), PortalErrorCode.ImportFailed,
                 () =>
                 {
-                    var software = GetPlcSoftwareOrThrow(softwarePath);
+                    var root = ResolveProgramRoot(softwarePath, importPath);
 
-                    importPath = ResolveSoftwareRoot(importPath, softwarePath);
+                    return ImportProgramFiles(softwarePath, root,
+                        Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories),
+                        regexName, keepOnError, dryRun);
+                },
+                ("softwarePath", softwarePath), ("importPath", importPath), ("regexName", regexName), ("dryRun", dryRun));
+        }
 
-                    if (!Directory.Exists(importPath))
+        /// <summary>
+        /// Like OverwritePlcProgram, but takes only the files below the folder that git reports as
+        /// changed since the last commit: modified, staged and untracked ones. Deleted files cannot
+        /// be imported and are listed in Deleted; files with an open merge conflict are listed in
+        /// Ignored. The folder must lie in a git repository.
+        /// </summary>
+        public PlcProgramImportResult ImportPlcProgramChanges(string softwarePath, string exportPath, string regexName = "", bool keepOnError = false, bool dryRun = true)
+        {
+            return Operation.Run(_logger, nameof(ImportPlcProgramChanges), PortalErrorCode.ImportFailed,
+                () =>
+                {
+                    var root = ResolveProgramRoot(softwarePath, exportPath);
+
+                    GitChangeSet changeSet;
+                    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+                    try
                     {
-                        throw new PortalException(PortalErrorCode.InvalidParams,
-                            $"Import directory '{importPath}' does not exist.");
+                        changeSet = GitRepo.GetChangeSet(root);
+                    }
+                    catch (GitException ex)
+                    {
+                        _logger?.LogWarning("git failed after {Elapsed} ms for '{Directory}': {Message}", stopwatch.ElapsedMilliseconds, root, ex.Message);
+
+                        throw new PortalException(PortalErrorCode.InvalidParams, ex.Message, null, ex);
                     }
 
-                    var blockRoot = software.BlockGroup?.Name ?? string.Empty;
-                    var typeRoot = software.TypeGroup?.Name ?? string.Empty;
-                    var option = keepOnError ? GenerateBlockOption.KeepOnError : GenerateBlockOption.None;
-                    var result = new PlcProgramImportResult { Directory = importPath };
-                    var work = new List<ProgramFile>();
-
-                    foreach (var file in Directory.EnumerateFiles(importPath, "*.*", SearchOption.AllDirectories))
-                    {
-                        var name = Path.GetFileNameWithoutExtension(file);
-
-                        if (!string.IsNullOrEmpty(regexName) && !MatchesRegex(name, regexName))
-                        {
-                            continue;
-                        }
-
-                        var directory = RelativeDirectory(importPath, file);
-                        var display = directory.Length == 0 ? Path.GetFileName(file) : directory + "/" + Path.GetFileName(file);
-                        var plan = PlcProgram.ClassifyFile(directory, Path.GetExtension(file), blockRoot, typeRoot);
-
-                        if (plan.Kind == ProgramFileKind.Ignored)
-                        {
-                            if (plan.Reason != null)
-                            {
-                                result.Ignored.Add($"{display}: {plan.Reason}");
-                            }
-
-                            continue;
-                        }
-
-                        var groupPath = StripSystemRootSegment(plan.Kind == ProgramFileKind.UdtSource ? typeRoot : blockRoot, directory);
-
-                        work.Add(new ProgramFile(file, display, plan.Kind, groupPath));
-                    }
-
-                    // Types first, then source blocks, then XML; the rounds cover what that order misses.
-                    var ordered = work
-                        .OrderBy(w => w.Kind)
-                        .ThenBy(w => w.Display, StringComparer.OrdinalIgnoreCase)
-                        .ToList();
-
-                    var rounds = PlcProgram.RunRounds(ordered, file => result.Items.AddRange(ImportProgramFile(softwarePath, file, option)));
-
-                    result.Rounds = rounds.Rounds;
-                    result.Failures.AddRange(rounds.Failed.Select(f => $"{f.Item.Display}: {f.Error}"));
+                    var changes = changeSet.Inside;
 
                     _logger?.LogInformation(
-                        "PLC program imported from '{Directory}' into '{Software}': {Imported} object(s) in {Rounds} round(s), {Failed} failed",
-                        importPath, softwarePath, result.Items.Count, result.Rounds, result.Failures.Count);
+                        "git reported {Inside} changed file(s) below '{Directory}' and {Outside} elsewhere in {Elapsed} ms",
+                        changes.Count, root, changeSet.Outside.Count, stopwatch.ElapsedMilliseconds);
+
+                    var importable = changes
+                        .Where(c => c.Kind != GitChangeKind.Deleted && c.Kind != GitChangeKind.Unmerged && File.Exists(c.FullPath))
+                        .Select(c => c.FullPath)
+                        .ToList();
+
+                    var result = ImportProgramFiles(softwarePath, root, importable, regexName, keepOnError, dryRun);
+
+                    result.Changed = changes.Count;
+                    result.Deleted.AddRange(changes.Where(c => c.Kind == GitChangeKind.Deleted).Select(c => RelativeFile(root, c.FullPath)));
+                    result.Ignored.AddRange(changes
+                        .Where(c => c.Kind == GitChangeKind.Unmerged)
+                        .Select(c => $"{RelativeFile(root, c.FullPath)}: open merge conflict, resolve it first"));
+
+                    AddOutsideScope(result, changeSet, root);
 
                     return result;
                 },
-                ("softwarePath", softwarePath), ("importPath", importPath), ("regexName", regexName));
+                ("softwarePath", softwarePath), ("exportPath", exportPath), ("regexName", regexName), ("dryRun", dryRun));
+        }
+
+        /// <summary>
+        /// The folder a program tree lies in: '<paramref name="path"/>/&lt;softwarePath&gt;'. Fails
+        /// before anything else when the software is unknown or the folder does not exist.
+        /// </summary>
+        private string ResolveProgramRoot(string softwarePath, string path)
+        {
+            GetPlcSoftwareOrThrow(softwarePath);
+
+            var root = ResolveSoftwareRoot(path, softwarePath);
+
+            if (!Directory.Exists(root))
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams,
+                    $"Import directory '{root}' does not exist.");
+            }
+
+            return root;
+        }
+
+        /// <summary>Most files outside the program folder that are listed by name; the rest is counted.</summary>
+        private const int MaxOutsideScopeListed = 20;
+
+        /// <summary>
+        /// Says which files git reports as changed elsewhere in the repository, so a file that was
+        /// put in the wrong folder shows up in Ignored instead of just missing from the result.
+        /// </summary>
+        private static void AddOutsideScope(PlcProgramImportResult result, GitChangeSet changeSet, string root)
+        {
+            foreach (var change in changeSet.Outside.Take(MaxOutsideScopeListed))
+            {
+                result.Ignored.Add(
+                    $"{RelativeFile(changeSet.RepositoryRoot, change.FullPath)}: changed in git but outside '{root}', so it is not part of this PLC software's program tree");
+            }
+
+            if (changeSet.Outside.Count > MaxOutsideScopeListed)
+            {
+                result.Ignored.Add($"... and {changeSet.Outside.Count - MaxOutsideScopeListed} more changed files outside '{root}'");
+            }
+        }
+
+        private static string RelativeFile(string root, string file)
+        {
+            return file.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+                ? file.Substring(root.Length).TrimStart('\\', '/').Replace('\\', '/')
+                : file;
+        }
+
+        /// <summary>
+        /// Classifies the given files of one program tree below <paramref name="root"/> and, unless
+        /// <paramref name="dryRun"/>, imports them in rounds. Shared by both import tools; only
+        /// the choice of files differs.
+        /// </summary>
+        private PlcProgramImportResult ImportProgramFiles(string softwarePath, string root, IEnumerable<string> files, string regexName, bool keepOnError, bool dryRun)
+        {
+            var software = GetPlcSoftwareOrThrow(softwarePath);
+            var importPath = root;
+            var blockRoot = software.BlockGroup?.Name ?? string.Empty;
+            var typeRoot = software.TypeGroup?.Name ?? string.Empty;
+            var option = keepOnError ? GenerateBlockOption.KeepOnError : GenerateBlockOption.None;
+            var result = new PlcProgramImportResult { Directory = importPath, DryRun = dryRun };
+            var work = new List<ProgramFile>();
+
+            foreach (var file in files)
+            {
+                var name = Path.GetFileNameWithoutExtension(file);
+
+                if (!string.IsNullOrEmpty(regexName) && !MatchesRegex(name, regexName))
+                {
+                    continue;
+                }
+
+                var directory = RelativeDirectory(importPath, file);
+                var display = directory.Length == 0 ? Path.GetFileName(file) : directory + "/" + Path.GetFileName(file);
+                var plan = PlcProgram.ClassifyFile(directory, Path.GetExtension(file), blockRoot, typeRoot);
+
+                if (plan.Kind == ProgramFileKind.Ignored)
+                {
+                    if (plan.Reason != null)
+                    {
+                        result.Ignored.Add($"{display}: {plan.Reason}");
+                    }
+
+                    continue;
+                }
+
+                var groupPath = StripSystemRootSegment(plan.Kind == ProgramFileKind.UdtSource ? typeRoot : blockRoot, directory);
+
+                work.Add(new ProgramFile(file, display, plan.Kind, groupPath));
+            }
+
+            // Types first, then source blocks, then XML; the rounds cover what that order misses.
+            var ordered = work
+                .OrderBy(w => w.Kind)
+                .ThenBy(w => w.Display, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (dryRun)
+            {
+                result.Planned.AddRange(ordered.Select(w => PlanProgramFile(softwarePath, w)));
+
+                _logger?.LogInformation(
+                    "PLC program preview of '{Directory}' for '{Software}': {Planned} file(s) would be imported, {Ignored} ignored",
+                    importPath, softwarePath, result.Planned.Count, result.Ignored.Count);
+
+                return result;
+            }
+
+            var rounds = PlcProgram.RunRounds(ordered, file => result.Items.AddRange(ImportProgramFile(softwarePath, file, option)));
+
+            result.Rounds = rounds.Rounds;
+            result.Failures.AddRange(rounds.Failed.Select(f => $"{f.Item.Display}: {f.Error}"));
+
+            _logger?.LogInformation(
+                "PLC program imported from '{Directory}' into '{Software}': {Imported} object(s) in {Rounds} round(s), {Failed} failed",
+                importPath, softwarePath, result.Items.Count, result.Rounds, result.Failures.Count);
+
+            return result;
+        }
+
+        /// <summary>
+        /// What importing one file would do. The object name is taken from the file name, which is
+        /// how ExportPlcProgram wrote it; an object that is found in the project is overwritten, one
+        /// that is not is created. A lookup that fails says 'unknown' instead of guessing.
+        /// </summary>
+        private PlannedProgramItem PlanProgramFile(string softwarePath, ProgramFile file)
+        {
+            var name = Path.GetFileNameWithoutExtension(file.File);
+            var path = file.GroupPath.Length == 0 ? name : file.GroupPath + "/" + name;
+            var isType = file.Kind == ProgramFileKind.UdtSource;
+
+            string action;
+
+            try
+            {
+                action = (isType ? (object?)GetType(softwarePath, path) : GetBlock(softwarePath, path)) != null
+                    ? PlannedProgramItem.Overwrite
+                    : PlannedProgramItem.Create;
+            }
+            catch (Exception)
+            {
+                action = PlannedProgramItem.Unknown;
+            }
+
+            return new PlannedProgramItem
+            {
+                File = file.Display,
+                Name = name,
+                Path = path,
+                Kind = isType ? "type" : "block",
+                Format = file.Kind == ProgramFileKind.XmlBlock ? "xml" : "source",
+                Action = action
+            };
         }
 
         private List<ImportedProgramItem> ImportProgramFile(string softwarePath, ProgramFile file, GenerateBlockOption option)
@@ -241,7 +400,33 @@ namespace TiaMcpServer.Siemens
         #endregion
     }
 
-    /// <summary>One block or PLC data type imported by ImportPlcProgram.</summary>
+    /// <summary>One file a dry run would import, and what the import would do with its object.</summary>
+    public class PlannedProgramItem
+    {
+        public const string Create = "create";
+        public const string Overwrite = "overwrite";
+        public const string Unknown = "unknown";
+
+        /// <summary>The file, relative to the program folder.</summary>
+        public string File { get; set; } = string.Empty;
+
+        /// <summary>Object name, taken from the file name.</summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>Root-relative path the object has or will get in the project.</summary>
+        public string Path { get; set; } = string.Empty;
+
+        /// <summary>'block' or 'type'.</summary>
+        public string Kind { get; set; } = string.Empty;
+
+        /// <summary>'source' for an external source file, 'xml' for SimaticML.</summary>
+        public string Format { get; set; } = string.Empty;
+
+        /// <summary>'create' when the project has no such object yet, 'overwrite' when it has, 'unknown' when the lookup failed.</summary>
+        public string Action { get; set; } = Create;
+    }
+
+    /// <summary>One block or PLC data type imported by OverwritePlcProgram.</summary>
     public class ImportedProgramItem
     {
         public string Name { get; set; } = string.Empty;
@@ -256,10 +441,22 @@ namespace TiaMcpServer.Siemens
         public string Format { get; set; } = string.Empty;
     }
 
-    /// <summary>What ImportPlcProgram produced.</summary>
+    /// <summary>What OverwritePlcProgram / ImportPlcProgramChanges produced.</summary>
     public class PlcProgramImportResult
     {
         public string Directory { get; set; } = string.Empty;
+
+        /// <summary>True when nothing was imported: Planned says what a real run would do.</summary>
+        public bool DryRun { get; set; }
+
+        /// <summary>Dry run only: each file that would be imported and whether it creates or overwrites.</summary>
+        public List<PlannedProgramItem> Planned { get; set; } = new List<PlannedProgramItem>();
+
+        /// <summary>ImportPlcProgramChanges: files git reports as deleted; they cannot be imported.</summary>
+        public List<string> Deleted { get; set; } = new List<string>();
+
+        /// <summary>ImportPlcProgramChanges: how many files git reports as changed, before filtering.</summary>
+        public int Changed { get; set; }
 
         public List<ImportedProgramItem> Items { get; set; } = new List<ImportedProgramItem>();
 

@@ -230,7 +230,7 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>
         /// Imports one SimaticML file into a block group, replacing blocks of the same name, and
-        /// returns the blocks TIA Portal created. Shared by ImportXmlBlock and ImportPlcProgram.
+        /// returns the blocks TIA Portal created. Shared by ImportXmlBlock and OverwritePlcProgram.
         /// Throws a PortalException with TIA Portal's own reason when nothing could be imported.
         /// </summary>
         private IList<PlcBlock> ImportBlocksFromXmlFile(string softwarePath, string groupPath, string importPath)

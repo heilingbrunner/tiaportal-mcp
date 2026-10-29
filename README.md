@@ -66,7 +66,7 @@ of the MCP server entry in your client's JSON configuration and the model no lon
 
 The server is read-only unless it is started with `--allow-write`.
 
-- Without the flag the 50 project-mutating tools are **not registered at all**, so they never
+- Without the flag the 51 project-mutating tools are **not registered at all**, so they never
   appear in `tools/list`. A model cannot call what it cannot see, and the tool list stays small.
 - With the flag they are registered and annotated `destructiveHint: true`, so a client can still
   prompt before each call.
@@ -106,7 +106,7 @@ Read-only tools (67) are always available.
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`    |
 | Whole PLC program             | `ExportPlcProgram` (sources and XML, see below)                                                                                                    |
 
-Write tools (50) require `--allow-write`.
+Write tools (51) require `--allow-write`.
 
 | Area                  | Tools                                                                                                                                                                                                                                         |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -119,7 +119,7 @@ Write tools (50) require `--allow-write`.
 | External sources      | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `ImportExternalSource`, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes`, `ImportSources` |
 | Type documents (V21+) | `ImportTypeFromDocuments`, `ImportTypesFromDocuments`                                                                                                                                                                                         |
 | XML and documents     | `ImportXmlBlock`, `ImportXmlType`, `ImportFromDocuments` (V20+), `ImportBlocksFromDocuments` (V20+) |
-| Whole PLC program     | `ImportPlcProgram` (sources and XML, see below)                                                                                                                                                                                               |
+| Whole PLC program     | `OverwritePlcProgram`, `ImportPlcProgramChanges` (sources and XML, preview by default, see below)                                                                                                                                          |
 | Multiuser             | `CommitChanges` (commits the local session to the server and closes the session)                                                                                                                                                              |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
@@ -129,9 +129,9 @@ Write tools (50) require `--allow-write`.
 Paths used by these tools are **root-relative**: `1_Tests/FC_Block_1`, not
 `Program blocks/1_Tests/FC_Block_1`. Use `GetProjectTree` and `GetSoftwareTree` to discover them.
 
-### Whole PLC program: `ExportPlcProgram` and `ImportPlcProgram`
+### Whole PLC program: `ExportPlcProgram`, `OverwritePlcProgram` and `ImportPlcProgramChanges`
 
-Two tools move all blocks and PLC data types of a PLC software in one call, each object in the format that
+These tools move all blocks and PLC data types of a PLC software in one call, each object in the format that
 suits it:
 
 | Object                     | File   | Format                                                                                       |
@@ -146,10 +146,24 @@ suits it:
 - Layout: `<exportPath>/<softwarePath>/Program blocks/<groups>/` and `.../PLC data types/<groups>/`, one file per
   object, always mirroring the project groups. It is the tree `ExportSources` writes, so an XML file lies next to
   the sources of its group.
-- `ExportPlcProgram(softwarePath, exportPath, regexName)` only writes files. `ImportPlcProgram(softwarePath,
-  importPath, regexName, keepOnError)` changes the project and needs `--allow-write`.
-- Import puts each file into the group its folder implies; the group must already exist. Existing blocks and
-  types of the same name are overwritten. An `.xml` file counts only below the `Program blocks` folder.
+- `ExportPlcProgram(softwarePath, exportPath, regexName)` only writes files. `OverwritePlcProgram(softwarePath,
+  importPath, regexName, keepOnError, dryRun)` changes the project and needs `--allow-write`. Blocks and types of the same name in the open project are **replaced** by the file content.
+  The tool description tells the agent so.
+- Prefer `ImportPlcProgramChanges` for edited files; use `OverwritePlcProgram` only to replace the whole tree (first
+  import, restore, a folder without git). The name and the description of the whole-tree tool say so, so an agent does
+  not pick it for a vague "import" request.
+- Both tools **preview by default**: `dryRun` is `true`, nothing is imported, and `Planned` lists every
+  object with `create` or `overwrite` (the action is derived from the file name). The tool descriptions and
+  prompts tell the agent to show that list to you, ask "Import these now? Reply: yes, import", and call again with `dryRun=false` only after you answer "yes, import". It must not save on its own: `SaveProject` (`SaveSession` in a local session) is called only after you say "save project".
+  Clients can still prompt before every call, because the tools carry `destructiveHint`.
+- Import puts each file into the group its folder implies; the group must already exist. An `.xml` file counts
+  only below the `Program blocks` folder.
+- `ImportPlcProgramChanges(softwarePath, exportPath, regexName, keepOnError, dryRun)` takes only the files git
+  reports as changed since the last commit below `<exportPath>/<softwarePath>/`: modified, staged and new files.
+  Deleted files cannot be imported and are listed in `Deleted`; files with an open merge conflict go to `Ignored`.
+  It needs git on `PATH` and an export folder inside a git repository, and takes the `--export-path` and
+  `--software-path` presets. Suggested flow: `ExportPlcProgram`, commit the export as baseline, edit files,
+  `ImportPlcProgramChanges` (preview), confirm, run it again with `dryRun=false`, `SaveProject`, commit.
 - Objects may need each other across the two formats (a LAD block calling an SCL block, an instance data block of
   a LAD function block). Import therefore works in rounds: it retries what failed as long as the last round
   imported something. The response reports `Rounds`, and what never succeeded in `Failures` with its last error.

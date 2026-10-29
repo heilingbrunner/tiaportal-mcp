@@ -50,16 +50,29 @@
   fixes these arguments and is not a sandbox: the `importPath` / `filePath` of the import tools and the
   names inside `blockPath` are not restricted.
 
-- __`ExportPlcProgram` and `ImportPlcProgram`__: the whole program of a PLC in one call, each object in the
+- __`ExportPlcProgram` and `OverwritePlcProgram`__: the whole program of a PLC in one call, each object in the
   format that suits it. SCL and STL blocks, data blocks and PLC data types are written and read as source files
   (`.scl`, `.awl`, `.db`, `.udt`), LAD blocks as XML (`.xml`). Blocks in other languages (FBD, GRAPH, ...) are
   skipped and listed with the reason. Both use the folder tree of `ExportSources`
   (`<exportPath>/<softwarePath>/Program blocks/...` and `PLC data types/...`), so the narrower tools can work on
-  the same folder. `ImportPlcProgram` needs `--allow-write`, puts each file into the group its folder implies,
-  and imports in rounds: an object that needs another one (a LAD block calling an SCL block, an instance data
-  block) is retried until nothing more can be imported; the response reports `Rounds` and the files that never
-  succeeded in `Failures`. Prompts of the same names are included. `ExportPlcProgram` takes the `--software-path`
-  and `--export-path` presets like every export.
+  the same folder. `OverwritePlcProgram` needs `--allow-write`, replaces objects of the same name in the open
+  project (the name and description say so, and point agents to `ImportPlcProgramChanges` for edited files), puts each file into the group
+  its folder implies, and imports in rounds: an object that needs another one (a LAD block calling an SCL block,
+  an instance data block) is retried until nothing more can be imported; the response reports `Rounds` and the
+  files that never succeeded in `Failures`. Prompts of the same names are included. `ExportPlcProgram` takes the
+  `--software-path` and `--export-path` presets like every export.
+
+- __`dryRun` first__: `OverwritePlcProgram` and `ImportPlcProgramChanges` default to `dryRun=true`. A call
+  without the argument imports nothing and returns `Planned`: every file that would be imported, with its object
+  and `create` or `overwrite`. The tool descriptions and the prompts tell the agent to show that list to the user
+  and to call again with `dryRun=false` only after the user answers "yes, import". After the import the agent must not save by itself; it calls `SaveProject` only after the user says "save project".
+
+- __`ImportPlcProgramChanges`__: imports only the files below `<exportPath>/<softwarePath>/` that git reports as
+  changed since the last commit (modified, staged and new files), instead of the whole tree. Deleted files are
+  listed in `Deleted`, files with an open merge conflict in `Ignored`, and `Changed` counts what git reported.
+  It needs git on `PATH` and an export folder inside a git repository, and takes the `--export-path` and
+  `--software-path` presets. The git access lives in the new namespace `TiaMcpServer.Git` (class `GitRepo`, folder
+  `src/TiaMcpServer/Git/`) and only runs `rev-parse` and `status`.
 
 ### Changed
 

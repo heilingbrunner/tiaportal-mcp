@@ -1,6 +1,6 @@
 namespace TiaMcpServer.ModelContextProtocol
 {
-    /// <summary>One block or PLC data type imported by ImportPlcProgram.</summary>
+    /// <summary>One block or PLC data type imported by OverwritePlcProgram.</summary>
     public class ResponseImportedProgramItem
     {
         public string? Name { get; set; }

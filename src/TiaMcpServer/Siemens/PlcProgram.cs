@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace TiaMcpServer.Siemens
 {
-    /// <summary>How one program block travels in ExportPlcProgram / ImportPlcProgram.</summary>
+    /// <summary>How one program block travels in ExportPlcProgram / OverwritePlcProgram.</summary>
     public enum ProgramBlockFormat
     {
         /// <summary>External source file: '.scl', '.awl' or '.db'.</summary>
@@ -18,7 +18,7 @@ namespace TiaMcpServer.Siemens
         None
     }
 
-    /// <summary>What ImportPlcProgram does with one file of the folder tree. The order is the order of the first import round.</summary>
+    /// <summary>What OverwritePlcProgram does with one file of the folder tree. The order is the order of the first import round.</summary>
     public enum ProgramFileKind
     {
         /// <summary>'.udt': a PLC data type source.</summary>
@@ -79,7 +79,7 @@ namespace TiaMcpServer.Siemens
     }
 
     /// <summary>
-    /// The rules behind ExportPlcProgram and ImportPlcProgram, free of TIA Portal so they can be
+    /// The rules behind ExportPlcProgram and OverwritePlcProgram, free of TIA Portal so they can be
     /// tested without it:
     /// - which format a block gets: source files where Openness can generate them (SCL, STL,
     ///   data blocks), XML for LAD, nothing for the rest;
