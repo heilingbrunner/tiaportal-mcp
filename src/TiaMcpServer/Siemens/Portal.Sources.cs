@@ -429,24 +429,13 @@ namespace TiaMcpServer.Siemens
         /// </summary>
         private static (string? Extension, string? Reason) BlockSourceExtension(PlcBlock block)
         {
-            if (block is DataBlock)
-            {
-                return (".db", null);
-            }
+            var extension = PlcProgram.SourceExtension(block is DataBlock, block.ProgrammingLanguage);
 
-            switch (block.ProgrammingLanguage)
-            {
-                case ProgrammingLanguage.STL:
-                    return (".awl", null);
-
-                case ProgrammingLanguage.SCL:
-                    return (".scl", null);
-
-                default:
-                    return (null,
-                        $"programming language {block.ProgrammingLanguage} has no source form; " +
-                        "Openness generates sources only from STL blocks, SCL blocks and data blocks");
-            }
+            return extension != null
+                ? (extension, null)
+                : (null,
+                    $"programming language {block.ProgrammingLanguage} has no source form; " +
+                    "Openness generates sources only from STL blocks, SCL blocks and data blocks");
         }
 
         #endregion

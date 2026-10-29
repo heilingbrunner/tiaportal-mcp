@@ -66,7 +66,7 @@ of the MCP server entry in your client's JSON configuration and the model no lon
 
 The server is read-only unless it is started with `--allow-write`.
 
-- Without the flag the 49 project-mutating tools are **not registered at all**, so they never
+- Without the flag the 50 project-mutating tools are **not registered at all**, so they never
   appear in `tools/list`. A model cannot call what it cannot see, and the tool list stays small.
 - With the flag they are registered and annotated `destructiveHint: true`, so a client can still
   prompt before each call.
@@ -84,7 +84,7 @@ To enable write mode, add the argument to your client configuration, for example
 
 ## Tools
 
-Read-only tools (66) are always available.
+Read-only tools (67) are always available.
 
 | Area                          | Tools                                                                                                                                              |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -104,8 +104,9 @@ Read-only tools (66) are always available.
 | Block documents (V20+)        | `ExportAsDocuments`, `ExportBlocksAsDocuments`                                                 |
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                  |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`    |
+| Whole PLC program             | `ExportPlcProgram` (sources and XML, see below)                                                                                                    |
 
-Write tools (49) require `--allow-write`.
+Write tools (50) require `--allow-write`.
 
 | Area                  | Tools                                                                                                                                                                                                                                         |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -118,6 +119,7 @@ Write tools (49) require `--allow-write`.
 | External sources      | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `ImportExternalSource`, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes`, `ImportSources` |
 | Type documents (V21+) | `ImportTypeFromDocuments`, `ImportTypesFromDocuments`                                                                                                                                                                                         |
 | XML and documents     | `ImportXmlBlock`, `ImportXmlType`, `ImportFromDocuments` (V20+), `ImportBlocksFromDocuments` (V20+) |
+| Whole PLC program     | `ImportPlcProgram` (sources and XML, see below)                                                                                                                                                                                               |
 | Multiuser             | `CommitChanges` (commits the local session to the server and closes the session)                                                                                                                                                              |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
@@ -126,6 +128,35 @@ Write tools (49) require `--allow-write`.
 
 Paths used by these tools are **root-relative**: `1_Tests/FC_Block_1`, not
 `Program blocks/1_Tests/FC_Block_1`. Use `GetProjectTree` and `GetSoftwareTree` to discover them.
+
+### Whole PLC program: `ExportPlcProgram` and `ImportPlcProgram`
+
+Two tools move all blocks and PLC data types of a PLC software in one call, each object in the format that
+suits it:
+
+| Object                     | File   | Format                                                                                       |
+| -------------------------- | ------ | -------------------------------------------------------------------------------------------- |
+| SCL block                  | `.scl` | external source                                                                              |
+| STL block                  | `.awl` | external source (TIA Portal names STL sources `.awl`; a `.stl` file is not a source and is not read) |
+| Data block                 | `.db`  | external source                                                                              |
+| PLC data type              | `.udt` | external source                                                                              |
+| LAD block                  | `.xml` | SimaticML, because TIA Portal generates no source for LAD                                    |
+| FBD, GRAPH and other blocks | none   | skipped and listed in `Skipped` with the reason; use `ExportXmlBlock` or `ExportAsDocuments` |
+
+- Layout: `<exportPath>/<softwarePath>/Program blocks/<groups>/` and `.../PLC data types/<groups>/`, one file per
+  object, always mirroring the project groups. It is the tree `ExportSources` writes, so an XML file lies next to
+  the sources of its group.
+- `ExportPlcProgram(softwarePath, exportPath, regexName)` only writes files. `ImportPlcProgram(softwarePath,
+  importPath, regexName, keepOnError)` changes the project and needs `--allow-write`.
+- Import puts each file into the group its folder implies; the group must already exist. Existing blocks and
+  types of the same name are overwritten. An `.xml` file counts only below the `Program blocks` folder.
+- Objects may need each other across the two formats (a LAD block calling an SCL block, an instance data block of
+  a LAD function block). Import therefore works in rounds: it retries what failed as long as the last round
+  imported something. The response reports `Rounds`, and what never succeeded in `Failures` with its last error.
+- The narrower tools stay: `ExportSources` / `ImportSources` (sources only) and `ExportXmlBlocks` /
+  `ImportXmlBlock` (XML only).
+- `softwarePath` and `exportPath` take the presets from `--software-path` and `--export-path` like every other
+  export.
 
 ## Example Prompts using natural language
 

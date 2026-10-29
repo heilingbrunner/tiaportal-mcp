@@ -221,42 +221,54 @@ namespace TiaMcpServer.Siemens
             return Operation.Run(_logger, nameof(ImportXmlBlock), PortalErrorCode.ImportFailed,
                 () =>
                 {
-                    if (IsProjectNull())
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidState,
-                            "No project is open. Open one with 'OpenProject' first.");
-                    }
+                    ImportBlocksFromXmlFile(softwarePath, groupPath, importPath);
 
-                    var group = GetPlcBlockGroupByPath(softwarePath, groupPath)
-                        ?? throw new PortalException(PortalErrorCode.NotFound,
-                            $"Block group not found at '{groupPath}'.");
-
-                    if (!File.Exists(importPath))
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidParams,
-                            $"Import file '{importPath}' does not exist on the machine running this server.");
-                    }
-
-                    try
-                    {
-                        var imported = group.Blocks.Import(new FileInfo(importPath), ImportOptions.Override);
-
-                        if (imported == null || imported.Count == 0)
-                        {
-                            throw new PortalException(PortalErrorCode.ImportFailed,
-                                $"TIA Portal imported no block from '{importPath}'.");
-                        }
-
-                        return true;
-                    }
-                    catch (Exception ex) when (!(ex is PortalException))
-                    {
-                        // Keep TIA Portal's own reason: it usually names the exact problem.
-                        throw new PortalException(PortalErrorCode.ImportFailed,
-                            $"Import of block file '{importPath}' failed: {ImportErrors.Describe(ex)}", null, ex);
-                    }
+                    return true;
                 },
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath));
+        }
+
+        /// <summary>
+        /// Imports one SimaticML file into a block group, replacing blocks of the same name, and
+        /// returns the blocks TIA Portal created. Shared by ImportXmlBlock and ImportPlcProgram.
+        /// Throws a PortalException with TIA Portal's own reason when nothing could be imported.
+        /// </summary>
+        private IList<PlcBlock> ImportBlocksFromXmlFile(string softwarePath, string groupPath, string importPath)
+        {
+            if (IsProjectNull())
+            {
+                throw new PortalException(PortalErrorCode.InvalidState,
+                    "No project is open. Open one with 'OpenProject' first.");
+            }
+
+            var group = GetPlcBlockGroupByPath(softwarePath, groupPath)
+                ?? throw new PortalException(PortalErrorCode.NotFound,
+                    $"Block group not found at '{groupPath}'.");
+
+            if (!File.Exists(importPath))
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams,
+                    $"Import file '{importPath}' does not exist on the machine running this server.");
+            }
+
+            try
+            {
+                var imported = group.Blocks.Import(new FileInfo(importPath), ImportOptions.Override);
+
+                if (imported == null || imported.Count == 0)
+                {
+                    throw new PortalException(PortalErrorCode.ImportFailed,
+                        $"TIA Portal imported no block from '{importPath}'.");
+                }
+
+                return imported;
+            }
+            catch (Exception ex) when (!(ex is PortalException))
+            {
+                // Keep TIA Portal's own reason: it usually names the exact problem.
+                throw new PortalException(PortalErrorCode.ImportFailed,
+                    $"Import of block file '{importPath}' failed: {ImportErrors.Describe(ex)}", null, ex);
+            }
         }
 
         public IEnumerable<PlcBlock>? ExportXmlBlocks(string softwarePath, string exportPath, string regexName = "", bool preservePath = false)

@@ -136,46 +136,6 @@ Use the ExportSourceType tool with these parameters:
 - preservePath: {NormalizeBool(preservePath)}";
         }
 
-        #endregion
-
-        #region Convenience Export Templates
-
-        [McpServerPrompt(Name = "ExportAllBlocksFlattened"), Description("Export all blocks of a PLC software as XML into one folder")]
-        public static string ExportAllBlocksFlattened(string softwarePath, string exportPath)
-        {
-            return ExportXmlBlocks(softwarePath, exportPath, "", "false");
-        }
-
-        [McpServerPrompt(Name = "ExportAllBlocksStructured"), Description("Export all blocks of a PLC software as XML, keeping the group folders")]
-        public static string ExportAllBlocksStructured(string softwarePath, string exportPath)
-        {
-            return ExportXmlBlocks(softwarePath, exportPath, "", "true");
-        }
-
-        [McpServerPrompt(Name = "ExportAllTypesFlattened"), Description("Export all PLC data types as XML into one folder")]
-        public static string ExportAllTypesFlattened(string softwarePath, string exportPath)
-        {
-            return ExportXmlTypes(softwarePath, exportPath, "", "false");
-        }
-
-        [McpServerPrompt(Name = "ExportAllTypesStructured"), Description("Export all PLC data types as XML, keeping the group folders")]
-        public static string ExportAllTypesStructured(string softwarePath, string exportPath)
-        {
-            return ExportXmlTypes(softwarePath, exportPath, "", "true");
-        }
-
-        [McpServerPrompt(Name = "ExportAllBlocksAsDocumentsFlattened"), Description("Export all blocks as documents (.s7dcl/.s7res) into one folder")]
-        public static string ExportAllBlocksAsDocumentsFlattened(string softwarePath, string exportPath)
-        {
-            return ExportBlocksAsDocuments(softwarePath, exportPath, "", "false");
-        }
-
-        [McpServerPrompt(Name = "ExportAllBlocksAsDocumentsStructured"), Description("Export all blocks as documents (.s7dcl/.s7res), keeping the group folders")]
-        public static string ExportAllBlocksAsDocumentsStructured(string softwarePath, string exportPath)
-        {
-            return ExportBlocksAsDocuments(softwarePath, exportPath, "", "true");
-        }
-
         [McpServerPrompt(Name = "ExportTypesAsDocuments"), Description("Export PLC data types as documents (.s7dcl/.s7res, V21+)")]
         public static string ExportTypesAsDocuments(string softwarePath, string exportPath, string regexName = "", string preservePath = "false")
         {
@@ -195,12 +155,6 @@ Use the ExportTypesAsDocuments tool with these parameters:
 - exportPath: {exportPath}
 - regexName: {regexName}
 - preservePath: {NormalizeBool(preservePath)}";
-        }
-
-        [McpServerPrompt(Name = "ExportAllTypesAsDocumentsStructured"), Description("Export all PLC data types as documents, keeping the group folders")]
-        public static string ExportAllTypesAsDocumentsStructured(string softwarePath, string exportPath)
-        {
-            return ExportTypesAsDocuments(softwarePath, exportPath, "", "true");
         }
 
         #endregion

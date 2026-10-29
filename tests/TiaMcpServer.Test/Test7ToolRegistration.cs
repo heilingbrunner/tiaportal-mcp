@@ -184,14 +184,14 @@ namespace TiaMcpServer.Test
             // Act
             var withoutPrompt = toolNames.Except(promptNames).OrderBy(n => n).ToList();
             var withoutTool = promptNames.Except(toolNames)
-                .Where(n => !n.StartsWith("ExportAll") && !n.StartsWith("ImportAll"))
+                .Where(n => !n.StartsWith("ImportAll"))
                 .OrderBy(n => n)
                 .ToList();
 
             // Assert
             Assert.AreEqual(0, withoutPrompt.Count, "Tools without a prompt: " + string.Join(", ", withoutPrompt));
             Assert.AreEqual(0, withoutTool.Count,
-                "Prompts without a tool (only the ExportAll*/ImportAll* shortcuts may exist): " + string.Join(", ", withoutTool));
+                "Prompts without a tool (only the ImportAll* shortcuts may exist): " + string.Join(", ", withoutTool));
         }
 
         [TestMethod]

@@ -38,8 +38,28 @@
 - __Preset tool arguments__: the new command line arguments `--project-path`, `--software-path`,
   `--export-path`, `--preserve-path` and `--with-dependencies` (the last two are flags, like `--allow-write`) preset the `path`, `softwarePath`, `exportPath`, `preservePath` and `withDependencies` arguments of every tool
   that declares them. A preset argument is no longer `required` in the tool schema and is filled in when
-  a call omits it; a value in the call still wins. Without the arguments nothing changes. `GetState`
-  reports the active presets. Prompts are unchanged.
+  a call omits it (or sends `null` or an empty string); a value in the call still wins. Without the
+  arguments nothing changes. `GetState` reports the active presets. Slash-command prompts use the presets
+  too: an argument with a preset is optional in `prompts/list` and filled in when left out. Claude Code
+  fills prompt arguments by position, so overriding only `exportPath` still needs `softwarePath` typed first.
+
+- __`--force-presets`__: opt-in flag that makes the `path`, `softwarePath` and `exportPath` presets (those
+  that are set) binding. They are removed from `tools/list` and from the prompt arguments, and a call that
+  still sends them is overwritten with the preset. `preservePath` and `withDependencies` stay overridable.
+  `OpenTiaProject` can then only open the preset project. `GetState` lists them in `ForcedPresets`. It only
+  fixes these arguments and is not a sandbox: the `importPath` / `filePath` of the import tools and the
+  names inside `blockPath` are not restricted.
+
+- __`ExportPlcProgram` and `ImportPlcProgram`__: the whole program of a PLC in one call, each object in the
+  format that suits it. SCL and STL blocks, data blocks and PLC data types are written and read as source files
+  (`.scl`, `.awl`, `.db`, `.udt`), LAD blocks as XML (`.xml`). Blocks in other languages (FBD, GRAPH, ...) are
+  skipped and listed with the reason. Both use the folder tree of `ExportSources`
+  (`<exportPath>/<softwarePath>/Program blocks/...` and `PLC data types/...`), so the narrower tools can work on
+  the same folder. `ImportPlcProgram` needs `--allow-write`, puts each file into the group its folder implies,
+  and imports in rounds: an object that needs another one (a LAD block calling an SCL block, an instance data
+  block) is retried until nothing more can be imported; the response reports `Rounds` and the files that never
+  succeeded in `Failures`. Prompts of the same names are included. `ExportPlcProgram` takes the `--software-path`
+  and `--export-path` presets like every export.
 
 ### Changed
 
@@ -108,6 +128,16 @@
   lookup now runs first and matches by file path (not by name), so a project already open in the TIA Portal
   instance, also one opened in the UI, is used as it is; the response says so. The same applies to local
   sessions (`.alsXX`). Another project is still closed only when a different one has to be opened.
+
+### Removed
+
+- __Breaking: the `ExportAll*Flattened` / `ExportAll*Structured` prompts__: `ExportAllBlocksFlattened`,
+  `ExportAllBlocksStructured`, `ExportAllTypesFlattened`, `ExportAllTypesStructured`,
+  `ExportAllBlocksAsDocumentsFlattened`, `ExportAllBlocksAsDocumentsStructured` and
+  `ExportAllTypesAsDocumentsStructured`. They only called `ExportXmlBlocks`, `ExportXmlTypes`,
+  `ExportBlocksAsDocuments` or `ExportTypesAsDocuments` with an empty `regexName` and a fixed
+  `preservePath`, so nothing is lost: use those prompts (or tools) and set `preservePath` yourself.
+  No tools were affected.
 
 ### Changed
 
