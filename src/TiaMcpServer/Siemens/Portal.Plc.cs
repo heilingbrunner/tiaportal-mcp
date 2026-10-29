@@ -327,7 +327,11 @@ namespace TiaMcpServer.Siemens
 
             if (dryRun)
             {
-                result.Planned.AddRange(ordered.Select(w => PlanProgramFile(softwarePath, w)));
+                // One lookup per group instead of one per file: each lookup walks the group's
+                // objects through Openness, which is what made a large preview take minutes.
+                var groupNames = new Dictionary<string, HashSet<string>?>(StringComparer.OrdinalIgnoreCase);
+
+                result.Planned.AddRange(ordered.Select(w => PlanProgramFile(softwarePath, w, groupNames)));
 
                 _logger?.LogInformation(
                     "PLC program preview of '{Directory}' for '{Software}': {Planned} file(s) would be imported, {Ignored} ignored",
@@ -351,26 +355,26 @@ namespace TiaMcpServer.Siemens
         /// <summary>
         /// What importing one file would do. The object name is taken from the file name, which is
         /// how ExportPlcProgram wrote it; an object that is found in the project is overwritten, one
-        /// that is not is created. A lookup that fails says 'unknown' instead of guessing.
+        /// that is not is created. When the group itself cannot be read (no project, software or
+        /// group found, or Openness fails) the answer is 'unknown': a missing object and a failed
+        /// lookup must not look the same.
         /// </summary>
-        private PlannedProgramItem PlanProgramFile(string softwarePath, ProgramFile file)
+        private PlannedProgramItem PlanProgramFile(string softwarePath, ProgramFile file, Dictionary<string, HashSet<string>?> groupNames)
         {
             var name = Path.GetFileNameWithoutExtension(file.File);
             var path = file.GroupPath.Length == 0 ? name : file.GroupPath + "/" + name;
             var isType = file.Kind == ProgramFileKind.UdtSource;
+            var key = (isType ? "type:" : "block:") + file.GroupPath;
 
-            string action;
+            if (!groupNames.TryGetValue(key, out var names))
+            {
+                names = ObjectNamesInGroup(softwarePath, file.GroupPath, isType);
+                groupNames[key] = names;
+            }
 
-            try
-            {
-                action = (isType ? (object?)GetType(softwarePath, path) : GetBlock(softwarePath, path)) != null
-                    ? PlannedProgramItem.Overwrite
-                    : PlannedProgramItem.Create;
-            }
-            catch (Exception)
-            {
-                action = PlannedProgramItem.Unknown;
-            }
+            var action = names == null
+                ? PlannedProgramItem.Unknown
+                : names.Contains(name) ? PlannedProgramItem.Overwrite : PlannedProgramItem.Create;
 
             return new PlannedProgramItem
             {
@@ -381,6 +385,28 @@ namespace TiaMcpServer.Siemens
                 Format = file.Kind == ProgramFileKind.XmlBlock ? "xml" : "source",
                 Action = action
             };
+        }
+
+        /// <summary>
+        /// The names of the blocks or PLC data types directly in one group, or null when the group
+        /// cannot be read.
+        /// </summary>
+        private HashSet<string>? ObjectNamesInGroup(string softwarePath, string groupPath, bool isType)
+        {
+            try
+            {
+                var names = isType
+                    ? GetPlcTypeGroupByPath(softwarePath, groupPath)?.Types.Select(t => t.Name)
+                    : GetPlcBlockGroupByPath(softwarePath, groupPath)?.Blocks.Select(b => b.Name);
+
+                return names == null ? null : new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogDebug(ex, "Could not read the {Kind} group '{Group}' of '{Software}'", isType ? "type" : "block", groupPath, softwarePath);
+
+                return null;
+            }
         }
 
         private List<ImportedProgramItem> ImportProgramFile(string softwarePath, ProgramFile file, GenerateBlockOption option)

@@ -247,6 +247,35 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        public void Test_935_IsImportConfirmation_AcceptsOnlyTheExactPhrase()
+        {
+            // Act and Assert
+            Assert.IsTrue(McpServer.IsImportConfirmation("yes, import"));
+            Assert.IsTrue(McpServer.IsImportConfirmation("  Yes, Import "), "case and surrounding spaces do not matter");
+
+            foreach (var answer in new string?[] { null, "", "yes", "import", "import plc program changes", "yes import", "yes, import everything" })
+            {
+                Assert.IsFalse(McpServer.IsImportConfirmation(answer), $"'{answer}' is not the confirmation");
+            }
+        }
+
+        [TestMethod]
+        public void Test_936_ImportTools_AskTheClientForTheServerSideConfirmation()
+        {
+            foreach (var name in new[] { nameof(McpServer.OverwritePlcProgram), nameof(McpServer.ImportPlcProgramChanges) })
+            {
+                // Act
+                var parameters = typeof(McpServer).GetMethod(name)!.GetParameters();
+
+                // Assert
+                Assert.IsTrue(parameters.Any(p => p.ParameterType == typeof(global::ModelContextProtocol.Server.McpServer)),
+                    $"{name} needs the MCP server instance to open the confirmation dialog");
+                Assert.IsTrue(parameters.Any(p => p.ParameterType == typeof(System.Threading.CancellationToken)), name);
+                Assert.AreEqual(typeof(System.Threading.Tasks.Task<ResponseImportedProgram>), typeof(McpServer).GetMethod(name)!.ReturnType, name);
+            }
+        }
+
+        [TestMethod]
         public void Test_934_Descriptions_SteerEditedFilesToImportPlcProgramChanges()
         {
             // Arrange

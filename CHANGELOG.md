@@ -65,7 +65,15 @@
 - __`dryRun` first__: `OverwritePlcProgram` and `ImportPlcProgramChanges` default to `dryRun=true`. A call
   without the argument imports nothing and returns `Planned`: every file that would be imported, with its object
   and `create` or `overwrite`. The tool descriptions and the prompts tell the agent to show that list to the user
-  and to call again with `dryRun=false` only after the user answers "yes, import". After the import the agent must not save by itself; it calls `SaveProject` only after the user says "save project".
+  and to call again with `dryRun=false` only after the user agrees. A real run is then confirmed by the server
+  itself: it opens a confirmation dialog in the client (MCP elicitation) and imports only when the user types
+  "yes, import"; declining or cancelling imports nothing, and a client without elicitation is refused. The agent is
+  told not to save by itself and to call `SaveProject` only after the user says "save project"; that part is an
+  instruction to the agent and not enforced.
+
+- __Dry run lookups per group__: the preview reads each group's object names once instead of looking up every file,
+  which made a preview of several hundred objects take minutes. A group that cannot be read reports `unknown`
+  instead of `create`, so a failed lookup no longer looks like a new object.
 
 - __`ImportPlcProgramChanges`__: imports only the files below `<exportPath>/<softwarePath>/` that git reports as
   changed since the last commit (modified, staged and new files), instead of the whole tree. Deleted files are

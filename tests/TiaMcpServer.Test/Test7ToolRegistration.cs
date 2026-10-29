@@ -499,6 +499,7 @@ namespace TiaMcpServer.Test
         // Parameters the SDK fills in (cancellation, progress) are not part of the tool's input.
         private static bool IsClientParameter(ParameterInfo parameter) =>
             parameter.ParameterType != typeof(System.Threading.CancellationToken)
+            && parameter.ParameterType != typeof(global::ModelContextProtocol.Server.McpServer)
             && !(parameter.ParameterType.IsGenericType && parameter.ParameterType.GetGenericTypeDefinition() == typeof(IProgress<>));
 
         private static IEnumerable<string> StyleProblems(string kind, string name, string? text, int maxLength)

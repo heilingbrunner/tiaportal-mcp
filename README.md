@@ -154,7 +154,13 @@ suits it:
   not pick it for a vague "import" request.
 - Both tools **preview by default**: `dryRun` is `true`, nothing is imported, and `Planned` lists every
   object with `create` or `overwrite` (the action is derived from the file name). The tool descriptions and
-  prompts tell the agent to show that list to you, ask "Import these now? Reply: yes, import", and call again with `dryRun=false` only after you answer "yes, import". It must not save on its own: `SaveProject` (`SaveSession` in a local session) is called only after you say "save project".
+  prompts tell the agent to show that list to you.
+- A real run (`dryRun=false`) is confirmed by **you, through the server**: it shows a confirmation dialog in the
+  client (MCP elicitation) listing what would be imported and how many objects are overwritten, and imports only
+  when you type "yes, import". The agent cannot answer it for you, and declining or cancelling imports nothing. A
+  client without elicitation support is refused with a message saying so; it can still run the preview.
+- Saving is not guarded by the server: the agent is told to call `SaveProject` (`SaveSession` in a local session)
+  only after you say "save project", which depends on the agent following that instruction.
   Clients can still prompt before every call, because the tools carry `destructiveHint`.
 - Import puts each file into the group its folder implies; the group must already exist. An `.xml` file counts
   only below the `Program blocks` folder.

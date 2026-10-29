@@ -38,8 +38,8 @@ Overwrite the whole program of one PLC software in one call with the files of a 
 
 Blocks and PLC data types of the same name in the open project are REPLACED by the file content. Always preview first:
 1. Call the tool with dryRun true. Nothing is imported; 'Planned' lists every object with 'create' or 'overwrite'
-2. Show the list to the user, name the objects that would be overwritten, and ask: 'Import these now? Reply: yes, import'
-3. Only after the user explicitly answers 'yes, import' (a vague follow-up is not enough), call the tool again with dryRun false
+2. Show the list to the user, name the objects that would be overwritten, and ask whether to import
+3. Only after the user agrees, call the tool again with dryRun false. The server then opens a confirmation dialog in which the user has to type 'yes, import'; do not answer it for the user. Without that answer nothing is imported, and a client without such dialogs cannot run the import
 4. Do not save on your own. Tell the user the change is only in memory and ask whether to save; call SaveProject (or SaveSession in a local session) only after the user explicitly says 'save project'
 
 What happens:
@@ -73,8 +73,8 @@ Overwrite objects of one PLC software with only the files of an export folder th
 
 Blocks and PLC data types of the same name in the open project are REPLACED by the file content. Always preview first:
 1. Call the tool with dryRun true. Nothing is imported; 'Planned' lists every changed file with its object and 'create' or 'overwrite'
-2. Show the list to the user, name the objects that would be overwritten, and ask: 'Import these now? Reply: yes, import'
-3. Only after the user explicitly answers 'yes, import' (a vague follow-up is not enough), call the tool again with dryRun false
+2. Show the list to the user, name the objects that would be overwritten, and ask whether to import
+3. Only after the user agrees, call the tool again with dryRun false. The server then opens a confirmation dialog in which the user has to type 'yes, import'; do not answer it for the user. Without that answer nothing is imported, and a client without such dialogs cannot run the import
 4. Do not save on your own. Tell the user the change is only in memory and ask whether to save; call SaveProject (or SaveSession in a local session) only after the user explicitly says 'save project'
 
 Typical flow: ExportPlcProgram into the git folder, commit the export as baseline, edit files, then this tool.
