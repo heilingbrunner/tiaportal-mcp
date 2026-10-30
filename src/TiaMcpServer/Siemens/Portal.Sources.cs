@@ -1536,6 +1536,9 @@ namespace TiaMcpServer.Siemens
         /// <summary>Objects that failed to generate, with the reason.</summary>
         public List<string> Failures { get; set; } = new List<string>();
 
+        /// <summary>Things the user should know about the run, e.g. a settings file that was created and needs checking.</summary>
+        public List<string> Notes { get; set; } = new List<string>();
+
         /// <summary>Files written per area, so a caller need not count the list itself.</summary>
         public Dictionary<string, int> Written => new Dictionary<string, int>
         {

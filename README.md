@@ -84,7 +84,7 @@ To enable write mode, add the argument to your client configuration, for example
 
 ## Tools
 
-Read-only tools (67) are always available.
+Read-only tools (68) are always available.
 
 | Area                          | Tools                                                                                                                                              |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -104,7 +104,7 @@ Read-only tools (67) are always available.
 | Block documents (V20+)        | `ExportAsDocuments`, `ExportBlocksAsDocuments`                                                 |
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                  |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`    |
-| Whole PLC program             | `ExportPlcProgram` (sources and XML, see below)                                                                                                    |
+| Whole PLC program             | `ExportPlcProgram` (format per object type from `tia.json`, see below), `GetExportFormats`                                                   |
 
 Write tools (51) require `--allow-write`.
 
@@ -131,17 +131,50 @@ Paths used by these tools are **root-relative**: `1_Tests/FC_Block_1`, not
 
 ### Whole PLC program: `ExportPlcProgram`, `OverwritePlcProgram` and `ImportPlcProgramChanges`
 
-These tools move all blocks and PLC data types of a PLC software in one call, each object in the format that
-suits it:
+These tools move all blocks and PLC data types of a PLC software in one call. `ExportPlcProgram` writes each
+object in the format TIA Portal is configured for (Options > Settings > Version control interface > Export
+formats). Openness cannot read that setting, so it is kept in `<exportPath>/tia.json`. If the file does not
+exist, the server creates it with the defaults TIA Portal offers for a new workspace:
 
-| Object                     | File   | Format                                                                                       |
-| -------------------------- | ------ | -------------------------------------------------------------------------------------------- |
-| SCL block                  | `.scl` | external source                                                                              |
-| STL block                  | `.awl` | external source (TIA Portal names STL sources `.awl`; a `.stl` file is not a source and is not read) |
-| Data block                 | `.db`  | external source                                                                              |
-| PLC data type              | `.udt` | external source                                                                              |
-| LAD block                  | `.xml` | SimaticML, because TIA Portal generates no source for LAD                                    |
-| FBD, GRAPH and other blocks | none   | skipped and listed in `Skipped` with the reason; use `ExportXmlBlock` or `ExportAsDocuments` |
+```json
+{
+  "version control interface": {
+    "code blocks-LAD": "SIMATIC SD(.s7dcl, .s7res)",
+    "code blocks-FBD": "SIMATIC SD(.s7dcl, .s7res)",
+    "code blocks-SCL": "SIMATIC SD(.s7dcl, .s7res)",
+    "code blocks-STL": ".awl",
+    "data blocks": "SIMATIC SD(.s7dcl, .s7res)",
+    "safety data blocks (F-DBs)": "SIMATIC SD(.s7dcl, .s7res)",
+    "PLC data types": "SIMATIC SD(.s7dcl, .s7res)",
+    "F-compliant PLC data types (UDT)": "SIMATIC SD(.s7dcl, .s7res)"
+  }
+}
+```
+
+**Check a created file** against Options > Settings > Version control interface > Export formats and correct it if
+your TIA Portal differs. The response of `ExportPlcProgram` (`Notes` and the message) and of `GetExportFormats`
+(`Created`, `Hint`) says when the file was just created, and the export continues with those values. An existing
+file is never overwritten. Keys and values are not case sensitive; the value is the text TIA Portal shows
+(`SIMATIC SD(.s7dcl, .s7res)`, `.xml`, `.awl`, `.scl`, `.db` or `.udt`). When the file lacks an entry for an object
+type that occurs in the PLC, or holds a value that is not a known format, `ExportPlcProgram` fails **before it
+writes anything** and says what to fix. `GetExportFormats(exportPath)` shows what the file says and which export
+tool writes each format.
+
+| Configured format                | Files                    | Written as                                                                          |
+| -------------------------------- | ------------------------ | ----------------------------------------------------------------------------------- |
+| `SIMATIC SD(.s7dcl, .s7res)`     | `.s7dcl`, `.s7res`       | documents (blocks need TIA Portal V20, PLC data types V21)                          |
+| `.xml`                           | `.xml`                   | SimaticML                                                                           |
+| `.awl`, `.scl`, `.db`, `.udt`    | the same extension       | external source (a block without a source form, e.g. LAD, is skipped with a reason) |
+
+SIMATIC SD documents need a project that is prepared for that format: TIA Portal refuses an object with "needs
+preparation for the format of Simatic SD" until you select it and run **Tools > Prepare for Simatic SD**. Openness
+has no call for that step, so `ExportPlcProgram` cannot do it. Such an object is listed in `Failures` with the
+message of TIA Portal, and the export goes on with the others; an export that finished with warnings is named in
+`Notes`.
+
+Blocks of a language that has no entry in the settings (GRAPH, for example) are skipped and listed in `Skipped`; use `ExportXmlBlock`
+or `ExportAsDocuments` for them. `OverwritePlcProgram` and `ImportPlcProgramChanges` still import only sources and
+XML, so the files of a SIMATIC SD folder are not imported by them.
 
 - Layout: `<exportPath>/<softwarePath>/Program blocks/<groups>/` and `.../PLC data types/<groups>/`, one file per
   object, always mirroring the project groups. It is the tree `ExportSources` writes, so an XML file lies next to

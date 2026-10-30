@@ -16,5 +16,8 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>Objects that failed to generate, with the reason.</summary>
         public IEnumerable<string>? Failures { get; set; }
+
+        /// <summary>Things to check or know after the run, e.g. a created settings file. Null when there are none.</summary>
+        public IEnumerable<string>? Notes { get; set; }
     }
 }

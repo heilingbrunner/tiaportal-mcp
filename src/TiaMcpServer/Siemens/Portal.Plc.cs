@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging;
 using Siemens.Engineering;
+using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.ExternalSources;
+using Siemens.Engineering.SW.Types;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -38,28 +40,41 @@ namespace TiaMcpServer.Siemens
         #region export
 
         /// <summary>
-        /// Writes every PLC data type and program block of one PLC software: sources where Openness
-        /// can generate them, XML for LAD, nothing for the rest. One file per object, always
-        /// mirroring the project groups. Skip-and-continue: an object that cannot be written is
-        /// reported in Skipped (no usable format, inconsistent, know-how protected) or Failures.
+        /// Writes every PLC data type and program block of one PLC software, each in the format the
+        /// export format settings of '&lt;exportPath&gt;/tia.json' configure for its object type:
+        /// SIMATIC SD documents, SimaticML or a source file. The settings are required, because
+        /// Openness cannot read them; a missing file or entry fails the call before anything is
+        /// written. One file per object, always mirroring the project groups. Skip-and-continue: an
+        /// object that cannot be written is reported in Skipped (no usable format, inconsistent,
+        /// know-how protected) or Failures.
         /// </summary>
         public GeneratedSourcesResult ExportPlcProgram(string softwarePath, string exportPath)
         {
             return Operation.Run(_logger, nameof(ExportPlcProgram), PortalErrorCode.ExportFailed,
                 () =>
                 {
-                    // Fail before writing anything when the path is wrong.
+                    // Fail before writing anything when the path is wrong or the settings are missing.
                     var group = GetSourceSystemGroup(softwarePath);
+
+                    // The settings file sits at the export root, the program below <softwarePath>.
+                    var settings = ExportFormatSettings.Load(exportPath);
 
                     exportPath = ResolveSoftwareRoot(exportPath, softwarePath);
 
                     var result = new GeneratedSourcesResult { Directory = exportPath };
+
+                    if (settings.Hint != null)
+                    {
+                        result.Notes.Add(settings.Hint);
+                    }
+
                     var sourceBlocks = new List<PlcBlock>();
                     var xmlBlocks = new List<PlcBlock>();
+                    var documentBlocks = new List<PlcBlock>();
 
                     foreach (var block in GetBlocks(softwarePath))
                     {
-                        var plan = PlcProgram.ClassifyBlock(block is DataBlock, block.ProgrammingLanguage);
+                        var plan = PlcProgram.PlanBlock(block is DataBlock, block.ProgrammingLanguage, settings);
 
                         switch (plan.Format)
                         {
@@ -71,13 +86,20 @@ namespace TiaMcpServer.Siemens
                                 xmlBlocks.Add(block);
                                 break;
 
+                            case ProgramBlockFormat.Document:
+                                documentBlocks.Add(block);
+                                break;
+
                             default:
                                 result.Skipped.Add($"block {GetBlockPath(block)}: {plan.Reason}");
                                 break;
                         }
                     }
 
-                    GenerateTypes(result, group, GetTypes(softwarePath), exportPath, withDependencies: false, preservePath: true);
+                    var types = GetTypes(softwarePath);
+                    var typeFormat = PlcProgram.PlanType(settings);
+
+                    ExportProgramTypes(result, group, types, typeFormat, exportPath);
                     GenerateBlocks(result, group, sourceBlocks, exportPath, withDependencies: false, preservePath: true);
 
                     foreach (var block in xmlBlocks)
@@ -90,6 +112,16 @@ namespace TiaMcpServer.Siemens
                         }
                     }
 
+                    foreach (var block in documentBlocks)
+                    {
+                        var blockPath = GetBlockPath(block);
+
+                        if (!Skip(result, "block", blockPath, block.IsConsistent, block.IsKnowHowProtected))
+                        {
+                            TryGenerate(result, "block", blockPath, () => ExportBlockDocument(block, blockPath, exportPath, result.Notes.Add));
+                        }
+                    }
+
                     _logger?.LogInformation(
                         "PLC program of '{Software}' written to '{Directory}': {Written} file(s), {Skipped} skipped, {Failed} failed",
                         softwarePath, exportPath, result.Files.Count, result.Skipped.Count, result.Failures.Count);
@@ -97,6 +129,142 @@ namespace TiaMcpServer.Siemens
                     return result;
                 },
                 ("softwarePath", softwarePath), ("exportPath", exportPath));
+        }
+
+        /// <summary>The PLC data types in the configured format: source file, SimaticML or SIMATIC SD documents.</summary>
+        private void ExportProgramTypes(
+            GeneratedSourcesResult result,
+            PlcExternalSourceSystemGroup group,
+            IEnumerable<PlcType> types,
+            ExportFormatKind format,
+            string exportPath)
+        {
+            if (format == ExportFormatKind.Source)
+            {
+                GenerateTypes(result, group, types, exportPath, withDependencies: false, preservePath: true);
+
+                return;
+            }
+
+            foreach (var type in types)
+            {
+                var typePath = GetTypePath(type);
+
+                if (Skip(result, "type", typePath, type.IsConsistent, type.IsKnowHowProtected))
+                {
+                    continue;
+                }
+
+                TryGenerate(result, "type", typePath, () => format == ExportFormatKind.Xml
+                    ? ExportTypeXml(type, typePath, exportPath)
+                    : ExportTypeDocument(type, typePath, exportPath, result.Notes.Add));
+            }
+        }
+
+        /// <summary>Writes one PLC data type as SimaticML into its group folder, replacing an existing file.</summary>
+        private GeneratedSource ExportTypeXml(PlcType type, string typePath, string exportPath)
+        {
+            var directory = TypeSourceDirectory(type, exportPath, preservePath: true);
+
+            Directory.CreateDirectory(directory);
+
+            var file = Path.Combine(directory, FileNames.Safe(type.Name) + PlcProgram.XmlExtension);
+
+            if (File.Exists(file))
+            {
+                File.Delete(file);
+            }
+
+            type.Export(new FileInfo(file), ExportOptions.None);
+
+            return new GeneratedSource
+            {
+                Name = type.Name,
+                Path = typePath,
+                File = file,
+                Format = PlcProgram.XmlExtension,
+                Language = "UDT",
+                Size = new FileInfo(file).Length
+            };
+        }
+
+        /// <summary>Writes one block as SIMATIC SD documents ('.s7dcl', '.s7res'); needs TIA Portal V20.</summary>
+        private GeneratedSource ExportBlockDocument(PlcBlock block, string blockPath, string exportPath, Action<string> warn)
+        {
+            if (Engineering.TiaMajorVersion < 20)
+            {
+                throw new PortalException(PortalErrorCode.NotSupported, "SIMATIC SD documents of blocks need TIA Portal V20 or newer");
+            }
+
+            var directory = BlockSourceDirectory(block, exportPath, preservePath: true);
+
+            return WriteDocuments(directory, block.Name, blockPath, block.ProgrammingLanguage.ToString(),
+                name => block.ExportAsDocuments(new DirectoryInfo(directory), name), warn);
+        }
+
+        /// <summary>Writes one PLC data type as SIMATIC SD documents ('.s7dcl', '.s7res'); needs TIA Portal V21.</summary>
+        private GeneratedSource ExportTypeDocument(PlcType type, string typePath, string exportPath, Action<string> warn)
+        {
+            if (Engineering.TiaMajorVersion < 21)
+            {
+                throw new PortalException(PortalErrorCode.NotSupported, "SIMATIC SD documents of PLC data types need TIA Portal V21 or newer");
+            }
+
+            var directory = TypeSourceDirectory(type, exportPath, preservePath: true);
+
+            return WriteDocuments(directory, type.Name, typePath, "UDT", name => ExportOneType(type, directory), warn);
+        }
+
+        /// <summary>Replaces the document files of one object and reports the '.s7dcl' file that landed on disk.</summary>
+        private GeneratedSource WriteDocuments(
+            string directory,
+            string objectName,
+            string objectPath,
+            string language,
+            Func<string, DocumentExportResult?> export,
+            Action<string> warn)
+        {
+            Directory.CreateDirectory(directory);
+
+            var baseName = FileNames.Safe(objectName);
+            var documentFile = Path.Combine(directory, baseName + PlcProgram.DocumentExtension);
+            var resourceFile = Path.Combine(directory, baseName + ".s7res");
+
+            foreach (var stale in new[] { documentFile, resourceFile })
+            {
+                if (File.Exists(stale))
+                {
+                    File.Delete(stale);
+                }
+            }
+
+            var outcome = export(baseName);
+            var info = Describe(outcome, directory, baseName);
+
+            if (outcome == null || outcome.State == DocumentResultState.Failure || !File.Exists(documentFile))
+            {
+                throw new PortalException(PortalErrorCode.ExportFailed,
+                    $"TIA Portal reported '{(string.IsNullOrEmpty(info.State) ? "no file" : info.State)}' exporting '{objectPath}' as documents. " +
+                    (info.Messages.Count > 0
+                        ? string.Join("; ", info.Messages)
+                        : "No further detail was returned. If TIA Portal shows 'needs preparation for the format of Simatic SD', " +
+                          "select the object there and run Tools > Prepare for Simatic SD, then export again."));
+            }
+
+            if (outcome.State == DocumentResultState.PartialSuccess)
+            {
+                warn($"{objectPath}: exported with warnings" + (info.Messages.Count > 0 ? ": " + string.Join("; ", info.Messages) : string.Empty));
+            }
+
+            return new GeneratedSource
+            {
+                Name = objectName,
+                Path = objectPath,
+                File = documentFile,
+                Format = PlcProgram.DocumentExtension,
+                Language = language,
+                Size = new FileInfo(documentFile).Length
+            };
         }
 
         /// <summary>

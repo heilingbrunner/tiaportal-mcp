@@ -4,6 +4,21 @@
 
 ### Added
 
+- __`ExportPlcProgram` follows the export formats of TIA Portal, `GetExportFormats`__: each object is written in
+  the format TIA Portal is configured for (Options > Settings > Version control interface > Export formats):
+  SIMATIC SD documents (`.s7dcl`, `.s7res`), SimaticML (`.xml`) or a source file (`.scl`, `.awl`, `.db`, `.udt`).
+  Openness cannot read that setting (the settings tree it offers has no export formats), so it is read from
+  `<exportPath>/tia.json`:
+  `{"version control interface": {"code blocks-LAD": "SIMATIC SD(.s7dcl, .s7res)", "code blocks-STL": ".awl", ...}}`.
+  A missing file is created with the defaults TIA Portal offers for a new workspace, and the response asks the
+  user to check it (`Notes` of `ExportPlcProgram`, `Created` and `Hint` of `GetExportFormats`); an existing file is
+  never overwritten. Without an entry for an object type of the PLC, or with an unknown format, the call fails
+  before writing anything. SIMATIC SD documents need the object to be prepared in TIA Portal (Tools > Prepare
+  for Simatic SD); an object that is not prepared is listed in `Failures` with the message of TIA Portal.
+  FBD blocks are exported when the settings give them a format; GRAPH blocks have no entry and are skipped. `ExportPlcProgram` no longer takes
+  `regexName`: it exports the whole program. The new read-only tool `GetExportFormats(exportPath)` shows the
+  file and the export tool that writes each format. `OverwritePlcProgram` and `ImportPlcProgramChanges` still
+  import only sources and XML.
 - __`ExportOpcUaXml`__: exports the OPC UA data of one PLC as `<exportPath>/<softwarePath>/OPC UA/<PLC name>.xml`
   (`OpcUaExportProvider.Export`, found through `Project.HwUtilities`). Read-only with respect to the project, so
   it is not gated behind `--allow-write`; it fails with `NotSupported` when TIA Portal does not offer the OPC UA

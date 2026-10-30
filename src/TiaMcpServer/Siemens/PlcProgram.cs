@@ -11,8 +11,11 @@ namespace TiaMcpServer.Siemens
         /// <summary>External source file: '.scl', '.awl' or '.db'.</summary>
         Source,
 
-        /// <summary>SimaticML file: '.xml'. Only LAD blocks, which have no source form.</summary>
+        /// <summary>SimaticML file: '.xml'. Without export format settings only LAD blocks, which have no source form.</summary>
         Xml,
+
+        /// <summary>SIMATIC SD documents: '.s7dcl' and '.s7res'. Only when the export format settings say so.</summary>
+        Document,
 
         /// <summary>Neither; the block is skipped and the reason is reported.</summary>
         None
@@ -92,6 +95,8 @@ namespace TiaMcpServer.Siemens
     {
         public const string XmlExtension = ".xml";
 
+        public const string DocumentExtension = ".s7dcl";
+
         /// <summary>
         /// The extension Openness demands for the source of one block, or null when the block has
         /// no source form. Data blocks are matched by type rather than by language, because the DB
@@ -137,6 +142,73 @@ namespace TiaMcpServer.Siemens
                 null,
                 $"programming language {language} has no source form and only LAD is exported as XML by this tool; " +
                 "use 'ExportXmlBlock' or 'ExportAsDocuments' for it");
+        }
+
+        /// <summary>
+        /// The format of one block as the export format settings configure it for its object type.
+        /// Throws when the settings have no usable entry for the type, so the export fails before it
+        /// writes anything instead of guessing; a block of a language without a setting is skipped.
+        /// </summary>
+        public static BlockPlan PlanBlock(bool isDataBlock, ProgrammingLanguage language, ExportFormatSettings settings)
+        {
+            var key = ExportFormats.BlockKey(isDataBlock, language);
+
+            if (key == null)
+            {
+                return new BlockPlan(
+                    ProgramBlockFormat.None,
+                    null,
+                    $"programming language {language} has no entry in the export format settings; " +
+                    "use 'ExportXmlBlock' or 'ExportAsDocuments' for it");
+            }
+
+            switch (RequireKind(settings, key))
+            {
+                case ExportFormatKind.SimaticSd:
+                    return new BlockPlan(ProgramBlockFormat.Document, DocumentExtension, null);
+
+                case ExportFormatKind.Xml:
+                    return new BlockPlan(ProgramBlockFormat.Xml, XmlExtension, null);
+
+                default:
+                    var extension = SourceExtension(isDataBlock, language);
+
+                    return extension != null
+                        ? new BlockPlan(ProgramBlockFormat.Source, extension, null)
+                        : new BlockPlan(
+                            ProgramBlockFormat.None,
+                            null,
+                            $"'{key}' is configured as {settings.Get(key)}, but a {language} block has no source form");
+            }
+        }
+
+        /// <summary>The format of the PLC data types as the export format settings configure it; throws like <see cref="PlanBlock"/>.</summary>
+        public static ExportFormatKind PlanType(ExportFormatSettings settings)
+        {
+            return RequireKind(settings, ExportFormats.PlcTypesKey);
+        }
+
+        private static ExportFormatKind RequireKind(ExportFormatSettings settings, string key)
+        {
+            var value = settings.Get(key);
+
+            if (value == null)
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams,
+                    $"'{settings.File}' has no entry \"{key}\" in \"{ExportFormats.GroupName}\". Add the export format of TIA Portal for it, " +
+                    $"for example \"{key}\": \".xml\"");
+            }
+
+            var kind = ExportFormats.ParseKind(value);
+
+            if (kind == ExportFormatKind.Unknown)
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams,
+                    $"'{settings.File}': \"{key}\" is \"{value}\", which is not a known export format. " +
+                    "Use the text TIA Portal shows: 'SIMATIC SD(.s7dcl, .s7res)', '.xml', '.awl', '.scl', '.db' or '.udt'");
+            }
+
+            return kind;
         }
 
         /// <summary>

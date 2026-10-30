@@ -12,10 +12,10 @@ namespace TiaMcpServer.ModelContextProtocol
         {
             return $@"Export the whole program of one PLC software in one call, each object in the format that suits it.
 
-What you get:
-- .scl for SCL blocks, .awl for STL blocks, .db for data blocks and .udt for PLC data types, as external source files
-- .xml for LAD blocks, because TIA Portal generates no source for them
-- Blocks in other languages (FBD, GRAPH, ...), inconsistent and know-how protected objects are listed in 'Skipped'; use ExportXmlBlock or ExportAsDocuments for those
+What you get: every object in the format TIA Portal is configured for (Version control interface > Export formats):
+- SIMATIC SD documents (.s7dcl and .s7res), SimaticML (.xml) or an external source file (.scl, .awl, .db, .udt), per object type
+- The formats are read from <exportPath>/tia.json because Openness cannot read them. A missing file is created with the defaults TIA Portal offers for a new workspace; the response then has a note asking the user to check the file, so tell the user. An entry missing for an object type fails the export before anything is written. Call GetExportFormats to see the formats
+- Blocks of a language without a setting, blocks that cannot be written in the configured format, inconsistent and know-how protected objects are listed in 'Skipped'; use ExportXmlBlock or ExportAsDocuments for those
 - Files are written below <exportPath>/<softwarePath>/Program blocks/... and <exportPath>/<softwarePath>/PLC data types/..., mirroring the project groups. OverwritePlcProgram reads the folder back, ImportPlcProgramChanges only the files git reports as changed
 
 Common parameter values:
