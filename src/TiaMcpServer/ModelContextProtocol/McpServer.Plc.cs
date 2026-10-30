@@ -35,11 +35,10 @@ namespace TiaMcpServer.ModelContextProtocol
          Description("Use this to export a whole PLC program in one call: every block and PLC data type of a PLC software, each in the format that suits it. SCL and STL blocks, data blocks and PLC data types are written as source files (.scl, .awl, .db, .udt) and LAD blocks as XML (.xml), into '<exportPath>/<softwarePath>/Program blocks/...' and '<exportPath>/<softwarePath>/PLC data types/...', mirroring the project groups, one file per object. Blocks in other languages (FBD, GRAPH, ...), inconsistent objects and know-how protected ones are reported in 'Skipped' instead of failing the run; export those with 'ExportXmlBlock' or 'ExportAsDocuments'. 'OverwritePlcProgram' reads the folder back, 'ImportPlcProgramChanges' only the files git reports as changed. For only sources use 'ExportSources', for only XML use 'ExportXmlBlocks'")]
         public static ResponseGeneratedSources ExportPlcProgram(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("exportPath: directory on this machine that receives the tree; existing files of the same name are overwritten; files are written below <exportPath>/<softwarePath>/")] string exportPath,
-            [Description("regexName: optional regular expression, exports only objects whose name matches. Empty means all")] string regexName = "")
+            [Description("exportPath: directory on this machine that receives the tree; existing files of the same name are overwritten; files are written below <exportPath>/<softwarePath>/")] string exportPath)
         {
             return GeneratedMany(
-                () => Portal.ExportPlcProgram(softwarePath, exportPath, regexName),
+                () => Portal.ExportPlcProgram(softwarePath, exportPath),
                 $"PLC program of '{softwarePath}'",
                 exportPath);
         }

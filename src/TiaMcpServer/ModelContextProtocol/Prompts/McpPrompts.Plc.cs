@@ -8,7 +8,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region PLC Program Templates
 
         [McpServerPrompt(Name = "ExportPlcProgram"), Description("Export all blocks and PLC data types: sources, and XML for LAD blocks")]
-        public static string ExportPlcProgram(string softwarePath, string exportPath, string regexName = "")
+        public static string ExportPlcProgram(string softwarePath, string exportPath)
         {
             return $@"Export the whole program of one PLC software in one call, each object in the format that suits it.
 
@@ -21,12 +21,10 @@ What you get:
 Common parameter values:
 - softwarePath: normally something like 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes, e.g. ""PC-System_1/Software PLC_1""
 - exportPath: '${{workspacefolder}}/export/Program' is a good default; existing files of the same name are overwritten
-- regexName: Use empty string """" for all objects, or a pattern like ""FB_.*"" to export only matching names
 
 Use the ExportPlcProgram tool with these parameters:
 - softwarePath: {softwarePath}
-- exportPath: {exportPath}
-- regexName: {regexName}";
+- exportPath: {exportPath}";
         }
 
         [McpServerPrompt(Name = "OverwritePlcProgram"), Description("Overwrite a PLC program with a folder written by ExportPlcProgram")]

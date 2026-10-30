@@ -43,7 +43,7 @@ namespace TiaMcpServer.Siemens
         /// mirroring the project groups. Skip-and-continue: an object that cannot be written is
         /// reported in Skipped (no usable format, inconsistent, know-how protected) or Failures.
         /// </summary>
-        public GeneratedSourcesResult ExportPlcProgram(string softwarePath, string exportPath, string regexName = "")
+        public GeneratedSourcesResult ExportPlcProgram(string softwarePath, string exportPath)
         {
             return Operation.Run(_logger, nameof(ExportPlcProgram), PortalErrorCode.ExportFailed,
                 () =>
@@ -57,7 +57,7 @@ namespace TiaMcpServer.Siemens
                     var sourceBlocks = new List<PlcBlock>();
                     var xmlBlocks = new List<PlcBlock>();
 
-                    foreach (var block in GetBlocks(softwarePath, regexName))
+                    foreach (var block in GetBlocks(softwarePath))
                     {
                         var plan = PlcProgram.ClassifyBlock(block is DataBlock, block.ProgrammingLanguage);
 
@@ -77,7 +77,7 @@ namespace TiaMcpServer.Siemens
                         }
                     }
 
-                    GenerateTypes(result, group, GetTypes(softwarePath, regexName), exportPath, withDependencies: false, preservePath: true);
+                    GenerateTypes(result, group, GetTypes(softwarePath), exportPath, withDependencies: false, preservePath: true);
                     GenerateBlocks(result, group, sourceBlocks, exportPath, withDependencies: false, preservePath: true);
 
                     foreach (var block in xmlBlocks)
@@ -96,7 +96,7 @@ namespace TiaMcpServer.Siemens
 
                     return result;
                 },
-                ("softwarePath", softwarePath), ("exportPath", exportPath), ("regexName", regexName));
+                ("softwarePath", softwarePath), ("exportPath", exportPath));
         }
 
         /// <summary>

@@ -146,7 +146,7 @@ suits it:
 - Layout: `<exportPath>/<softwarePath>/Program blocks/<groups>/` and `.../PLC data types/<groups>/`, one file per
   object, always mirroring the project groups. It is the tree `ExportSources` writes, so an XML file lies next to
   the sources of its group.
-- `ExportPlcProgram(softwarePath, exportPath, regexName)` only writes files. `OverwritePlcProgram(softwarePath,
+- `ExportPlcProgram(softwarePath, exportPath)` only writes files. `OverwritePlcProgram(softwarePath,
   importPath, regexName, keepOnError, dryRun)` changes the project and needs `--allow-write`. Blocks and types of the same name in the open project are **replaced** by the file content.
   The tool description tells the agent so.
 - Prefer `ImportPlcProgramChanges` for edited files; use `OverwritePlcProgram` only to replace the whole tree (first
@@ -210,6 +210,8 @@ Prompts:
 - 'export blocks as sources, which match regex name pattern ".+HMI_.+"'
 - 'export all tags'
 - 'import modified type sources'
+- 'get project tree and save output to project-tree.txt'
+- 'get software tree and save output to software-tree.txt'
 - 'save project'
 - 'compile project'
 - 'close project'
