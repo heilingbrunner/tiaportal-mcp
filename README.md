@@ -130,12 +130,23 @@ Write tools (51) require `--allow-write`.
 Paths used by these tools are **root-relative**: `1_Tests/FC_Block_1`, not
 `Program blocks/1_Tests/FC_Block_1`. Use `GetProjectTree` and `GetSoftwareTree` to discover them.
 
-### Whole PLC program: `ExportPlcProgram`, `OverwritePlcProgram` and `ImportPlcProgramChanges`
+### `tia.json`: the export formats of TIA Portal
 
-These tools move all blocks and PLC data types of a PLC software in one call. `ExportPlcProgram` writes each
-object in the format TIA Portal is configured for (Options > Settings > Version control interface > Export
-formats). Openness cannot read that setting, so it is kept in `<exportPath>/tia.json`. If the file does not
-exist, the server creates it with the defaults TIA Portal offers for a new workspace:
+TIA Portal exports each kind of object in the format set under **Options > Settings > Version control interface >
+Export formats**: SIMATIC SD documents (`.s7dcl`, `.s7res`), SimaticML (`.xml`) or a source file. Openness cannot
+read that setting (the settings tree it offers has no export formats), so the server keeps the formats in a plain,
+visible file at the root of the export folder:
+
+```
+<exportPath>/tia.json
+```
+
+It is one file for all PLCs below `<exportPath>`, because the setting is global. It is meant to be kept and committed
+together with the export, so everyone who works with the folder uses the same formats.
+
+**You normally do not write it.** The first time a tool needs it and it does not exist, the server creates it with the
+defaults TIA Portal offers for a new workspace:
+
 
 ```json
 {
@@ -152,20 +163,58 @@ exist, the server creates it with the defaults TIA Portal offers for a new works
 }
 ```
 
-**Check a created file** against Options > Settings > Version control interface > Export formats and correct it if
-your TIA Portal differs. The response of `ExportPlcProgram` (`Notes` and the message) and of `GetExportFormats`
-(`Created`, `Hint`) says when the file was just created, and the export continues with those values. An existing
-file is never overwritten. Keys and values are not case sensitive; the value is the text TIA Portal shows
-(`SIMATIC SD(.s7dcl, .s7res)`, `.xml`, `.awl`, `.scl`, `.db` or `.udt`). When the file lacks an entry for an object
-type that occurs in the PLC, or holds a value that is not a known format, `ExportPlcProgram` fails **before it
-writes anything** and says what to fix. `GetExportFormats(exportPath)` shows what the file says and which export
-tool writes each format.
+Available file formats per object type; the first one listed is the default of a new file:
 
-| Configured format                | Files                    | Written as                                                                          |
-| -------------------------------- | ------------------------ | ----------------------------------------------------------------------------------- |
-| `SIMATIC SD(.s7dcl, .s7res)`     | `.s7dcl`, `.s7res`       | documents (blocks need TIA Portal V20, PLC data types V21)                          |
-| `.xml`                           | `.xml`                   | SimaticML                                                                           |
-| `.awl`, `.scl`, `.db`, `.udt`    | the same extension       | external source (a block without a source form, e.g. LAD, is skipped with a reason) |
+| Key                                | Available formats                                     |
+| ---------------------------------- | ----------------------------------------------------- |
+| `code blocks-LAD`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`                  |
+| `code blocks-FBD`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`                  |
+| `code blocks-SCL`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.scl`, `.xml`          |
+| `code blocks-STL`                  | `.awl`, `.xml`                                        |
+| `data blocks`                      | `SIMATIC SD(.s7dcl, .s7res)`, `.db`, `.xml`           |
+| `safety data blocks (F-DBs)`       | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`                  |
+| `PLC data types`                   | `SIMATIC SD(.s7dcl, .s7res)`, `.udt`, `.xml`          |
+| `F-compliant PLC data types (UDT)` | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`                  |
+
+**Check a created file.** The server cannot see your TIA Portal settings, so the defaults may differ from yours. The
+response of `ExportPlcProgram` (`Notes` and the message) and of `GetExportFormats` (`Created`, `Hint`) says when the
+file was just created and asks you to compare it with the dialog above. Correct it by hand if it differs. The file
+only tells the server what to write; it does not change the setting in TIA Portal. An existing file is never
+overwritten.
+
+Each key names an object type, the value is the text TIA Portal shows for it:
+
+| Value                         | Written as                                                 | Fits                                                 |
+| ----------------------------- | ---------------------------------------------------------- | ---------------------------------------------------- |
+| `SIMATIC SD(.s7dcl, .s7res)`  | documents, `.s7dcl` and `.s7res` (blocks V20+, types V21+) | every block and PLC data type except STL blocks      |
+| `.xml`                        | SimaticML, `.xml`                                          | every block and PLC data type                        |
+| `.awl`, `.scl`, `.db`, `.udt` | external source, the same extension                        | STL, SCL, data blocks, PLC data types (not LAD, FBD) |
+
+| Key                                                              | Controls                                                 |
+| ---------------------------------------------------------------- | -------------------------------------------------------- |
+| `code blocks-LAD`, `-FBD`, `-SCL`, `-STL`                        | blocks of that language                                  |
+| `data blocks`                                                    | data blocks                                              |
+| `PLC data types`                                                 | PLC data types                                           |
+| `safety data blocks (F-DBs)`, `F-compliant PLC data types (UDT)` | listed as TIA Portal shows them; not read separately yet |
+
+Rules:
+- Keys and values are not case sensitive. Other keys are kept and shown but have no effect, so a longer file from a
+  copy does not break anything.
+- If the file has no entry for an object type that occurs in the PLC, holds a value that is not one of the formats
+  above, or is not valid JSON, `ExportPlcProgram` fails **before it writes anything** and names the file and the key.
+- A block of a language without an entry (GRAPH, for example) is skipped and listed in `Skipped`. A source format for
+  a block that has no source form (LAD as `.awl`) is skipped with a reason.
+
+Who reads it: `ExportPlcProgram` decides the format of every object from it. `GetExportFormats(exportPath)` shows what
+the file says and which export tool writes each format, so an agent can pick the right one. The narrow export tools
+(`ExportXmlBlock`, `ExportSourceBlock`, `ExportAsDocuments`, ...) do what their name says and do not read it. The import
+tools do not read it either.
+
+### Whole PLC program: `ExportPlcProgram`, `OverwritePlcProgram` and `ImportPlcProgramChanges`
+
+These tools move all blocks and PLC data types of a PLC software in one call. `ExportPlcProgram` writes each
+object in the format that [`tia.json`](#tiajson-the-export-formats-of-tia-portal) gives for its object type; the file
+is created with defaults when it is missing, so check it.
 
 SIMATIC SD documents need a project that is prepared for that format: TIA Portal refuses an object with "needs
 preparation for the format of Simatic SD" until you select it and run **Tools > Prepare for Simatic SD**. Openness
@@ -246,6 +295,9 @@ Prompts:
 - 'import modified type sources'
 - 'get project tree and save output to project-tree.txt'
 - 'get software tree and save output to software-tree.txt'
+- 'export watch tables'
+- 'export force tables'
+- 'export opc ua'
 - 'save project'
 - 'compile project'
 - 'close project'
