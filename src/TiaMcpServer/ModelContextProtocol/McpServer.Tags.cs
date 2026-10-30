@@ -341,12 +341,12 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "ExportXmlWatchTable", Title = "Export watch table as XML", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Export one PLC watch table as an XML file into exportPath, below its watch table group folders when preservePath is true")]
+         Description("Export one PLC watch table as an XML file into the watch and force tables folder below exportPath (named as TIA Portal names it in the current interface language), below its watch table group folders when preservePath is true")]
         public static ResponseExportXmlWatchTable ExportXmlWatchTable(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("watchTablePath: root-relative path of the watch table, e.g. 'WatchGroup1/WatchTable_1'")] string watchTablePath,
             [Description("exportPath: directory on this machine that receives the XML file; files are written below <exportPath>/<softwarePath>/")] string exportPath,
-            [Description("preservePath: recreate the watch table group structure below exportPath")] bool preservePath = false)
+            [Description("preservePath: recreate the watch table group structure below exportPath, inside the watch and force tables system folder as TIA Portal names it in the current interface language")] bool preservePath = false)
         {
             try
             {
@@ -368,6 +368,36 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error exporting watch table '{watchTablePath}' from '{softwarePath}': {ex.Message}", ex);
+            }
+        }
+
+        [McpServerTool(Name = "ExportXmlForceTable", Title = "Export force table as XML", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Export one PLC force table as an XML file into the watch and force tables folder below exportPath (named as TIA Portal names it in the current interface language), next to the exported watch tables. A PLC has one force table, owned by the system; use GetForceTables for its name")]
+        public static ResponseExportXmlForceTable ExportXmlForceTable(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("forceTablePath: path of the force table as GetForceTables lists it")] string forceTablePath,
+            [Description("exportPath: directory on this machine that receives the XML file; files are written below <exportPath>/<softwarePath>/")] string exportPath)
+        {
+            try
+            {
+                var table = Portal.ExportXmlForceTable(softwarePath, forceTablePath, exportPath)
+                    ?? throw new McpException($"Failed exporting force table '{forceTablePath}' from '{softwarePath}'");
+
+                return new ResponseExportXmlForceTable
+                {
+                    Message = $"Force table '{forceTablePath}' exported to '{exportPath}'",
+                    Name = table.Name,
+                    Path = Portal.GetForceTablePath(table),
+                    Meta = Ok()
+                };
+            }
+            catch (TiaMcpServer.Siemens.PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error exporting force table '{forceTablePath}' from '{softwarePath}': {ex.Message}", ex);
             }
         }
 
@@ -783,7 +813,7 @@ namespace TiaMcpServer.ModelContextProtocol
          Description("Import a PLC watch table from an XML file into a watch table group. An existing table of the same name is replaced unless overwrite is false")]
         public static ResponseImported ImportWatchTable(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("groupPath: root-relative watch table group that receives the table; empty uses the root")] string groupPath,
+            [Description("groupPath: root-relative watch table group that receives the table; empty uses the root. A leading watch and force tables system folder segment, as written by preservePath exports, is accepted and ignored")] string groupPath,
             [Description("importPath: full path of the XML file to import")] string importPath,
             [Description("overwrite: replace an existing watch table of the same name (default true)")] bool overwrite = true)
         {

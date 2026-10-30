@@ -312,9 +312,35 @@ namespace TiaMcpServer.Siemens
 
                     return root == null
                         ? null
-                        : WalkGroups<PlcWatchAndForceTableGroup>(root, groupPath, g => g.Groups, g => g.Name);
+                        : WalkGroups<PlcWatchAndForceTableGroup>(
+                            root, StripWatchTableSystemRoot(root, groupPath), g => g.Groups, g => g.Name);
                 },
                 ("softwarePath", softwarePath), ("groupPath", groupPath));
+        }
+
+        /// <summary>
+        /// Drops a leading system root segment (the watch and force tables folder, in the current
+        /// TIA Portal interface language) so a group path taken from the export layout resolves
+        /// like the root-relative form, the way tag table group paths do.
+        /// </summary>
+        private static string StripWatchTableSystemRoot(PlcWatchAndForceTableSystemGroup root, string groupPath)
+        {
+            groupPath = NormalizeGroupPath(groupPath);
+
+            if (groupPath.Length == 0)
+            {
+                return groupPath;
+            }
+
+            var separator = groupPath.IndexOf('/');
+            var head = separator < 0 ? groupPath : groupPath.Substring(0, separator);
+
+            if (!head.Equals(root.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                return groupPath;
+            }
+
+            return separator < 0 ? string.Empty : groupPath.Substring(separator + 1);
         }
 
         /// <summary>Root-relative path of a watch table, e.g. "WatchGroup1/WatchTable_1".</summary>
@@ -409,8 +435,12 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
-        /// Exports one watch table to '&lt;exportPath&gt;/&lt;softwarePath&gt;/&lt;table&gt;.xml'. Filesystem only, so
-        /// it is not gated behind '--allow-write'.
+        /// Exports one watch table to '&lt;exportPath&gt;/&lt;softwarePath&gt;/&lt;system folder&gt;/&lt;table&gt;.xml', or,
+        /// with <paramref name="preservePath"/>, to
+        /// '&lt;exportPath&gt;/&lt;softwarePath&gt;/&lt;system folder&gt;/&lt;groups&gt;/&lt;table&gt;.xml' - the system folder
+        /// ("Watch and force tables") named as TIA Portal reports it in the current interface language,
+        /// the same way block, type and tag table exports mirror "Program blocks", "PLC data types" and
+        /// "PLC tags". Filesystem only, so it is not gated behind '--allow-write'.
         /// </summary>
         public PlcWatchTable? ExportXmlWatchTable(string softwarePath, string watchTablePath, string exportPath, bool preservePath = false)
         {
@@ -423,9 +453,11 @@ namespace TiaMcpServer.Siemens
 
                     exportPath = ResolveSoftwareRoot(exportPath, softwarePath);
 
+                    // Always below the system folder as the project tree has it; preservePath adds the table's groups.
+                    var systemFolder = GetPlcSoftwareOrThrow(softwarePath).WatchAndForceTableGroup?.Name ?? string.Empty;
                     var target = preservePath
-                        ? Path.Combine(exportPath, GetWatchTablePath(table).Replace('/', '\\') + ".xml")
-                        : Path.Combine(exportPath, $"{table.Name}.xml");
+                        ? Path.Combine(exportPath, systemFolder, GetWatchTablePath(table).Replace('/', '\\') + ".xml")
+                        : Path.Combine(exportPath, systemFolder, $"{table.Name}.xml");
 
                     var directory = Path.GetDirectoryName(target);
                     if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -443,6 +475,40 @@ namespace TiaMcpServer.Siemens
                     return table;
                 },
                 ("softwarePath", softwarePath), ("watchTablePath", watchTablePath), ("exportPath", exportPath));
+        }
+
+        /// <summary>
+        /// Exports a force table to '&lt;exportPath&gt;/&lt;softwarePath&gt;/&lt;system folder&gt;/&lt;table&gt;.xml', the
+        /// watch and force tables folder of the project tree in the current interface language, where the
+        /// watch tables go as well. A force table is system owned and has no groups, so there is no
+        /// preservePath. Filesystem only, so it is not gated behind '--allow-write'.
+        /// </summary>
+        public PlcForceTable? ExportXmlForceTable(string softwarePath, string forceTablePath, string exportPath)
+        {
+            return Operation.Run(_logger, nameof(ExportXmlForceTable), PortalErrorCode.ExportFailed,
+                () =>
+                {
+                    var table = GetForceTable(softwarePath, forceTablePath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound,
+                            $"Force table not found at '{forceTablePath}'. Use 'GetForceTables' to list the available tables.");
+
+                    exportPath = ResolveSoftwareRoot(exportPath, softwarePath);
+
+                    var systemFolder = GetPlcSoftwareOrThrow(softwarePath).WatchAndForceTableGroup?.Name ?? string.Empty;
+                    var target = Path.Combine(exportPath, systemFolder, FileNames.Safe(table.Name) + ".xml");
+
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+
+                    if (File.Exists(target))
+                    {
+                        File.Delete(target);
+                    }
+
+                    table.Export(new FileInfo(target), ExportOptions.None);
+
+                    return table;
+                },
+                ("softwarePath", softwarePath), ("forceTablePath", forceTablePath), ("exportPath", exportPath));
         }
 
         #endregion

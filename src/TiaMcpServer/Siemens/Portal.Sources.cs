@@ -348,6 +348,11 @@ namespace TiaMcpServer.Siemens
                         "watch table",
                         result));
 
+                    Record(result, "forceTables", "xml", ExportEach(
+                        GetForceTables(softwarePath).Select(t => (GetForceTablePath(t), (Action)(() => ExportXmlForceTable(softwarePath, GetForceTablePath(t), exportPath)))),
+                        "force table",
+                        result));
+
                     _logger?.LogInformation(
                         "Source tree for '{Software}' written to '{Directory}': {Written} object(s), {Skipped} skipped, {Failed} failed",
                         softwarePath, exportPath, result.TotalWritten, result.Skipped.Count, result.Failures.Count);
@@ -1485,7 +1490,7 @@ namespace TiaMcpServer.Siemens
     {
         public string Directory { get; set; } = string.Empty;
 
-        /// <summary>Objects written per area: blocks, types, tagTables, watchTables.</summary>
+        /// <summary>Objects written per area: blocks, types, tagTables, watchTables, forceTables.</summary>
         public Dictionary<string, int> Written { get; set; } = new Dictionary<string, int>();
 
         /// <summary>Format used per area: 'document' where TIA Portal supports it, else 'xml'.</summary>

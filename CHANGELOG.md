@@ -4,6 +4,12 @@
 
 ### Added
 
+- __`ExportXmlForceTable`__: exports the force table of a PLC (`PlcForceTable.Export`) as
+  `<exportPath>/<softwarePath>/<system folder>/<table>.xml`, the watch and force tables folder of the project
+  tree in the interface language of TIA Portal, next to the exported watch tables. A force table is owned by the
+  system and has no groups, so the tool has no `preservePath`. Like the other export tools it only writes files and
+  is not gated behind `--allow-write`. `ExportPlcAsDocuments` writes it too (area `forceTables`). A prompt of the same
+  name is included.
 - __`ExportPlcProgram` follows the export formats of TIA Portal, `GetExportFormats`__: each object is written in
   the format TIA Portal is configured for (Options > Settings > Version control interface > Export formats):
   SIMATIC SD documents (`.s7dcl`, `.s7res`), SimaticML (`.xml`) or a source file (`.scl`, `.awl`, `.db`, `.udt`).
@@ -126,6 +132,15 @@
 
 ### Fixed
 
+- __Watch table exports follow the folder layout of the project tree__: `ExportXmlWatchTable` wrote the file
+  directly below `<exportPath>/<softwarePath>/` (or, with `preservePath`, into the group folders beside
+  `Program blocks` and `PLC tags`), unlike blocks, PLC data types and tag tables. Watch tables now land in
+  `<exportPath>/<softwarePath>/<system folder>/<table>.xml`, and with `preservePath` in
+  `<system folder>/<groups>/<table>.xml`, using the name of the watch and force tables folder as TIA Portal
+  reports it in the current interface language (`Watch and force tables` in English). `ExportPlcAsDocuments`
+  gets the same layout. `ImportWatchTable` accepts a leading system folder segment in `groupPath`, so the exported
+  layout can be fed straight back. Watch table files exported before this change lie one level higher and have to
+  be moved.
 - __Block and type names with characters that are invalid in a file name__: TIA Portal allows names such as
   `T_Data->HMI` or `GTS_EQ_I/FLower`, but the exports used the name as the file name. On .NET Framework a `>`,
   `<`, `|` or `"` made `Path.Combine` throw, and in `ExportXmlBlocks` / `ExportXmlTypes` that happened before the

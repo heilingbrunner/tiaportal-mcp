@@ -132,13 +132,29 @@ Common parameter values:
 - softwarePath: defines the path in the project structure to the PLC software
 - watchTablePath: root-relative path of the watch table, e.g. 'WatchGroup1/WatchTable_1'
 - exportPath: directory on this machine that receives the XML file
-- preservePath: recreate the watch table group structure below <exportPath>/<softwarePath>
+- preservePath: recreate the watch table group structure below <exportPath>/<softwarePath>, inside the watch and force tables system folder as TIA Portal names it in the current interface language (the file always lands in that folder)
 
 Use the ExportXmlWatchTable tool with these parameters:
 - softwarePath: {softwarePath}
 - watchTablePath: {watchTablePath}
 - exportPath: {exportPath}
 - preservePath: {NormalizeBool(preservePath)}";
+        }
+
+        [McpServerPrompt(Name = "ExportXmlForceTable"), Description("Export the PLC force table as XML")]
+        public static string ExportXmlForceTable(string softwarePath, string forceTablePath, string exportPath)
+        {
+            return $@"Export the PLC force table to an XML file on the file system of the machine running this server. Does not modify the project. A PLC has one force table, owned by the system.
+
+Common parameter values:
+- softwarePath: defines the path in the project structure to the PLC software
+- forceTablePath: path of the force table as GetForceTables lists it
+- exportPath: directory on this machine that receives the XML file; the file lands in the watch and force tables system folder below <exportPath>/<softwarePath>, as TIA Portal names it in the current interface language, next to the watch tables
+
+Use the ExportXmlForceTable tool with these parameters:
+- softwarePath: {softwarePath}
+- forceTablePath: {forceTablePath}
+- exportPath: {exportPath}";
         }
 
         [McpServerPrompt(Name = "CreateTagTable"), Description("Create a PLC tag table")]

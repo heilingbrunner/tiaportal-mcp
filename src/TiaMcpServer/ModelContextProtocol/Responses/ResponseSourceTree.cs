@@ -6,7 +6,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         public string? Directory { get; set; }
 
-        /// <summary>Objects written per area: blocks, types, tagTables, watchTables.</summary>
+        /// <summary>Objects written per area: blocks, types, tagTables, watchTables, forceTables.</summary>
         public IDictionary<string, int>? Written { get; set; }
 
         /// <summary>Format used per area: 'document' where TIA Portal supports it, else 'xml'.</summary>

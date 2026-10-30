@@ -50,7 +50,8 @@ of the MCP server entry in your client's JSON configuration and the model no lon
 - A single `--software-path` only fits a project with one PLC; pass `softwarePath` explicitly otherwise.
 - `exportPath` / `importPath` is the base directory shared by all PLCs. Every export and folder-based
   import works below `<exportPath>/<softwarePath>/`, e.g. `D:\Export\Group1\PLC_1\Program blocks\...`,
-  `...\PLC data types\...` and `...\PLC tags\...`; each `/` in `softwarePath` is a folder level. Imports that
+  `...\PLC data types\...`, `...\PLC tags\...` and `...\Watch and force tables\...` (the folder names of the
+  project tree in the interface language of TIA Portal); each `/` in `softwarePath` is a folder level. Imports that
   take the full path of a single file are unaffected.
 - Prompts (slash commands) use the presets too: an argument with a preset is optional in the prompt list and
   is filled in when left out. Claude Code fills prompt arguments by position, so to override only `exportPath`
@@ -84,7 +85,7 @@ To enable write mode, add the argument to your client configuration, for example
 
 ## Tools
 
-Read-only tools (68) are always available.
+Read-only tools (69) are always available.
 
 | Area                          | Tools                                                                                                                                              |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -95,7 +96,7 @@ Read-only tools (68) are always available.
 | Blocks                        | `GetBlocks`, `GetBlockInfo`, `GetBlocksWithHierarchy`, `ExportXmlBlock`, `ExportXmlBlocks`                                       |
 | Types                         | `GetTypes`, `GetTypeInfo`, `ExportXmlType`, `ExportXmlTypes`                                                                      |
 | Tags and constants            | `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants`, `ExportXmlTagTable`                                                    |
-| Watch and force tables        | `GetWatchTables`, `GetWatchTableInfo`, `GetForceTables`, `ExportXmlWatchTable`                                                                     |
+| Watch and force tables        | `GetWatchTables`, `GetWatchTableInfo`, `GetForceTables`, `ExportXmlWatchTable`, `ExportXmlForceTable`                                              |
 | External sources              | `GetExternalSources`, `GetExternalSourceInfo`, `ExportSourceBlock`, `ExportSourceBlocks`, `ExportSourceType`, `ExportSourceTypes`, `ExportSources` |
 | Read source inline            | `GetXmlBlock`, `GetXmlType`, `GetSourceBlock`, `GetSourceType`, `GetDocumentsBlock`, `GetDocumentsType`                                            |
 | Cross references              | `GetCrossReferences`                                                                                                                               |
