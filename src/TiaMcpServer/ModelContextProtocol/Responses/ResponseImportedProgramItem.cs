@@ -11,7 +11,7 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>'block' or 'type'.</summary>
         public string? Kind { get; set; }
 
-        /// <summary>'source' for an external source file (.scl, .awl, .db, .udt), 'xml' for SimaticML (.xml).</summary>
+        /// <summary>'source' for an external source file (.scl, .awl, .db, .udt), 'xml' for SimaticML (.xml), 'document' for SIMATIC SD documents (.s7dcl, .s7res).</summary>
         public string? Format { get; set; }
     }
 }

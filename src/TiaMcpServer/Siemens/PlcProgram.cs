@@ -27,11 +27,17 @@ namespace TiaMcpServer.Siemens
         /// <summary>'.udt': a PLC data type source.</summary>
         UdtSource,
 
+        /// <summary>'.s7dcl' (or its '.s7res') below the 'PLC data types' folder: a SIMATIC SD type. Needs TIA Portal V21.</summary>
+        DocumentType,
+
         /// <summary>'.db', '.awl', '.scl': a block source.</summary>
         BlockSource,
 
         /// <summary>'.xml' below the 'Program blocks' folder: a SimaticML block.</summary>
         XmlBlock,
+
+        /// <summary>'.s7dcl' (or its '.s7res') below the 'Program blocks' folder: a SIMATIC SD block. Needs TIA Portal V20.</summary>
+        DocumentBlock,
 
         /// <summary>Not part of the program tree; see the reason.</summary>
         Ignored
@@ -96,6 +102,9 @@ namespace TiaMcpServer.Siemens
         public const string XmlExtension = ".xml";
 
         public const string DocumentExtension = ".s7dcl";
+
+        /// <summary>The resource file that belongs to a '.s7dcl'; it has no object of its own.</summary>
+        public const string ResourceExtension = ".s7res";
 
         /// <summary>
         /// The extension Openness demands for the source of one block, or null when the block has
@@ -215,12 +224,23 @@ namespace TiaMcpServer.Siemens
         /// Decides what a file of the import tree is. <paramref name="relativeDirectory"/> is its
         /// folder below the import root with forward slashes; the first segment is the localized
         /// system folder ('Program blocks', 'PLC data types'). An '.xml' file only counts below the
-        /// block folder, because '.xml' also holds tag tables and the like.
+        /// block folder, because '.xml' also holds tag tables and the like. A SIMATIC SD document
+        /// ('.s7dcl', or the '.s7res' that belongs to it) is a block below the block folder and a
+        /// type below the type folder. <paramref name="fileName"/> is only used to recognise the
+        /// 'tia.json' of ExportPlcProgram, which is a setting and not part of the program.
         /// </summary>
-        public static FilePlan ClassifyFile(string relativeDirectory, string extension, string blockRoot, string typeRoot)
+        public static FilePlan ClassifyFile(string relativeDirectory, string extension, string blockRoot, string typeRoot, string fileName = "")
         {
             switch (extension.ToLowerInvariant())
             {
+                case DocumentExtension:
+                case ResourceExtension:
+                    return ClassifyDocument(relativeDirectory, blockRoot, typeRoot);
+
+                case ".json" when fileName.Equals("tia.json", StringComparison.OrdinalIgnoreCase):
+                    return new FilePlan(ProgramFileKind.Ignored,
+                        "the export format settings that ExportPlcProgram reads; they are not part of the program");
+
                 case ".udt":
                     return new FilePlan(ProgramFileKind.UdtSource, null);
 
@@ -242,6 +262,24 @@ namespace TiaMcpServer.Siemens
                 default:
                     return new FilePlan(ProgramFileKind.Ignored, null);
             }
+        }
+
+        private static FilePlan ClassifyDocument(string relativeDirectory, string blockRoot, string typeRoot)
+        {
+            var folder = FirstSegment(relativeDirectory);
+
+            if (typeRoot.Length > 0 && folder.Equals(typeRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return new FilePlan(ProgramFileKind.DocumentType, null);
+            }
+
+            if (blockRoot.Length > 0 && folder.Equals(blockRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return new FilePlan(ProgramFileKind.DocumentBlock, null);
+            }
+
+            return new FilePlan(ProgramFileKind.Ignored,
+                $"a SIMATIC SD document is imported only below the '{blockRoot}' or '{typeRoot}' folder");
         }
 
         /// <summary>

@@ -384,6 +384,8 @@ namespace TiaMcpServer.Siemens
 
                     var result = ImportProgramFiles(softwarePath, root, importable, regexName, keepOnError, dryRun);
 
+                    AssignGitStatus(result, root, changes);
+
                     result.Changed = changes.Count;
                     result.Deleted.AddRange(changes.Where(c => c.Kind == GitChangeKind.Deleted).Select(c => RelativeFile(root, c.FullPath)));
                     result.Ignored.AddRange(changes
@@ -395,6 +397,40 @@ namespace TiaMcpServer.Siemens
                     return result;
                 },
                 ("softwarePath", softwarePath), ("exportPath", exportPath), ("regexName", regexName), ("dryRun", dryRun));
+        }
+
+        /// <summary>
+        /// Puts the git status letter (M, A, U, R) on every planned file. A planned SIMATIC SD
+        /// document is named after its '.s7dcl'; when only the '.s7res' changed, that file's
+        /// status counts for it, and the '.s7dcl' wins when both changed.
+        /// </summary>
+        private static void AssignGitStatus(PlcProgramImportResult result, string root, IReadOnlyList<GitChange> changes)
+        {
+            var letters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var change in changes.Where(c => c.Kind != GitChangeKind.Deleted && c.Kind != GitChangeKind.Unmerged))
+            {
+                var file = RelativeFile(root, change.FullPath);
+
+                if (file.EndsWith(PlcProgram.ResourceExtension, StringComparison.OrdinalIgnoreCase))
+                {
+                    var document = Path.ChangeExtension(file, PlcProgram.DocumentExtension);
+
+                    if (!letters.ContainsKey(document))
+                    {
+                        letters[document] = change.Kind.Letter();
+                    }
+                }
+                else
+                {
+                    letters[file] = change.Kind.Letter();
+                }
+            }
+
+            foreach (var planned in result.Planned)
+            {
+                planned.GitStatus = letters.TryGetValue(planned.File, out var letter) ? letter : null;
+            }
         }
 
         /// <summary>
@@ -458,6 +494,7 @@ namespace TiaMcpServer.Siemens
             var option = keepOnError ? GenerateBlockOption.KeepOnError : GenerateBlockOption.None;
             var result = new PlcProgramImportResult { Directory = importPath, DryRun = dryRun };
             var work = new List<ProgramFile>();
+            var documentFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var file in files)
             {
@@ -470,7 +507,7 @@ namespace TiaMcpServer.Siemens
 
                 var directory = RelativeDirectory(importPath, file);
                 var display = directory.Length == 0 ? Path.GetFileName(file) : directory + "/" + Path.GetFileName(file);
-                var plan = PlcProgram.ClassifyFile(directory, Path.GetExtension(file), blockRoot, typeRoot);
+                var plan = PlcProgram.ClassifyFile(directory, Path.GetExtension(file), blockRoot, typeRoot, Path.GetFileName(file));
 
                 if (plan.Kind == ProgramFileKind.Ignored)
                 {
@@ -482,9 +519,35 @@ namespace TiaMcpServer.Siemens
                     continue;
                 }
 
-                var groupPath = StripSystemRootSegment(plan.Kind == ProgramFileKind.UdtSource ? typeRoot : blockRoot, directory);
+                var isDocument = plan.Kind == ProgramFileKind.DocumentBlock || plan.Kind == ProgramFileKind.DocumentType;
+                var importFile = file;
 
-                work.Add(new ProgramFile(file, display, plan.Kind, groupPath));
+                if (isDocument)
+                {
+                    // A changed '.s7res' stands for the '.s7dcl' next to it, and a set that git
+                    // reports with both files is one object, not two.
+                    importFile = Path.ChangeExtension(file, PlcProgram.DocumentExtension);
+                    display = directory.Length == 0 ? Path.GetFileName(importFile) : directory + "/" + Path.GetFileName(importFile);
+
+                    var problem = DocumentProblem(plan.Kind, importFile);
+
+                    if (problem != null)
+                    {
+                        result.Ignored.Add($"{display}: {problem}");
+
+                        continue;
+                    }
+
+                    if (!documentFiles.Add(importFile))
+                    {
+                        continue;
+                    }
+                }
+
+                var isType = plan.Kind == ProgramFileKind.UdtSource || plan.Kind == ProgramFileKind.DocumentType;
+                var groupPath = StripSystemRootSegment(isType ? typeRoot : blockRoot, directory);
+
+                work.Add(new ProgramFile(importFile, display, plan.Kind, groupPath));
             }
 
             // Types first, then source blocks, then XML; the rounds cover what that order misses.
@@ -531,7 +594,7 @@ namespace TiaMcpServer.Siemens
         {
             var name = Path.GetFileNameWithoutExtension(file.File);
             var path = file.GroupPath.Length == 0 ? name : file.GroupPath + "/" + name;
-            var isType = file.Kind == ProgramFileKind.UdtSource;
+            var isType = file.Kind == ProgramFileKind.UdtSource || file.Kind == ProgramFileKind.DocumentType;
             var key = (isType ? "type:" : "block:") + file.GroupPath;
 
             if (!groupNames.TryGetValue(key, out var names))
@@ -550,7 +613,7 @@ namespace TiaMcpServer.Siemens
                 Name = name,
                 Path = path,
                 Kind = isType ? "type" : "block",
-                Format = file.Kind == ProgramFileKind.XmlBlock ? "xml" : "source",
+                Format = FormatOf(file.Kind),
                 Action = action
             };
         }
@@ -577,8 +640,77 @@ namespace TiaMcpServer.Siemens
             }
         }
 
+        /// <summary>The 'Format' a planned or imported file is reported with.</summary>
+        private static string FormatOf(ProgramFileKind kind)
+        {
+            switch (kind)
+            {
+                case ProgramFileKind.XmlBlock:
+                    return "xml";
+
+                case ProgramFileKind.DocumentBlock:
+                case ProgramFileKind.DocumentType:
+                    return "document";
+
+                default:
+                    return "source";
+            }
+        }
+
+        /// <summary>The lowest TIA Portal major version that imports SIMATIC SD documents for blocks.</summary>
+        private const int MinVersionForBlockDocuments = 20;
+
+        /// <summary>
+        /// Why a SIMATIC SD document cannot be imported, or null when it can: the '.s7dcl' must
+        /// exist (a lone '.s7res' is not enough) and TIA Portal must be new enough. Said in the
+        /// preview, so it does not first show up as a failure of the real run.
+        /// </summary>
+        private static string? DocumentProblem(ProgramFileKind kind, string documentFile)
+        {
+            if (!File.Exists(documentFile))
+            {
+                return $"no '{PlcProgram.DocumentExtension}' file next to it; the '{PlcProgram.ResourceExtension}' alone cannot be imported";
+            }
+
+            var minimum = kind == ProgramFileKind.DocumentType ? MinVersionForTypeDocuments : MinVersionForBlockDocuments;
+
+            return Engineering.TiaMajorVersion < minimum
+                ? $"importing SIMATIC SD documents of {(kind == ProgramFileKind.DocumentType ? "PLC data types" : "blocks")} needs TIA Portal V{minimum}; V{Engineering.TiaMajorVersion} is configured"
+                : null;
+        }
+
+        /// <summary>Imports one '.s7dcl' (with its '.s7res') as a block or a PLC data type, replacing an object of the same name.</summary>
+        private List<ImportedProgramItem> ImportDocumentFile(string softwarePath, ProgramFile file)
+        {
+            var directory = Path.GetDirectoryName(file.File) ?? string.Empty;
+            var baseName = Path.GetFileNameWithoutExtension(file.File);
+
+            if (file.Kind == ProgramFileKind.DocumentType)
+            {
+                RequireTiaVersion(MinVersionForTypeDocuments, "Import of a PLC data type from a SIMATIC SD document");
+
+                return ImportOneTypeSet(ResolveTypeGroupForImport(softwarePath, file.GroupPath), directory, baseName, ImportDocumentOptions.Override)
+                    .Select(t => new ImportedProgramItem { Name = t.Name, Path = GetTypePath(t), Kind = "type", Format = "document" })
+                    .ToList();
+            }
+
+            RequireTiaVersion(MinVersionForBlockDocuments, "Import of a block from a SIMATIC SD document");
+
+            var group = GetPlcBlockGroupByPath(softwarePath, file.GroupPath)
+                ?? throw new PortalException(PortalErrorCode.NotFound, $"Block group not found at '{file.GroupPath}'.");
+
+            return ImportOneBlockSet(group, directory, baseName, ImportDocumentOptions.Override)
+                .Select(b => new ImportedProgramItem { Name = b.Name, Path = GetBlockPath(b), Kind = "block", Format = "document" })
+                .ToList();
+        }
+
         private List<ImportedProgramItem> ImportProgramFile(string softwarePath, ProgramFile file, GenerateBlockOption option)
         {
+            if (file.Kind == ProgramFileKind.DocumentBlock || file.Kind == ProgramFileKind.DocumentType)
+            {
+                return ImportDocumentFile(softwarePath, file);
+            }
+
             if (file.Kind == ProgramFileKind.XmlBlock)
             {
                 return ImportBlocksFromXmlFile(softwarePath, file.GroupPath, file.File)
@@ -613,11 +745,14 @@ namespace TiaMcpServer.Siemens
         /// <summary>'block' or 'type'.</summary>
         public string Kind { get; set; } = string.Empty;
 
-        /// <summary>'source' for an external source file, 'xml' for SimaticML.</summary>
+        /// <summary>'source' for an external source file, 'xml' for SimaticML, 'document' for SIMATIC SD documents.</summary>
         public string Format { get; set; } = string.Empty;
 
         /// <summary>'create' when the project has no such object yet, 'overwrite' when it has, 'unknown' when the lookup failed.</summary>
         public string Action { get; set; } = Create;
+
+        /// <summary>ImportPlcProgramChanges: what git says about the file, as VS Code shows it: M, A, U (untracked), R. Null for OverwritePlcProgram.</summary>
+        public string? GitStatus { get; set; }
     }
 
     /// <summary>One block or PLC data type imported by OverwritePlcProgram.</summary>
@@ -631,7 +766,7 @@ namespace TiaMcpServer.Siemens
         /// <summary>'block' or 'type'.</summary>
         public string Kind { get; set; } = string.Empty;
 
-        /// <summary>'source' for an external source file, 'xml' for SimaticML.</summary>
+        /// <summary>'source' for an external source file, 'xml' for SimaticML, 'document' for SIMATIC SD documents.</summary>
         public string Format { get; set; } = string.Empty;
     }
 
@@ -669,7 +804,8 @@ namespace TiaMcpServer.Siemens
             ["blocks"] = Items.Count(i => i.Kind == "block"),
             ["types"] = Items.Count(i => i.Kind == "type"),
             ["source"] = Items.Count(i => i.Format == "source"),
-            ["xml"] = Items.Count(i => i.Format == "xml")
+            ["xml"] = Items.Count(i => i.Format == "xml"),
+            ["document"] = Items.Count(i => i.Format == "document")
         };
     }
 }

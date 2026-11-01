@@ -15,10 +15,13 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>'block' or 'type'.</summary>
         public string? Kind { get; set; }
 
-        /// <summary>'source' for an external source file (.scl, .awl, .db, .udt), 'xml' for SimaticML (.xml).</summary>
+        /// <summary>'source' for an external source file (.scl, .awl, .db, .udt), 'xml' for SimaticML (.xml), 'document' for SIMATIC SD documents (.s7dcl, .s7res).</summary>
         public string? Format { get; set; }
 
         /// <summary>'create' when the project has no such object, 'overwrite' when it has and the import would replace it, 'unknown' when the lookup failed.</summary>
         public string? Action { get; set; }
+
+        /// <summary>ImportPlcProgramChanges only: what git says about the file, as VS Code shows it: M (modified), A (added), U (untracked), R (renamed).</summary>
+        public string? GitStatus { get; set; }
     }
 }

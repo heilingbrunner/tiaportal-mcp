@@ -37,11 +37,11 @@ Overwrite the whole program of one PLC software in one call with the files of a 
 Blocks and PLC data types of the same name in the open project are REPLACED by the file content. Always preview first:
 1. Call the tool with dryRun true. Nothing is imported; 'Planned' lists every object with 'create' or 'overwrite'
 2. Show the list to the user, name the objects that would be overwritten, and ask whether to import
-3. Only after the user agrees, call the tool again with dryRun false. The server then opens a confirmation dialog in which the user has to type 'yes, import'; do not answer it for the user. Without that answer nothing is imported, and a client without such dialogs cannot run the import
+3. Only after the user agrees, call the tool again with dryRun false. The server then opens a confirmation dialog in which the user has to tick 'Yes, import' and press Submit; do not answer it for the user. Without that answer nothing is imported, and a client without such dialogs cannot run the import
 4. Do not save on your own. Tell the user the change is only in memory and ask whether to save; call SaveProject (or SaveSession in a local session) only after the user explicitly says 'save project'
 
 What happens:
-- .udt files become PLC data types; .db, .awl and .scl files are compiled as sources; .xml files below the 'Program blocks' folder are imported as blocks (LAD)
+- .udt files become PLC data types; .db, .awl and .scl files are compiled as sources; .xml files below the 'Program blocks' folder are imported as blocks (LAD); .s7dcl files (SIMATIC SD documents, with their .s7res) below the 'Program blocks' or 'PLC data types' folder are imported as blocks or PLC data types
 - Each file goes into the block or PLC data type group its folder path implies; the group must already exist (create it with CreateBlockGroup or CreateTypeGroup), otherwise that file fails
 - Files are imported in rounds: an object that needs another one (a LAD block calling an SCL block, an instance data block) is retried until nothing more can be imported; the response shows 'Rounds' and lists what never succeeded in 'Failures'
 - Other files, and .xml files outside the 'Program blocks' folder, are listed in 'Ignored'
@@ -63,17 +63,16 @@ Use the OverwritePlcProgram tool with these parameters:
         }
 
         [McpServerPrompt(Name = "ImportPlcProgramChanges"), Description("Overwrite only the files git reports as changed in an export folder")]
-        public static string ImportPlcProgramChanges(string softwarePath, string exportPath, string regexName = "", string keepOnError = "false", string dryRun = "true")
+        public static string ImportPlcProgramChanges(string softwarePath, string exportPath, string regexName = "", string keepOnError = "false", string dryRun = "false")
         {
             return $@"This is the default way to import edited files back; for the whole folder use OverwritePlcProgram.
 
 Overwrite objects of one PLC software with only the files of an export folder that git reports as changed since the last commit: modified, staged and new files (requires the server started with '--allow-write', git on PATH and an export folder inside a git repository).
 
-Blocks and PLC data types of the same name in the open project are REPLACED by the file content. Always preview first:
-1. Call the tool with dryRun true. Nothing is imported; 'Planned' lists every changed file with its object and 'create' or 'overwrite'
-2. Show the list to the user, name the objects that would be overwritten, and ask whether to import
-3. Only after the user agrees, call the tool again with dryRun false. The server then opens a confirmation dialog in which the user has to type 'yes, import'; do not answer it for the user. Without that answer nothing is imported, and a client without such dialogs cannot run the import
-4. Do not save on your own. Tell the user the change is only in memory and ask whether to save; call SaveProject (or SaveSession in a local session) only after the user explicitly says 'save project'
+Blocks and PLC data types of the same name in the open project are REPLACED by the file content. The server asks the user itself, so do not ask in the chat first:
+1. Call the tool with dryRun false. The server then opens a dialog that lists every file to import and has a 'Yes, import' checkbox and a Submit button; do not answer it for the user. Nothing is imported unless the user ticks the box and submits, and a client without such dialogs cannot run the import
+2. If the user only wants to see the list, call the tool with dryRun true instead: nothing is imported and 'Planned' lists every changed file with its object
+3. Do not save on your own. Tell the user the change is only in memory and ask whether to save; call SaveProject (or SaveSession in a local session) only after the user explicitly says 'save project'
 
 Typical flow: ExportPlcProgram into the git folder, commit the export as baseline, edit files, then this tool.
 
@@ -86,7 +85,7 @@ Common parameter values:
 - exportPath: folder that holds the tree ExportPlcProgram wrote and is a git working tree; changes are looked up below <exportPath>/<softwarePath>/
 - regexName: empty for all, or e.g. 'FB_.*' to select changed files by base name
 - keepOnError: Use false (default) to roll back a whole source file on any error, true to keep the objects of a file that were generated successfully
-- dryRun: true (default) only previews, false really overwrites
+- dryRun: false (default) opens the confirmation dialog and imports after the user ticks Yes, import; true only lists what would be imported
 
 Use the ImportPlcProgramChanges tool with these parameters:
 - softwarePath: {softwarePath}

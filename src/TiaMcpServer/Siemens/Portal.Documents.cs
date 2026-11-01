@@ -519,6 +519,39 @@ namespace TiaMcpServer.Siemens
             return result.ImportedPlcTypes?.Where(t => t != null).ToList() ?? new List<PlcType>();
         }
 
+        /// <summary>
+        /// Imports the document set '&lt;baseName&gt;.s7dcl' (and '.s7res') of a directory into a
+        /// block group and returns the blocks TIA Portal created. Throws with TIA Portal's own
+        /// messages when nothing could be imported. Block counterpart of ImportOneTypeSet.
+        /// </summary>
+        private static List<PlcBlock> ImportOneBlockSet(
+            PlcBlockGroup group,
+            string importPath,
+            string baseName,
+            ImportDocumentOptions option)
+        {
+            try
+            {
+                var result = group.Blocks.ImportFromDocuments(new DirectoryInfo(importPath), baseName, option);
+
+                if (result == null || result.State == DocumentResultState.Failure)
+                {
+                    var detail = DescribeImportMessages(result);
+
+                    throw new PortalException(PortalErrorCode.ImportFailed,
+                        $"TIA Portal reported '{result?.State.ToString() ?? "Failure"}' importing '{baseName}'. " +
+                        (detail.Length > 0 ? detail : "No further detail was returned."));
+                }
+
+                return result.ImportedPlcBlocks?.Where(b => b != null).ToList() ?? new List<PlcBlock>();
+            }
+            catch (EngineeringNotSupportedException ex)
+            {
+                throw new PortalException(PortalErrorCode.NotSupported,
+                    $"TIA Portal cannot import '{baseName}' from a source document. {ex.Message}", null, ex);
+            }
+        }
+
         private static string DescribeImportMessages(DocumentImportResult? result)
         {
             if (result?.Messages == null)

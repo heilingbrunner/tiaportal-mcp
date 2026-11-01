@@ -2,6 +2,9 @@ using Siemens.Engineering.SW.Blocks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using ModelContextProtocol.Protocol;
+using TiaMcpServer.Git;
 using TiaMcpServer.ModelContextProtocol;
 using TiaMcpServer.Siemens;
 
@@ -103,6 +106,67 @@ namespace TiaMcpServer.Test
             Assert.AreEqual(ProgramFileKind.Ignored, atRoot.Kind);
             Assert.AreEqual(ProgramFileKind.Ignored, stl.Kind);
             StringAssert.Contains(stl.Reason, ".awl", "the reason says what STL blocks are written as");
+        }
+
+        [TestMethod]
+        public void Test_937_ClassifyFile_SimaticSdDocumentsAreBlocksOrTypesByFolder()
+        {
+            // Act / Assert
+            Assert.AreEqual(ProgramFileKind.DocumentBlock, PlcProgram.ClassifyFile("Program blocks/Motors", ".s7dcl", BlockRoot, TypeRoot).Kind);
+            Assert.AreEqual(ProgramFileKind.DocumentBlock, PlcProgram.ClassifyFile("Program blocks", ".S7DCL", BlockRoot, TypeRoot).Kind, "the extension is case-insensitive");
+            Assert.AreEqual(ProgramFileKind.DocumentBlock, PlcProgram.ClassifyFile("Program blocks", ".s7res", BlockRoot, TypeRoot).Kind, "the resource file stands for its document");
+            Assert.AreEqual(ProgramFileKind.DocumentType, PlcProgram.ClassifyFile("PLC data types/Common", ".s7dcl", BlockRoot, TypeRoot).Kind);
+            Assert.AreEqual(ProgramFileKind.DocumentType, PlcProgram.ClassifyFile("PLC data types", ".s7res", BlockRoot, TypeRoot).Kind);
+        }
+
+        [TestMethod]
+        public void Test_938_ClassifyFile_SimaticSdDocumentOutsideTheProgramFoldersIsIgnoredWithAReason()
+        {
+            // Act
+            var plan = PlcProgram.ClassifyFile("PLC tags", ".s7dcl", BlockRoot, TypeRoot);
+            var atRoot = PlcProgram.ClassifyFile(string.Empty, ".s7dcl", BlockRoot, TypeRoot);
+
+            // Assert
+            Assert.AreEqual(ProgramFileKind.Ignored, plan.Kind);
+            StringAssert.Contains(plan.Reason, BlockRoot);
+            StringAssert.Contains(plan.Reason, TypeRoot);
+            Assert.AreEqual(ProgramFileKind.Ignored, atRoot.Kind);
+            Assert.IsNotNull(atRoot.Reason);
+        }
+
+        [TestMethod]
+        public void Test_939_ClassifyFile_ExportFormatSettingsAreIgnoredWithAReason()
+        {
+            // Act
+            var settings = PlcProgram.ClassifyFile(string.Empty, ".json", BlockRoot, TypeRoot, "tia.json");
+            var other = PlcProgram.ClassifyFile(string.Empty, ".json", BlockRoot, TypeRoot, "package.json");
+
+            // Assert
+            Assert.AreEqual(ProgramFileKind.Ignored, settings.Kind);
+            StringAssert.Contains(settings.Reason, "ExportPlcProgram");
+            Assert.IsNull(other.Reason, "any other json file stays unmentioned");
+        }
+
+        [TestMethod]
+        public void Test_941_GitChangeKinds_UseTheLettersOfVsCode()
+        {
+            // Act and Assert
+            Assert.AreEqual("M", GitChangeKind.Modified.Letter());
+            Assert.AreEqual("A", GitChangeKind.Added.Letter());
+            Assert.AreEqual("U", GitChangeKind.Untracked.Letter());
+            Assert.AreEqual("R", GitChangeKind.Renamed.Letter());
+            Assert.AreEqual("D", GitChangeKind.Deleted.Letter());
+            Assert.AreEqual("!", GitChangeKind.Unmerged.Letter());
+        }
+
+        [TestMethod]
+        public void Test_942_StatusLetter_TakesGitFirstAndFallsBackToTheProjectAction()
+        {
+            // Act and Assert
+            Assert.AreEqual("U", McpServer.StatusLetter(new PlannedProgramItem { GitStatus = "U", Action = PlannedProgramItem.Overwrite }), "git wins");
+            Assert.AreEqual("M", McpServer.StatusLetter(new PlannedProgramItem { Action = PlannedProgramItem.Overwrite }), "no git: an existing object is modified");
+            Assert.AreEqual("A", McpServer.StatusLetter(new PlannedProgramItem { Action = PlannedProgramItem.Create }), "no git: a new object is added");
+            Assert.AreEqual("?", McpServer.StatusLetter(new PlannedProgramItem { Action = PlannedProgramItem.Unknown }));
         }
 
         [TestMethod]
@@ -241,22 +305,32 @@ namespace TiaMcpServer.Test
                 // Assert
                 StringAssert.Contains(description, "REPLACED", name);
                 StringAssert.Contains(description, "dryRun", name);
-                StringAssert.Contains(description, "yes, import", name);
+                StringAssert.Contains(description, "Yes, import", name);
                 StringAssert.Contains(description, "save project", name);
             }
         }
 
         [TestMethod]
-        public void Test_935_IsImportConfirmation_AcceptsOnlyTheExactPhrase()
+        public void Test_935_IsImportAccepted_AcceptsOnlyASubmitWithTheBoxTicked()
         {
-            // Act and Assert
-            Assert.IsTrue(McpServer.IsImportConfirmation("yes, import"));
-            Assert.IsTrue(McpServer.IsImportConfirmation("  Yes, Import "), "case and surrounding spaces do not matter");
-
-            foreach (var answer in new string?[] { null, "", "yes", "import", "import plc program changes", "yes import", "yes, import everything" })
+            // Arrange
+            ElicitResult Result(string action, string? json) => new ElicitResult
             {
-                Assert.IsFalse(McpServer.IsImportConfirmation(answer), $"'{answer}' is not the confirmation");
-            }
+                Action = action,
+                Content = json == null ? null : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json)
+            };
+
+            // Act and Assert
+            Assert.IsTrue(McpServer.IsImportAccepted(Result("accept", "{\"confirmation\":[\"Yes, import\"]}")));
+
+            Assert.IsFalse(McpServer.IsImportAccepted(Result("accept", "{\"confirmation\":[]}")), "submitted without the tick");
+            Assert.IsFalse(McpServer.IsImportAccepted(Result("accept", "{\"confirmation\":[\"other\"]}")), "some other option");
+            Assert.IsFalse(McpServer.IsImportAccepted(Result("accept", "{\"confirmation\":true}")), "a boolean is not a tick");
+            Assert.IsFalse(McpServer.IsImportAccepted(Result("accept", "{\"confirmation\":\"Yes, import\"}")), "a plain string is not a tick");
+            Assert.IsFalse(McpServer.IsImportAccepted(Result("accept", "{}")), "field missing");
+            Assert.IsFalse(McpServer.IsImportAccepted(Result("accept", null)), "no content");
+            Assert.IsFalse(McpServer.IsImportAccepted(Result("decline", "{\"confirmation\":[\"Yes, import\"]}")), "declined");
+            Assert.IsFalse(McpServer.IsImportAccepted(Result("cancel", null)), "cancelled");
         }
 
         [TestMethod]
@@ -296,20 +370,31 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        public void Test_933_ImportPrompts_DescribeThePreviewWorkflow()
+        public void Test_933_OverwritePrompt_DescribesThePreviewWorkflow()
         {
-            foreach (var body in new[]
-            {
-                McpPrompts.OverwritePlcProgram("PLC_1", "C:\\export"),
-                McpPrompts.ImportPlcProgramChanges("PLC_1", "C:\\export")
-            })
-            {
-                // Assert
-                StringAssert.Contains(body, "dryRun true");
-                StringAssert.Contains(body, "yes, import", "the import needs an explicit confirmation");
-                StringAssert.Contains(body, "save project", "saving needs an explicit request, not an automatic call");
-                StringAssert.Contains(body, "- dryRun: true", "the prompt passes dryRun=true unless asked otherwise");
-            }
+            // Act
+            var body = McpPrompts.OverwritePlcProgram("PLC_1", "C:\\export");
+
+            // Assert
+            StringAssert.Contains(body, "dryRun true");
+            StringAssert.Contains(body, "Yes, import", "the import needs an explicit confirmation");
+            StringAssert.Contains(body, "save project", "saving needs an explicit request, not an automatic call");
+            StringAssert.Contains(body, "- dryRun: true", "replacing the whole program is previewed first unless asked otherwise");
+        }
+
+        [TestMethod]
+        public void Test_940_ImportChangesPrompt_GoesStraightToTheConfirmationDialog()
+        {
+            // Act
+            var body = McpPrompts.ImportPlcProgramChanges("PLC_1", "C:\\export");
+
+            // Assert
+            StringAssert.Contains(body, "dryRun false", "an import request opens the dialog right away");
+            StringAssert.Contains(body, "do not ask in the chat first");
+            StringAssert.Contains(body, "Yes, import", "the import needs an explicit confirmation");
+            StringAssert.Contains(body, "save project", "saving needs an explicit request, not an automatic call");
+            StringAssert.Contains(body, "- dryRun: false", "the dialog is the preview and the confirmation");
+            StringAssert.Contains(McpPrompts.ImportPlcProgramChanges("PLC_1", "C:\\export", dryRun: "true"), "- dryRun: true", "a pure preview stays possible");
         }
     }
 }

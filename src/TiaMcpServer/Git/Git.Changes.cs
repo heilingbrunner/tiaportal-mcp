@@ -20,6 +20,34 @@ namespace TiaMcpServer.Git
         Unmerged
     }
 
+    public static class GitChangeKinds
+    {
+        /// <summary>The one-letter status VS Code shows next to a changed file: M, A, U (untracked), R, D; '!' for an open conflict.</summary>
+        public static string Letter(this GitChangeKind kind)
+        {
+            switch (kind)
+            {
+                case GitChangeKind.Added:
+                    return "A";
+
+                case GitChangeKind.Untracked:
+                    return "U";
+
+                case GitChangeKind.Renamed:
+                    return "R";
+
+                case GitChangeKind.Deleted:
+                    return "D";
+
+                case GitChangeKind.Unmerged:
+                    return "!";
+
+                default:
+                    return "M";
+            }
+        }
+    }
+
     /// <summary>One changed file: its full path on disk and what changed.</summary>
     public sealed class GitChange
     {

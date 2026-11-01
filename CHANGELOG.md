@@ -23,8 +23,8 @@
   for Simatic SD); an object that is not prepared is listed in `Failures` with the message of TIA Portal.
   FBD blocks are exported when the settings give them a format; GRAPH blocks have no entry and are skipped. `ExportPlcProgram` no longer takes
   `regexName`: it exports the whole program. The new read-only tool `GetExportFormats(exportPath)` shows the
-  file and the export tool that writes each format. `OverwritePlcProgram` and `ImportPlcProgramChanges` still
-  import only sources and XML.
+  file and the export tool that writes each format. `OverwritePlcProgram` and `ImportPlcProgramChanges` import
+  sources, XML and SIMATIC SD documents (see Changed).
 - __`ExportOpcUaXml`__: exports the OPC UA data of one PLC as `<exportPath>/<softwarePath>/OPC UA/<PLC name>.xml`
   (`OpcUaExportProvider.Export`, found through `Project.HwUtilities`). Read-only with respect to the project, so
   it is not gated behind `--allow-write`; it fails with `NotSupported` when TIA Portal does not offer the OPC UA
@@ -105,6 +105,22 @@
 
 ### Changed
 
+- __`OverwritePlcProgram` and `ImportPlcProgramChanges` import SIMATIC SD documents__: a `.s7dcl` file (with its
+  `.s7res`) below `Program blocks` is imported as a block (TIA Portal V20 or newer), below `PLC data types` as a
+  PLC data type (V21 or newer), and the preview lists it in `Planned` with format `document` and `create` or
+  `overwrite`. Before, such a file was dropped without a word, so a change to a SIMATIC SD export was missing from
+  the preview. A changed `.s7res` stands for its `.s7dcl` (one entry per object); a `.s7res` without `.s7dcl`, a
+  document outside the two folders, a TIA Portal that is too old, and the `tia.json` of `ExportPlcProgram` are
+  listed in `Ignored` with the reason.
+- __`ImportPlcProgramChanges` opens the confirmation dialog right away__: the description and the prompt tell the
+  agent to call it with `dryRun=false` for an import request instead of listing the files in the chat and waiting
+  for a "yes". The dialog is the preview and the confirmation in one: it now lists every file to import (before:
+  the first 10), each with the git status letter VS Code uses (M modified, A added, U untracked, R renamed; D for deleted files, which cannot be imported), and how many files are ignored. `Planned` carries the same letter as `GitStatus`. `dryRun=true` stays for a pure preview, and
+  `OverwritePlcProgram` stays preview-first.
+- __Import confirmation is a checkbox__: the dialog of `OverwritePlcProgram` and `ImportPlcProgramChanges` (and their
+  prompts) no longer asks the user to type "yes, import". It shows an unticked "Yes, import" checkbox and the client's
+  Submit button. Only a submit with the box ticked imports; submitting it unticked, declining or cancelling imports
+  nothing.
 - __Breaking: `CompileSoftware` renamed to `CompilePlcSoftware`__: the name now says it compiles the whole
   PLC software, as opposed to the new `CompileCodeBlock`. Behaviour and parameters are unchanged; the tool
   and the prompt both carry the new name and no alias for the old one is kept.

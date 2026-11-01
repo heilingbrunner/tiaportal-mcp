@@ -120,7 +120,7 @@ Write tools (51) require `--allow-write`.
 | External sources      | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `ImportExternalSource`, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes`, `ImportSources` |
 | Type documents (V21+) | `ImportTypeFromDocuments`, `ImportTypesFromDocuments`                                                                                                                                                                                         |
 | XML and documents     | `ImportXmlBlock`, `ImportXmlType`, `ImportFromDocuments` (V20+), `ImportBlocksFromDocuments` (V20+) |
-| Whole PLC program     | `OverwritePlcProgram`, `ImportPlcProgramChanges` (sources and XML, preview by default, see below)                                                                                                                                          |
+| Whole PLC program     | `OverwritePlcProgram`, `ImportPlcProgramChanges` (sources, XML and SIMATIC SD documents, preview by default, see below)                                                                                                                                          |
 | Multiuser             | `CommitChanges` (commits the local session to the server and closes the session)                                                                                                                                                              |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
@@ -235,12 +235,15 @@ XML, so the files of a SIMATIC SD folder are not imported by them.
 - Prefer `ImportPlcProgramChanges` for edited files; use `OverwritePlcProgram` only to replace the whole tree (first
   import, restore, a folder without git). The name and the description of the whole-tree tool say so, so an agent does
   not pick it for a vague "import" request.
-- Both tools **preview by default**: `dryRun` is `true`, nothing is imported, and `Planned` lists every
+- Both tools **preview by default** (the parameter `dryRun` is `true`): nothing is imported, and `Planned` lists every
   object with `create` or `overwrite` (the action is derived from the file name). The tool descriptions and
-  prompts tell the agent to show that list to you.
+  prompts tell the agent to show that list to you. Exception: for a plain import request the `ImportPlcProgramChanges`
+  prompt and description tell the agent to call it with `dryRun=false` right away, because the dialog below is the
+  preview and the confirmation in one; it lists every file to import.
 - A real run (`dryRun=false`) is confirmed by **you, through the server**: it shows a confirmation dialog in the
   client (MCP elicitation) listing what would be imported and how many objects are overwritten, and imports only
-  when you type "yes, import". The agent cannot answer it for you, and declining or cancelling imports nothing. A
+  when you tick the "Yes, import" checkbox and submit. The agent cannot answer it for you, and submitting without the
+  tick, declining or cancelling imports nothing. A
   client without elicitation support is refused with a message saying so; it can still run the preview.
 - Saving is not guarded by the server: the agent is told to call `SaveProject` (`SaveSession` in a local session)
   only after you say "save project", which depends on the agent following that instruction.
@@ -252,7 +255,7 @@ XML, so the files of a SIMATIC SD folder are not imported by them.
   Deleted files cannot be imported and are listed in `Deleted`; files with an open merge conflict go to `Ignored`.
   It needs git on `PATH` and an export folder inside a git repository, and takes the `--export-path` and
   `--software-path` presets. Suggested flow: `ExportPlcProgram`, commit the export as baseline, edit files,
-  `ImportPlcProgramChanges` (preview), confirm, run it again with `dryRun=false`, `SaveProject`, commit.
+  `ImportPlcProgramChanges` (the dialog lists the files; tick "Yes, import" and submit), `SaveProject`, commit.
 - Objects may need each other across the two formats (a LAD block calling an SCL block, an instance data block of
   a LAD function block). Import therefore works in rounds: it retries what failed as long as the last round
   imported something. The response reports `Rounds`, and what never succeeded in `Failures` with its last error.
