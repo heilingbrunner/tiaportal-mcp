@@ -97,13 +97,14 @@ namespace TiaMcpServer.Test
         [TestMethod]
         public void Test_1020_RecommendedTool_NamesTheToolThatWritesTheFormat()
         {
-            Assert.AreEqual("ExportAsDocuments", ExportFormats.RecommendedTool("code blocks-LAD", ExportFormatKind.SimaticSd));
-            Assert.AreEqual("ExportXmlBlock", ExportFormats.RecommendedTool("code blocks-FBD", ExportFormatKind.Xml));
-            Assert.AreEqual("ExportSourceBlock", ExportFormats.RecommendedTool("code blocks-STL", ExportFormatKind.Source));
-            Assert.AreEqual("ExportSourceBlock", ExportFormats.RecommendedTool("data blocks", ExportFormatKind.Source));
-            Assert.AreEqual("ExportTypeAsDocuments", ExportFormats.RecommendedTool("PLC data types", ExportFormatKind.SimaticSd));
-            Assert.AreEqual("ExportXmlType", ExportFormats.RecommendedTool("PLC data types", ExportFormatKind.Xml));
-            Assert.AreEqual("ExportSourceType", ExportFormats.RecommendedTool("PLC data types", ExportFormatKind.Source));
+            // The format comes from tia.json, so one tool per object kind writes every format
+            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code blocks-LAD", ExportFormatKind.SimaticSd));
+            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code blocks-FBD", ExportFormatKind.Xml));
+            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code blocks-STL", ExportFormatKind.Source));
+            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("data blocks", ExportFormatKind.Source));
+            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC data types", ExportFormatKind.SimaticSd));
+            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC data types", ExportFormatKind.Xml));
+            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC data types", ExportFormatKind.Source));
             Assert.IsNull(ExportFormats.RecommendedTool("PLC tag tables", ExportFormatKind.Xml), "an object type without an export tool for it");
             Assert.IsNull(ExportFormats.RecommendedTool("code blocks-LAD", ExportFormatKind.Unknown));
         }

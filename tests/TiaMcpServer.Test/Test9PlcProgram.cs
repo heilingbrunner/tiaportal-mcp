@@ -76,7 +76,7 @@ namespace TiaMcpServer.Test
                 Assert.AreEqual(ProgramBlockFormat.None, plan.Format, language.ToString());
                 Assert.IsNull(plan.Extension);
                 StringAssert.Contains(plan.Reason, language.ToString());
-                StringAssert.Contains(plan.Reason, "ExportXmlBlock", "the reason names the tool to use instead");
+                StringAssert.Contains(plan.Reason, "GetXmlBlock", "the reason names the tool to use instead");
             }
         }
 

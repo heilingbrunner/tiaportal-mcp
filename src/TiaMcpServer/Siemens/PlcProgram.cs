@@ -150,7 +150,7 @@ namespace TiaMcpServer.Siemens
                 ProgramBlockFormat.None,
                 null,
                 $"programming language {language} has no source form and only LAD is exported as XML by this tool; " +
-                "use 'ExportXmlBlock' or 'ExportAsDocuments' for it");
+                "read it with 'GetXmlBlock' instead");
         }
 
         /// <summary>
@@ -168,7 +168,7 @@ namespace TiaMcpServer.Siemens
                     ProgramBlockFormat.None,
                     null,
                     $"programming language {language} has no entry in the export format settings; " +
-                    "use 'ExportXmlBlock' or 'ExportAsDocuments' for it");
+                    "read it with 'GetXmlBlock' instead");
             }
 
             switch (RequireKind(settings, key))

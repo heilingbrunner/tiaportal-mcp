@@ -134,30 +134,28 @@ namespace TiaMcpServer.Siemens
             }
         }
 
-        /// <summary>The export tool that writes the configured format of the object type, or null when there is none.</summary>
+        /// <summary>
+        /// The export tool for the object type, or null when there is none or the format is unknown.
+        /// The format comes from 'tia.json', so one tool per object kind writes every format.
+        /// </summary>
         public static string? RecommendedTool(string key, ExportFormatKind kind)
         {
-            var isType = key.StartsWith(PlcTypesKey, StringComparison.OrdinalIgnoreCase) ||
-                         key.StartsWith("F-compliant PLC data types", StringComparison.OrdinalIgnoreCase);
+            if (kind == ExportFormatKind.Unknown)
+            {
+                return null;
+            }
+
+            if (key.StartsWith(PlcTypesKey, StringComparison.OrdinalIgnoreCase) ||
+                key.StartsWith("F-compliant PLC data types", StringComparison.OrdinalIgnoreCase))
+            {
+                return "ExportType";
+            }
 
             var isBlock = key.StartsWith("code blocks", StringComparison.OrdinalIgnoreCase) ||
                           key.StartsWith(DataBlocksKey, StringComparison.OrdinalIgnoreCase) ||
                           key.StartsWith("safety data blocks", StringComparison.OrdinalIgnoreCase);
 
-            switch (kind)
-            {
-                case ExportFormatKind.SimaticSd:
-                    return isType ? "ExportTypeAsDocuments" : isBlock ? "ExportAsDocuments" : null;
-
-                case ExportFormatKind.Xml:
-                    return isType ? "ExportXmlType" : isBlock ? "ExportXmlBlock" : null;
-
-                case ExportFormatKind.Source:
-                    return isType ? "ExportSourceType" : isBlock ? "ExportSourceBlock" : null;
-
-                default:
-                    return null;
-            }
+            return isBlock ? "ExportBlock" : null;
         }
     }
 

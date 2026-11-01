@@ -9,6 +9,9 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>True when nothing was imported; 'Planned' says what a real run would do.</summary>
         public bool? DryRun { get; set; }
 
+        /// <summary>Dry run only: the affected files as a markdown table (columns Git, Type, File); show it to the user unchanged.</summary>
+        public string? Table { get; set; }
+
         /// <summary>Dry run only: each file that would be imported and whether it creates or overwrites its object.</summary>
         public IEnumerable<ResponsePlannedProgramItem>? Planned { get; set; }
 

@@ -26,7 +26,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region source
 
         [McpServerTool(Name = "GetXmlBlock", Title = "Get block as XML", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Return one program block as SimaticML XML text directly, instead of exporting a file and reading it back. Works for every consistent block, whatever its language. The inline counterpart to 'ExportXmlBlock'")]
+         Description("Return one program block as SimaticML XML text directly, instead of exporting a file and reading it back. Works for every consistent block, whatever its language. The inline counterpart to 'ExportBlock'")]
         public static ResponseSourceText GetXmlBlock(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("blockPath: root-relative path of the block, e.g. '0_OBs/Main'. Use 'ResolveObjectPath' if you only know the name")] string blockPath,
@@ -39,7 +39,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "GetSourceBlock", Title = "Get block as source", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Return one program block as TIA Portal external source text ('.scl' for SCL, '.db' for data blocks, '.awl' for STL) directly, in the format the compiler reads back. LAD, FBD and GRAPH blocks have no source form and are rejected with a reason - use 'GetXmlBlock' or 'GetDocumentsBlock' for those. The inline counterpart to 'ExportSourceBlock'")]
+         Description("Return one program block as TIA Portal external source text ('.scl' for SCL, '.db' for data blocks, '.awl' for STL) directly, in the format the compiler reads back. LAD, FBD and GRAPH blocks have no source form and are rejected with a reason - use 'GetXmlBlock' or 'GetDocumentsBlock' for those. The inline counterpart to 'ExportBlock'")]
         public static ResponseSourceText GetSourceBlock(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("blockPath: root-relative path of the block, e.g. '0_OBs/Main'. Use 'ResolveObjectPath' if you only know the name")] string blockPath,
@@ -53,7 +53,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "GetDocumentsBlock", Title = "Get block as documents", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Return one program block as readable SIMATIC Source Document text (.s7dcl/.s7res, TIA Portal V20+) directly. STL and mixed-language blocks have no source document and are rejected - use 'GetXmlBlock' or 'GetSourceBlock' for those. The inline counterpart to 'ExportAsDocuments'")]
+         Description("Return one program block as readable SIMATIC Source Document text (.s7dcl/.s7res, TIA Portal V20+) directly. STL and mixed-language blocks have no source document and are rejected - use 'GetXmlBlock' or 'GetSourceBlock' for those. The inline counterpart to 'ExportBlock'")]
         public static ResponseSourceText GetDocumentsBlock(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("blockPath: root-relative path of the block, e.g. '0_OBs/Main'. Use 'ResolveObjectPath' if you only know the name")] string blockPath,
@@ -105,7 +105,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "GetXmlType", Title = "Get type as XML", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Return one PLC data type as SimaticML XML text directly, instead of exporting a file and reading it back. The inline counterpart to 'ExportXmlType'")]
+         Description("Return one PLC data type as SimaticML XML text directly, instead of exporting a file and reading it back. The inline counterpart to 'ExportType'")]
         public static ResponseSourceText GetXmlType(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("typePath: root-relative path of the PLC data type, e.g. 'Common/BtnTyp_X'. Use 'ResolveObjectPath' if you only know the name")] string typePath,
@@ -118,7 +118,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "GetSourceType", Title = "Get type as source", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Return one PLC data type as TIA Portal external source text ('.udt', the TYPE ... END_TYPE declaration) directly, in the format the compiler reads back. Needs no TIA Portal V21. The inline counterpart to 'ExportSourceType'")]
+         Description("Return one PLC data type as TIA Portal external source text ('.udt', the TYPE ... END_TYPE declaration) directly, in the format the compiler reads back. Needs no TIA Portal V21. The inline counterpart to 'ExportType'")]
         public static ResponseSourceText GetSourceType(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("typePath: root-relative path of the PLC data type, e.g. 'Common/BtnTyp_X'. Use 'ResolveObjectPath' if you only know the name")] string typePath,
@@ -132,7 +132,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "GetDocumentsType", Title = "Get type as documents", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Return one PLC data type as readable SIMATIC Source Document text (.s7dcl/.s7res) directly. Requires TIA Portal V21; on older versions use 'GetSourceType' or 'GetXmlType'. The inline counterpart to 'ExportTypeAsDocuments'")]
+         Description("Return one PLC data type as readable SIMATIC Source Document text (.s7dcl/.s7res) directly. Requires TIA Portal V21; on older versions use 'GetSourceType' or 'GetXmlType'. The inline counterpart to 'ExportType'")]
         public static ResponseSourceText GetDocumentsType(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("typePath: root-relative path of the PLC data type, e.g. 'Common/BtnTyp_X'. Use 'ResolveObjectPath' if you only know the name")] string typePath,
@@ -144,162 +144,17 @@ namespace TiaMcpServer.ModelContextProtocol
                 "PLC data type");
         }
 
-        [McpServerTool(Name = "ExportPlcAsDocuments", Title = "Export PLC as documents", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Write a whole PLC software to one folder tree that mirrors the project, ready to commit: program blocks and PLC data types as readable SIMATIC Source Documents where TIA Portal supports them, tag tables and watch tables as XML, each below its localised system folder. Replaces running the four bulk exports separately. Objects that cannot be exported are reported instead of failing the snapshot")]
-        public static ResponseSourceTree ExportPlcAsDocuments(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("exportPath: directory on this machine that receives the tree; existing files of the same name are overwritten; files are written below <exportPath>/<softwarePath>/")] string exportPath)
-        {
-            try
-            {
-                var result = Portal.ExportPlcAsDocuments(softwarePath, exportPath);
-
-                return new ResponseSourceTree
-                {
-                    Message = $"Snapshot of '{softwarePath}' written to '{exportPath}': {result.TotalWritten} object(s), " +
-                              $"{result.Skipped.Count} skipped, {result.Failures.Count} failed",
-                    Directory = result.Directory,
-                    Written = result.Written,
-                    Formats = result.Formats,
-                    Skipped = result.Skipped,
-                    Failures = result.Failures,
-                    Meta = Ok(new JsonObject
-                    {
-                        ["totalWritten"] = result.TotalWritten,
-                        ["skipped"] = result.Skipped.Count,
-                        ["failed"] = result.Failures.Count
-                    })
-                };
-            }
-            catch (PortalException pex)
-            {
-                throw new McpException(pex.Message, pex);
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error snapshotting '{softwarePath}': {ex.Message}", ex);
-            }
-        }
-
         #endregion
 
-        // From the former McpServer.GenerateSource.cs:
-        // Writing TIA Portal external source files (*.scl, *.db, *.awl, *.udt).
+        // Callers: the export tools in McpServer.Plc.cs and McpServer.Porcelain.cs. File I/O: they
+        // write to a caller-supplied directory and overwrite a file of the same name, so they are
+        // marked destructive; they do not modify the project, so they are not gated behind
+        // '--allow-write'.
         //
-        // Callers: the MCP host, through tool registration. Affected API: none existing - all three
-        // tools are new.
-        //
-        // File I/O: these write to a caller-supplied directory and overwrite a file of the same
-        // name, so they are marked destructive, exactly like the Export* tools. They do not modify
-        // the project, so they are not gated behind '--allow-write'.
-        //
-        // Why this sits next to the existing exporters rather than replacing them: 'ExportXmlBlock'
-        // writes SimaticML, 'ExportAsDocuments' writes SIMATIC Source Documents, and neither can be
-        // compiled back. These files can - 'CreateExternalSourceFromFile' plus
-        // 'ImportSourceBlocks' is the return path.
+        // The response shaping the bulk export tools (ExportPlcProgram, ExportBlocks, ExportTypes,
+        // ExportTagTables and the single-object ExportBlock, ExportType, ExportTagTable) share.
 
         #region export source
-
-        [McpServerTool(Name = "ExportSourceBlock", Title = "Export block as source", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Write one program block as a TIA Portal external source file, in the format the compiler reads back. The extension follows the block: '.db' for data blocks, '.scl' for SCL blocks, '.awl' for STL blocks. Only those three can be generated - LAD, FBD and GRAPH blocks have no source form and are rejected with a reason, for which 'ExportXmlBlock' (SimaticML) or 'ExportAsDocuments' is the alternative")]
-        public static ResponseGeneratedSource ExportSourceBlock(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("blockPath: root-relative path of the block, e.g. '0_OBs/Main'. Use 'ResolveObjectPath' if you only know the name")] string blockPath,
-            [Description("exportPath: directory on this machine that receives the file; an existing file of the same name is overwritten; files are written below <exportPath>/<softwarePath>/")] string exportPath,
-            [Description("withDependencies: also write every object the block uses (called blocks, instance DBs, UDTs) into the same file, so it compiles on its own. Default false")] bool withDependencies = false,
-            [Description("preservePath: mirror the project groups below '<exportPath>/Program blocks', as the Export* tools do. Default false, which writes straight into exportPath")] bool preservePath = false)
-        {
-            return Generated(
-                () => Portal.ExportSourceBlock(softwarePath, blockPath, exportPath, withDependencies, preservePath),
-                blockPath,
-                "block");
-        }
-
-        [McpServerTool(Name = "ExportSourceType", Title = "Export type as source", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Write one PLC data type as a '*.udt' external source file, in the format the compiler reads back. Unlike 'ExportTypeAsDocuments' this needs no TIA Portal V21 and produces a file that can be imported again")]
-        public static ResponseGeneratedSource ExportSourceType(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("typePath: root-relative path of the PLC data type, e.g. 'Common/BtnTyp_X'. Use 'ResolveObjectPath' if you only know the name")] string typePath,
-            [Description("exportPath: directory on this machine that receives the file; an existing file of the same name is overwritten; files are written below <exportPath>/<softwarePath>/")] string exportPath,
-            [Description("withDependencies: also write every data type this one uses into the same file. Default false")] bool withDependencies = false,
-            [Description("preservePath: mirror the project groups below '<exportPath>/PLC data types', as the Export* tools do. Default false, which writes straight into exportPath")] bool preservePath = false)
-        {
-            return Generated(
-                () => Portal.ExportSourceType(softwarePath, typePath, exportPath, withDependencies, preservePath),
-                typePath,
-                "PLC data type");
-        }
-
-        [McpServerTool(Name = "ExportSourceBlocks", Title = "Export blocks as source", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use this to export blocks (and only blocks, no PLC data types) as source files, all of them or only those matching a name pattern. Writes every program block below a block group, including all subgroups, as TIA Portal external source files. To export only some blocks pass 'regexName' (a regular expression on the block name, e.g. '.+HMI_.+'): the server filters while exporting, so never export everything to a temporary folder and copy the matching files afterwards. Blocks with no source form (LAD, FBD, GRAPH), inconsistent blocks and know-how protected ones are reported in 'Skipped' instead of failing the run. The recursive counterpart to 'ExportSourceBlock'")]
-        public static ResponseGeneratedSources ExportSourceBlocks(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("groupPath: root-relative path of the block group to export recursively, e.g. '0_OBs'. Empty means all blocks below 'Program blocks'")] string groupPath,
-            [Description("exportPath: directory on this machine that receives the files; existing files of the same name are overwritten; files are written below <exportPath>/<softwarePath>/")] string exportPath,
-            [Description("withDependencies: also write every object each block uses into its file. Default false, which keeps one object per file")] bool withDependencies = false,
-            [Description("preservePath: mirror the project groups below '<exportPath>/Program blocks'. Default false, which writes straight into exportPath, so blocks of the same name in different groups overwrite each other")] bool preservePath = false,
-            [Description("regexName: optional regular expression, exports only blocks whose name matches (e.g. '.+HMI_.+'). Filtering happens during the export, so no temporary export or file copying is needed. Empty means all")] string regexName = "")
-        {
-            return GeneratedMany(
-                () => Portal.ExportSourceBlocks(softwarePath, groupPath, exportPath, withDependencies, preservePath, regexName),
-                $"Block sources below '{groupPath}'",
-                exportPath);
-        }
-
-        [McpServerTool(Name = "ExportSourceTypes", Title = "Export types as source", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use this to export PLC data types (and only types, no blocks) as source files, all of them or only those matching a name pattern. Writes every PLC data type below a type group, including all subgroups, as '*.udt' external source files. To export only some types pass 'regexName' (a regular expression on the type name): the server filters while exporting, so never export everything to a temporary folder and copy the matching files afterwards. Inconsistent and know-how protected types are reported in 'Skipped' instead of failing the run. The recursive counterpart to 'ExportSourceType'")]
-        public static ResponseGeneratedSources ExportSourceTypes(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("groupPath: root-relative path of the type group to export recursively, e.g. 'Common'. Empty means all types below 'PLC data types'")] string groupPath,
-            [Description("exportPath: directory on this machine that receives the files; existing files of the same name are overwritten; files are written below <exportPath>/<softwarePath>/")] string exportPath,
-            [Description("withDependencies: also write every data type each one uses into its file. Default false")] bool withDependencies = false,
-            [Description("preservePath: mirror the project groups below '<exportPath>/PLC data types'. Default false, which writes straight into exportPath, so types of the same name in different groups overwrite each other")] bool preservePath = false,
-            [Description("regexName: optional regular expression, exports only types whose name matches. Filtering happens during the export. Empty means all")] string regexName = "")
-        {
-            return GeneratedMany(
-                () => Portal.ExportSourceTypes(softwarePath, groupPath, exportPath, withDependencies, preservePath, regexName),
-                $"Type sources below '{groupPath}'",
-                exportPath);
-        }
-
-        [McpServerTool(Name = "ExportSources", Title = "Export sources", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use this only when blocks AND PLC data types are wanted together; for only blocks use 'ExportSourceBlocks', for only types use 'ExportSourceTypes'. Writes every block and PLC data type of one PLC software as external source files into a folder tree that mirrors the project groups: '<exportPath>/Program blocks/...' and '<exportPath>/PLC data types/...', one file per object. The whole-PLC counterpart to 'ExportSourceBlocks' and 'ExportSourceTypes' and the compilable counterpart to 'ExportPlcAsDocuments'; 'ImportSources' reads such a tree back. The 'regexName' filter applies to blocks and types alike; to filter only blocks or only types use 'ExportSourceBlocks' or 'ExportSourceTypes' with 'regexName'. Objects with no source form (LAD, FBD, GRAPH), inconsistent objects and know-how protected ones are reported in 'Skipped' instead of failing the run. 'ExportPlcProgram' writes the same tree and also exports the LAD blocks as XML")]
-        public static ResponseGeneratedSources ExportSources(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("exportPath: directory on this machine that receives the tree; existing files of the same name are overwritten; files are written below <exportPath>/<softwarePath>/")] string exportPath,
-            [Description("regexName: optional regular expression, exports only objects whose name matches. Empty means all")] string regexName = "",
-            [Description("withDependencies: also write every object each one uses into its file. Default false, which keeps one object per file")] bool withDependencies = false)
-        {
-            try
-            {
-                var result = Portal.ExportSources(softwarePath, exportPath, regexName, withDependencies);
-
-                return new ResponseGeneratedSources
-                {
-                    Message = $"Sources of '{softwarePath}' written to '{exportPath}': {result.Files.Count} file(s), " +
-                              $"{result.Skipped.Count} skipped, {result.Failures.Count} failed",
-                    Directory = result.Directory,
-                    Written = result.Written,
-                    Items = result.Files.Select(ToGeneratedSourceItem).ToList(),
-                    Skipped = result.Skipped,
-                    Failures = result.Failures,
-                    Meta = Ok(new JsonObject
-                    {
-                        ["totalWritten"] = result.Files.Count,
-                        ["skipped"] = result.Skipped.Count,
-                        ["failed"] = result.Failures.Count
-                    })
-                };
-            }
-            catch (PortalException pex)
-            {
-                throw new McpException(pex.Message, pex);
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error generating sources for '{softwarePath}': {ex.Message}", ex);
-            }
-        }
 
         /// <summary>Shared response shaping for the two recursive group generators.</summary>
         private static ResponseGeneratedSources GeneratedMany(Func<GeneratedSourcesResult> generate, string what, string exportPath)
@@ -339,39 +194,6 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        /// <summary>Shared response shaping for the two single-object generators.</summary>
-        private static ResponseGeneratedSource Generated(Func<GeneratedSource> generate, string objectPath, string kind)
-        {
-            try
-            {
-                var result = generate();
-
-                return new ResponseGeneratedSource
-                {
-                    Message = $"Source of {kind} '{objectPath}' written to '{result.File}'",
-                    Name = result.Name,
-                    Path = result.Path,
-                    File = result.File,
-                    Format = result.Format,
-                    Language = result.Language,
-                    Size = result.Size,
-                    Meta = Ok(new JsonObject
-                    {
-                        ["format"] = result.Format,
-                        ["size"] = result.Size
-                    })
-                };
-            }
-            catch (PortalException pex)
-            {
-                throw new McpException(pex.Message, pex);
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error generating the source of '{objectPath}': {ex.Message}", ex);
-            }
-        }
-
         private static ResponseGeneratedSourceItem ToGeneratedSourceItem(GeneratedSource source) => new ResponseGeneratedSourceItem
         {
             Name = source.Name,
@@ -381,123 +203,6 @@ namespace TiaMcpServer.ModelContextProtocol
             Language = source.Language,
             Size = source.Size
         };
-
-        #endregion
-
-        // From the former McpServerWrite.ImportSources.cs:
-        // Importing a whole tree of TIA Portal external source files back into the project.
-        //
-        // Callers: the MCP host, through tool registration under '--allow-write'. Affected API:
-        // none existing - the tool is new. File I/O: reads the caller-supplied tree only; the
-        // project change stays in memory until SaveProject/SaveSession, per the SaveHint convention
-        // shared by every [WriteTool] tool.
-        //
-        // The import counterparts to the ExportSource* tools further up in this file, one to one:
-        // ImportSourceBlock / ImportSourceType / ImportSourceBlocks / ImportSourceTypes read what
-        // ExportSourceBlock / ExportSourceType / ExportSourceBlocks / ExportSourceTypes wrote, and
-        // ImportSources walks a whole tree written by ExportSources back into blocks and PLC data
-        // types via 'Portal.ImportSources'. All five share ImportedSources for the response.
-        // 'ImportExternalSource' (in the external sources region below) is the different tool that
-        // compiles a source already registered in the project; it was named ImportSourceBlocks
-        // before that name went to the folder import.
-
-        #region import sources (write)
-
-        [WriteTool]
-        [McpServerTool(Name = "ImportSourceBlock", Title = "Import block from source", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile one block source file (*.db, *.awl or *.scl) into a block group - the counterpart to 'ExportSourceBlock'. Existing blocks of the same name are overwritten. A file that includes dependencies can generate several objects, all listed in 'Items'. 'ImportXmlBlock' is the equivalent for SimaticML files")]
-        public static ResponseImportedSources ImportSourceBlock(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("groupPath: root-relative block user group that receives the blocks, e.g. '0_OBs'. Empty uses the source's default location; the 'Program blocks' root itself is not allowed")] string groupPath,
-            [Description("importPath: full path of the *.db, *.awl or *.scl file on the machine running this server")] string importPath,
-            [Description("keepOnError: keep successfully generated objects even when others in the file fail. Default false, which rolls back the whole file on any error")] bool keepOnError = false)
-        {
-            return Guarded(nameof(ImportSourceBlock), () =>
-                ImportedSources(Portal.ImportSourceBlock(softwarePath, groupPath, importPath, keepOnError), importPath, keepOnError));
-        }
-
-        [WriteTool]
-        [McpServerTool(Name = "ImportSourceType", Title = "Import type from source", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile one '*.udt' source file into a PLC data type group - the counterpart to 'ExportSourceType'. Existing types of the same name are overwritten. 'ImportXmlType' is the equivalent for SimaticML files")]
-        public static ResponseImportedSources ImportSourceType(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("groupPath: root-relative PLC data type user group that receives the types, e.g. 'Common'. Empty uses the source's default location; the 'PLC data types' root itself is not allowed")] string groupPath,
-            [Description("importPath: full path of the *.udt file on the machine running this server")] string importPath,
-            [Description("keepOnError: keep successfully generated objects even when others in the file fail. Default false, which rolls back the whole file on any error")] bool keepOnError = false)
-        {
-            return Guarded(nameof(ImportSourceType), () =>
-                ImportedSources(Portal.ImportSourceType(softwarePath, groupPath, importPath, keepOnError), importPath, keepOnError));
-        }
-
-        [WriteTool]
-        [McpServerTool(Name = "ImportSourceBlocks", Title = "Import blocks from source", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile every block source file (*.db, *.awl, *.scl) of a folder into a block group - the counterpart to 'ExportSourceBlocks'. Existing blocks of the same name are overwritten. A file that fails is reported in 'Failures' instead of stopping the run. 'ImportSources' does blocks and PLC data types in one go")]
-        public static ResponseImportedSources ImportSourceBlocks(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("groupPath: root-relative block user group that receives the blocks, e.g. '0_OBs'. Empty uses each source's default location; the 'Program blocks' root itself is not allowed")] string groupPath,
-            [Description("importPath: directory on this machine that holds the *.db, *.awl and *.scl files; read from <importPath>/<softwarePath>/")] string importPath,
-            [Description("regexName: optional regular expression, imports only files whose base name matches. Empty means all")] string regexName = "",
-            [Description("preservePath: also read the subfolders of importPath and put each file into the matching subgroup of groupPath, as 'ExportSourceBlocks' with preservePath writes them; a missing subgroup fails that file. Default false, which reads only importPath itself")] bool preservePath = false,
-            [Description("keepOnError: keep successfully generated objects even when others in a file fail. Default false, which rolls back a whole file on any error")] bool keepOnError = false)
-        {
-            return Guarded(nameof(ImportSourceBlocks), () =>
-                ImportedSources(Portal.ImportSourceBlocks(softwarePath, groupPath, importPath, regexName, preservePath, keepOnError), importPath, keepOnError));
-        }
-
-        [WriteTool]
-        [McpServerTool(Name = "ImportSourceTypes", Title = "Import types from source", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile every '*.udt' source file of a folder into a PLC data type group - the counterpart to 'ExportSourceTypes'. Existing types of the same name are overwritten. A file that fails is reported in 'Failures' instead of stopping the run")]
-        public static ResponseImportedSources ImportSourceTypes(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("groupPath: root-relative PLC data type user group that receives the types, e.g. 'Common'. Empty uses each source's default location; the 'PLC data types' root itself is not allowed")] string groupPath,
-            [Description("importPath: directory on this machine that holds the *.udt files; read from <importPath>/<softwarePath>/")] string importPath,
-            [Description("regexName: optional regular expression, imports only files whose base name matches. Empty means all")] string regexName = "",
-            [Description("preservePath: also read the subfolders of importPath and put each file into the matching subgroup of groupPath, as 'ExportSourceTypes' with preservePath writes them; a missing subgroup fails that file. Default false, which reads only importPath itself")] bool preservePath = false,
-            [Description("keepOnError: keep successfully generated objects even when others in a file fail. Default false, which rolls back a whole file on any error")] bool keepOnError = false)
-        {
-            return Guarded(nameof(ImportSourceTypes), () =>
-                ImportedSources(Portal.ImportSourceTypes(softwarePath, groupPath, importPath, regexName, preservePath, keepOnError), importPath, keepOnError));
-        }
-
-        [WriteTool]
-        [McpServerTool(Name = "ImportSources", Title = "Import sources", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile every block and PLC data type source file (*.db, *.awl, *.scl, *.udt) under a folder tree back into the project - the whole-PLC counterpart to 'ExportSources'. Each file is placed into the block or PLC data type group its folder path implies, matching the layout 'ExportSources' writes; a folder whose group does not yet exist in the project fails that file rather than being created automatically. Existing blocks/types of the same name are overwritten. 'OverwritePlcProgram' also imports the XML files of LAD blocks")]
-        public static ResponseImportedSources ImportSources(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("importPath: directory on this machine to walk recursively for *.db, *.awl, *.scl and *.udt files; read from <importPath>/<softwarePath>/")] string importPath,
-            [Description("regexName: optional regular expression, imports only files whose base name matches. Empty means all")] string regexName = "",
-            [Description("keepOnError: keep successfully generated objects from a file even when others in it fail; TIA Portal then reports no per-object success/failure for that file. Default false, which rolls back a whole file on any error")] bool keepOnError = false)
-        {
-            return Guarded(nameof(ImportSources), () =>
-                ImportedSources(Portal.ImportSources(softwarePath, importPath, regexName, keepOnError), importPath, keepOnError));
-        }
-
-        /// <summary>Shared response shaping for the five source import tools.</summary>
-        private static ResponseImportedSources ImportedSources(ImportedSourcesResult result, string importPath, bool keepOnError)
-        {
-            return new ResponseImportedSources
-            {
-                Directory = result.Directory,
-                Written = result.Written,
-                Items = result.Items.Select(i => new ResponseImportedSourceItem
-                {
-                    Name = i.Name,
-                    Path = i.Path,
-                    Kind = i.Kind
-                }).ToList(),
-                Failures = result.Failures,
-                Message = $"{result.Items.Count} object(s) imported from '{importPath}', {result.Failures.Count} failed. {SaveHint}",
-                Meta = new JsonObject
-                {
-                    ["timestamp"] = DateTime.Now,
-                    ["success"] = true,
-                    ["pendingSave"] = true,
-                    ["importedCount"] = result.Items.Count,
-                    ["failedCount"] = result.Failures.Count,
-                    ["keepOnError"] = keepOnError
-                }
-            };
-        }
 
         #endregion
 
@@ -631,36 +336,6 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 Portal.DeleteExternalSourceGroup(softwarePath, groupPath);
                 return Deleted("External source group", groupPath);
-            });
-        }
-
-        [WriteTool]
-        [McpServerTool(Name = "ImportExternalSource", Title = "Import external source", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile an external source that is already registered in the PLC software into program blocks and PLC data types. To import a file from disk, use 'ImportSourceBlock' or 'ImportSourceType' instead. A target must be a block user group: blocks cannot be generated into the Program blocks root")]
-        public static ResponseGenerateBlocks ImportExternalSource(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("sourcePath: root-relative path of the external source, e.g. SourceGroup1/Source_1")] string sourcePath,
-            [Description("targetGroupPath: optional root-relative block user group that receives the blocks; empty uses the source default location")] string targetGroupPath = "",
-            [Description("keepOnError: keep successfully generated blocks even when others fail (default false)")] bool keepOnError = false)
-        {
-            return Guarded(nameof(ImportExternalSource), () =>
-            {
-                var names = Portal.ImportExternalSource(softwarePath, sourcePath, targetGroupPath, keepOnError);
-
-                return new ResponseGenerateBlocks
-                {
-                    GeneratedNames = names,
-                    Count = names.Count,
-                    Message = $"{names.Count} object(s) generated from '{sourcePath}'. {SaveHint}",
-                    Meta = new JsonObject
-                    {
-                        ["timestamp"] = DateTime.Now,
-                        ["success"] = true,
-                        ["pendingSave"] = true,
-                        ["generatedCount"] = names.Count,
-                        ["keepOnError"] = keepOnError
-                    }
-                };
             });
         }
 

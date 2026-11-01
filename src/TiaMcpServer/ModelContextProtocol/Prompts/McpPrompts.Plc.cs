@@ -15,7 +15,7 @@ namespace TiaMcpServer.ModelContextProtocol
 What you get: every object in the format TIA Portal is configured for (Version control interface > Export formats):
 - SIMATIC SD documents (.s7dcl and .s7res), SimaticML (.xml) or an external source file (.scl, .awl, .db, .udt), per object type
 - The formats are read from <exportPath>/tia.json because Openness cannot read them. A missing file is created with the defaults TIA Portal offers for a new workspace; the response then has a note asking the user to check the file, so tell the user. An entry missing for an object type fails the export before anything is written. Call GetExportFormats to see the formats
-- Blocks of a language without a setting, blocks that cannot be written in the configured format, inconsistent and know-how protected objects are listed in 'Skipped'; use ExportXmlBlock or ExportAsDocuments for those
+- Blocks of a language without a setting, blocks that cannot be written in the configured format, inconsistent and know-how protected objects are listed in 'Skipped'; read those with GetXmlBlock
 - Files are written below <exportPath>/<softwarePath>/Program blocks/... and <exportPath>/<softwarePath>/PLC data types/..., mirroring the project groups. OverwritePlcProgram reads the folder back, ImportPlcProgramChanges only the files git reports as changed
 
 Common parameter values:
@@ -25,6 +25,166 @@ Common parameter values:
 Use the ExportPlcProgram tool with these parameters:
 - softwarePath: {softwarePath}
 - exportPath: {exportPath}";
+        }
+
+        [McpServerPrompt(Name = "ExportBlocks"), Description("Export program blocks, all or by regular expression, using tia.json formats")]
+        public static string ExportBlocks(string softwarePath, string exportPath, string regexName = "")
+        {
+            return $@"Export only the program blocks of one PLC software, each in the format TIA Portal is configured for its block type and language (Version control interface > Export formats).
+
+What you get:
+- The formats are read from <exportPath>/tia.json because Openness cannot read them. A missing file is created with the defaults TIA Portal offers for a new workspace; the response then has a note asking the user to check the file, so tell the user. An entry missing for a block type fails the export before anything is written. Call GetExportFormats to see the formats
+- No PLC data types and no tag tables; use ExportTypes and ExportTagTables for those, or ExportPlcProgram for blocks and types in one call
+- Blocks that cannot be written in the configured format, inconsistent and know-how protected blocks are listed in 'Skipped'
+- Files are written below <exportPath>/<softwarePath>/Program blocks/..., mirroring the project groups
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes
+- exportPath: '${{workspacefolder}}/export/Program' is a good default; existing files of the same name are overwritten
+- regexName: empty for all blocks, or e.g. '.+HMI' to export only blocks whose name matches
+
+Use the ExportBlocks tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}
+- regexName: {regexName}";
+        }
+
+        [McpServerPrompt(Name = "ExportTypes"), Description("Export PLC data types, all or by regular expression, using tia.json formats")]
+        public static string ExportTypes(string softwarePath, string exportPath, string regexName = "")
+        {
+            return $@"Export only the PLC data types of one PLC software, in the format TIA Portal is configured for them (Version control interface > Export formats, entry 'PLC data types').
+
+What you get:
+- The format is read from <exportPath>/tia.json because Openness cannot read it. A missing file is created with the defaults TIA Portal offers for a new workspace; the response then has a note asking the user to check the file, so tell the user. A missing 'PLC data types' entry fails the export before anything is written
+- No blocks and no tag tables; use ExportBlocks and ExportTagTables for those, or ExportPlcProgram for blocks and types in one call
+- Files are written below <exportPath>/<softwarePath>/PLC data types/..., mirroring the project groups
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes
+- exportPath: '${{workspacefolder}}/export/Program' is a good default; existing files of the same name are overwritten
+- regexName: empty for all types, or e.g. '.+HMI' to export only types whose name matches
+
+Use the ExportTypes tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}
+- regexName: {regexName}";
+        }
+
+        [McpServerPrompt(Name = "ExportTagTables"), Description("Export PLC tag tables as XML, all or by regular expression")]
+        public static string ExportTagTables(string softwarePath, string exportPath, string regexName = "")
+        {
+            return $@"Export the PLC tag tables of one PLC software as XML files, one per table.
+
+What you get:
+- Tag tables have no entry in the export format settings of TIA Portal, so <exportPath>/tia.json is neither read nor created: they are always XML
+- Files are written below <exportPath>/<softwarePath>/PLC tags/<groups>/, next to the folders of ExportBlocks and ExportTypes
+- OverwritePlcProgram and ImportPlcProgramChanges do not read tag tables back, and there is no tool that imports tag tables
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC; in a slash command write a value with spaces in double quotes
+- exportPath: '${{workspacefolder}}/export/Program' is a good default; existing files of the same name are overwritten
+- regexName: empty for all tag tables, or e.g. '.+HMI' to export only tables whose name matches
+
+Use the ExportTagTables tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}
+- regexName: {regexName}";
+        }
+
+        [McpServerPrompt(Name = "ExportBlock"), Description("Export one program block in the format configured in tia.json")]
+        public static string ExportBlock(string softwarePath, string exportPath, string blockPath)
+        {
+            return $@"Export exactly one program block, in the format TIA Portal is configured for its block type and language (Version control interface > Export formats). The format is read from <exportPath>/tia.json; a missing file is created with the defaults and the response then has a note asking the user to check it, so tell the user. The file lands in <exportPath>/<softwarePath>/Program blocks/<groups>/, where ExportBlocks and ExportPlcProgram put it. For several blocks by name use ExportBlocks.
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- exportPath: '${{workspacefolder}}/export/Program' is a good default; an existing file of the same name is overwritten
+- blockPath: full path of the block in the project structure, e.g. 'Group/Subgroup/Name'; call GetBlocks to find it
+
+Use the ExportBlock tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}
+- blockPath: {blockPath}";
+        }
+
+        [McpServerPrompt(Name = "ExportType"), Description("Export one PLC data type in the format configured in tia.json")]
+        public static string ExportType(string softwarePath, string exportPath, string typePath)
+        {
+            return $@"Export exactly one PLC data type, in the format TIA Portal is configured for PLC data types (Version control interface > Export formats). The format is read from the entry 'PLC data types' of <exportPath>/tia.json; a missing file is created with the defaults and the response then has a note asking the user to check it, so tell the user. The file lands in <exportPath>/<softwarePath>/PLC data types/<groups>/, where ExportTypes and ExportPlcProgram put it. For several types by name use ExportTypes.
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- exportPath: '${{workspacefolder}}/export/Program' is a good default; an existing file of the same name is overwritten
+- typePath: full path of the PLC data type in the project structure, e.g. 'Group/Name'; call GetTypes to find it
+
+Use the ExportType tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}
+- typePath: {typePath}";
+        }
+
+        [McpServerPrompt(Name = "ExportTagTable"), Description("Export one PLC tag table as XML")]
+        public static string ExportTagTable(string softwarePath, string exportPath, string tagTablePath)
+        {
+            return $@"Export exactly one PLC tag table as an XML file. Tag tables have no entry in the export format settings of TIA Portal, so <exportPath>/tia.json is neither read nor created. The file lands in <exportPath>/<softwarePath>/PLC tags/<groups>/, next to the folders of ExportBlock and ExportType. For several tag tables by name use ExportTagTables.
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- exportPath: '${{workspacefolder}}/export/Program' is a good default; an existing file of the same name is overwritten
+- tagTablePath: root-relative path of the tag table, e.g. 'TagGroup1/Table1'; call GetTagTables to find it
+
+Use the ExportTagTable tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}
+- tagTablePath: {tagTablePath}";
+        }
+
+        [McpServerPrompt(Name = "ExportWatchTables"), Description("Export PLC watch tables as XML, all or by regular expression")]
+        public static string ExportWatchTables(string softwarePath, string exportPath, string regexName = "")
+        {
+            return $@"Export the PLC watch tables of one PLC software as XML files, one per table. Watch tables have no entry in the export format settings of TIA Portal, so <exportPath>/tia.json is neither read nor created. The files land in the watch and force tables folder below <exportPath>/<softwarePath>/, as TIA Portal names it in the current interface language, mirroring the watch table groups. The force table is not included, use ExportForceTable.
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- exportPath: '${{workspacefolder}}/export/Program' is a good default; existing files of the same name are overwritten
+- regexName: empty for all watch tables, or e.g. '.+HMI' to export only tables whose name matches
+
+Use the ExportWatchTables tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}
+- regexName: {regexName}";
+        }
+
+        [McpServerPrompt(Name = "ExportWatchTable"), Description("Export one PLC watch table as XML")]
+        public static string ExportWatchTable(string softwarePath, string exportPath, string watchTablePath)
+        {
+            return $@"Export exactly one PLC watch table as an XML file. Watch tables have no entry in the export format settings of TIA Portal, so <exportPath>/tia.json is neither read nor created. The file lands in the watch and force tables folder below <exportPath>/<softwarePath>/, below its watch table groups, the same place as with ExportWatchTables. For several watch tables by name use ExportWatchTables.
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- exportPath: '${{workspacefolder}}/export/Program' is a good default; an existing file of the same name is overwritten
+- watchTablePath: root-relative path of the watch table, e.g. 'WatchGroup1/WatchTable_1'; call GetWatchTables to find it
+
+Use the ExportWatchTable tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}
+- watchTablePath: {watchTablePath}";
+        }
+
+        [McpServerPrompt(Name = "ExportForceTable"), Description("Export the PLC force table as XML")]
+        public static string ExportForceTable(string softwarePath, string exportPath, string forceTablePath)
+        {
+            return $@"Export the PLC force table as an XML file. A PLC has one force table, owned by the system. The file lands in the watch and force tables folder below <exportPath>/<softwarePath>/, next to the watch tables of ExportWatchTables. <exportPath>/tia.json is neither read nor created.
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC, 'PC-System_1/Software PLC_1' for PC based PLC
+- exportPath: '${{workspacefolder}}/export/Program' is a good default; an existing file of the same name is overwritten
+- forceTablePath: path of the force table as GetForceTables lists it
+
+Use the ExportForceTable tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}
+- forceTablePath: {forceTablePath}";
         }
 
         [McpServerPrompt(Name = "OverwritePlcProgram"), Description("Overwrite a PLC program with a folder written by ExportPlcProgram")]

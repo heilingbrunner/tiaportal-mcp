@@ -18,7 +18,8 @@ namespace TiaMcpServer.ModelContextProtocol
         // Callers: registered through Program.BuildTools() and invoked directly by the tag test
         // class. Affected API: additive only - this is a new partial of the existing McpServer type.
         // Data: returns the ResponseTagTable*/ResponseTag*/ResponseConstant* DTOs as MCP
-        // structuredContent. Only ExportXmlTagTable touches the file system, writing one .xml.
+        // structuredContent. Only ExportWatchTable and ExportForceTable touch the file system,
+        // each writing one .xml.
         //
         // Every tool follows the house pattern: call Portal, translate a null/empty result into a
         // specific McpException, and wrap anything unexpected with 'when (ex is not McpException)'.
@@ -177,37 +178,6 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "ExportXmlTagTable", Title = "Export tag table as XML", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Export one PLC tag table as an XML file into the 'PLC tags' folder below exportPath, below its tag table group folders when preservePath is true")]
-        public static ResponseExportXmlTagTable ExportXmlTagTable(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("tagTablePath: root-relative path of the tag table, e.g. 'TagGroup1/Table1'")] string tagTablePath,
-            [Description("exportPath: directory on this machine that receives the XML file; files are written below <exportPath>/<softwarePath>/")] string exportPath,
-            [Description("preservePath: recreate the tag table group structure below exportPath, inside the 'PLC tags' system folder as TIA Portal names it in the current interface language")] bool preservePath = false)
-        {
-            try
-            {
-                var table = Portal.ExportXmlTagTable(softwarePath, tagTablePath, exportPath, preservePath)
-                    ?? throw new McpException($"Failed exporting tag table '{tagTablePath}' from '{softwarePath}'");
-
-                return new ResponseExportXmlTagTable
-                {
-                    Message = $"Tag table '{tagTablePath}' exported to '{exportPath}'",
-                    Name = table.Name,
-                    Path = Portal.GetTagTablePath(table),
-                    Meta = Ok()
-                };
-            }
-            catch (TiaMcpServer.Siemens.PortalException pex)
-            {
-                throw new McpException(pex.Message, pex);
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error exporting tag table '{tagTablePath}' from '{softwarePath}': {ex.Message}", ex);
-            }
-        }
-
         #endregion
 
         #region mappers
@@ -267,7 +237,7 @@ namespace TiaMcpServer.ModelContextProtocol
         // Callers: registered through Program.BuildTools() and invoked directly by the watch
         // table test class. Affected API: additive only - a new partial of the existing McpServer
         // type. Data: returns ResponseWatchTable*/TableEntryInfo as MCP structuredContent; only
-        // ExportXmlWatchTable touches the file system, writing one .xml.
+        // ExportWatchTable touches the file system, writing one .xml.
 
         #region watch and force tables
 
@@ -337,67 +307,6 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error retrieving force tables from '{softwarePath}': {ex.Message}", ex);
-            }
-        }
-
-        [McpServerTool(Name = "ExportXmlWatchTable", Title = "Export watch table as XML", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Export one PLC watch table as an XML file into the watch and force tables folder below exportPath (named as TIA Portal names it in the current interface language), below its watch table group folders when preservePath is true")]
-        public static ResponseExportXmlWatchTable ExportXmlWatchTable(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("watchTablePath: root-relative path of the watch table, e.g. 'WatchGroup1/WatchTable_1'")] string watchTablePath,
-            [Description("exportPath: directory on this machine that receives the XML file; files are written below <exportPath>/<softwarePath>/")] string exportPath,
-            [Description("preservePath: recreate the watch table group structure below exportPath, inside the watch and force tables system folder as TIA Portal names it in the current interface language")] bool preservePath = false)
-        {
-            try
-            {
-                var table = Portal.ExportXmlWatchTable(softwarePath, watchTablePath, exportPath, preservePath)
-                    ?? throw new McpException($"Failed exporting watch table '{watchTablePath}' from '{softwarePath}'");
-
-                return new ResponseExportXmlWatchTable
-                {
-                    Message = $"Watch table '{watchTablePath}' exported to '{exportPath}'",
-                    Name = table.Name,
-                    Path = Portal.GetWatchTablePath(table),
-                    Meta = Ok()
-                };
-            }
-            catch (TiaMcpServer.Siemens.PortalException pex)
-            {
-                throw new McpException(pex.Message, pex);
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error exporting watch table '{watchTablePath}' from '{softwarePath}': {ex.Message}", ex);
-            }
-        }
-
-        [McpServerTool(Name = "ExportXmlForceTable", Title = "Export force table as XML", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Export one PLC force table as an XML file into the watch and force tables folder below exportPath (named as TIA Portal names it in the current interface language), next to the exported watch tables. A PLC has one force table, owned by the system; use GetForceTables for its name")]
-        public static ResponseExportXmlForceTable ExportXmlForceTable(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("forceTablePath: path of the force table as GetForceTables lists it")] string forceTablePath,
-            [Description("exportPath: directory on this machine that receives the XML file; files are written below <exportPath>/<softwarePath>/")] string exportPath)
-        {
-            try
-            {
-                var table = Portal.ExportXmlForceTable(softwarePath, forceTablePath, exportPath)
-                    ?? throw new McpException($"Failed exporting force table '{forceTablePath}' from '{softwarePath}'");
-
-                return new ResponseExportXmlForceTable
-                {
-                    Message = $"Force table '{forceTablePath}' exported to '{exportPath}'",
-                    Name = table.Name,
-                    Path = Portal.GetForceTablePath(table),
-                    Meta = Ok()
-                };
-            }
-            catch (TiaMcpServer.Siemens.PortalException pex)
-            {
-                throw new McpException(pex.Message, pex);
-            }
-            catch (Exception ex) when (ex is not McpException)
-            {
-                throw new McpException($"Unexpected error exporting force table '{forceTablePath}' from '{softwarePath}': {ex.Message}", ex);
             }
         }
 
@@ -491,7 +400,7 @@ namespace TiaMcpServer.ModelContextProtocol
         //
         // Callers: registered by Program.BuildTools() under '--allow-write'; also invoked
         // directly by the write test class. Affected API: additive - a partial of McpServer; the tools are marked [WriteTool].
-        // File I/O: ImportXmlTagTable reads a caller-supplied XML file; nothing here writes files.
+        // File I/O: ImportWatchTable reads a caller-supplied XML file; nothing here writes files.
         //
         // There are no tools for system constants: PlcSystemConstantComposition has no Create and
         // PlcSystemConstant no setters, so they are read-only through Openness by design.
@@ -579,23 +488,6 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 Portal.DeleteTagTableGroup(softwarePath, groupPath);
                 return Deleted("Tag table group", groupPath);
-            });
-        }
-
-        [WriteTool]
-        [McpServerTool(Name = "ImportXmlTagTable", Title = "Import tag table from XML", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Import a PLC tag table from an XML file into a tag table group. An existing table of the same name is replaced unless overwrite is false")]
-        public static ResponseImported ImportXmlTagTable(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("groupPath: root-relative tag table group that receives the table; empty uses the PLC tags root. A leading 'PLC tags' segment, as written by preservePath exports, is accepted and ignored")] string groupPath,
-            [Description("importPath: full path of the XML file to import, or a path relative to the 'PLC tags' folder below <exportPath>/<softwarePath> (the layout ExportXmlTagTable writes)")] string importPath,
-            [Description("overwrite: replace an existing tag table of the same name (default true)")] bool overwrite = true,
-            [Description("exportPath: base directory of the export layout (<exportPath>/<softwarePath>/PLC tags); only used to resolve a relative importPath")] string exportPath = "")
-        {
-            return Guarded(nameof(ImportXmlTagTable), () =>
-            {
-                Portal.ImportXmlTagTable(softwarePath, groupPath, importPath, overwrite, exportPath);
-                return Imported("Tag table", groupPath, importPath);
             });
         }
 

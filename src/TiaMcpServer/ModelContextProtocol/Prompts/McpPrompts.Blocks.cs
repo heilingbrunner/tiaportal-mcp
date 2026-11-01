@@ -47,40 +47,6 @@ Use the GetBlocksWithHierarchy tool with these parameters:
 - softwarePath: {softwarePath}";
         }
 
-        [McpServerPrompt(Name = "ExportXmlBlock"), Description("Export one block as XML")]
-        public static string ExportXmlBlock(string softwarePath, string blockPath, string exportPath, string preservePath = "false")
-        {
-            return $@"Export a block from the software to file.
-
-Common parameter values:
-- softwarePath: defines the path in the project structure to the software
-- blockPath: full path to the block in the project structure, e.g. 'Group/Subgroup/Name' (single names are ambiguous)
-- exportPath: defines the path where to export the block
-- preservePath: preserves the path/structure of the PLC software
-
-Use the ExportXmlBlock tool with these parameters:
-- softwarePath: {softwarePath}
-- blockPath: {blockPath}
-- exportPath: {exportPath}
-- preservePath: {NormalizeBool(preservePath)}";
-        }
-
-        [McpServerPrompt(Name = "ImportXmlBlock"), Description("Import one block from an XML file")]
-        public static string ImportXmlBlock(string softwarePath, string groupPath, string importPath)
-        {
-            return $@"Import a block file to the software.
-
-Common parameter values:
-- softwarePath: defines the path in the project structure to the software
-- groupPath: defines the path in the project structure to the group, where to import the block
-- importPath: defines the path of the xml file from where to import the block
-
-Use the ImportXmlBlock tool with these parameters:
-- softwarePath: {softwarePath}
-- groupPath: {groupPath}
-- importPath: {importPath}";
-        }
-
         [McpServerPrompt(Name = "GetBlockInterface"), Description("List the members of a data block with type and attributes")]
         public static string GetBlockInterface(string softwarePath, string blockPath)
         {
@@ -266,40 +232,6 @@ Common parameter values:
 Use the GetTypes tool with these parameters:
 - softwarePath: {softwarePath}
 - regexName: {regexName}";
-        }
-
-        [McpServerPrompt(Name = "ExportXmlType"), Description("Export one PLC data type as XML")]
-        public static string ExportXmlType(string softwarePath, string exportPath, string typePath, string preservePath = "false")
-        {
-            return $@"Export a type from the PLC software.
-
-Common parameter values:
-- softwarePath: defines the path in the project structure to the PLC software
-- exportPath: defines the path where export the type
-- typePath: defines the path in the project structure to the type
-- preservePath: preserves the path/structure of the PLC software
-
-Use the ExportXmlType tool with these parameters:
-- softwarePath: {softwarePath}
-- exportPath: {exportPath}
-- typePath: {typePath}
-- preservePath: {NormalizeBool(preservePath)}";
-        }
-
-        [McpServerPrompt(Name = "ImportXmlType"), Description("Import one PLC data type from an XML file")]
-        public static string ImportXmlType(string softwarePath, string groupPath, string importPath)
-        {
-            return $@"Import a type from file into the PLC software.
-
-Common parameter values:
-- softwarePath: defines the path in the project structure to the PLC software
-- groupPath: defines the path in the project structure to the group, where to import the type
-- importPath: defines the path of the xml file from where to import the type
-
-Use the ImportXmlType tool with these parameters:
-- softwarePath: {softwarePath}
-- groupPath: {groupPath}
-- importPath: {importPath}";
         }
 
         [McpServerPrompt(Name = "CreateTypeGroup"), Description("Create a PLC data type group")]

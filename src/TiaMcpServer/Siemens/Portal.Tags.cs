@@ -15,8 +15,8 @@ namespace TiaMcpServer.Siemens
         // PLC tag tables, tags and constants (read side).
         //
         // Callers: the GetTagTables / GetTagTableInfo / GetTags / GetTagInfo / GetConstants /
-        // ExportXmlTagTable tools in McpServer.cs. Affected API: none existing - all members are new.
-        // ExportXmlTagTable writes one .xml file to the path the caller supplies; nothing else here
+        // ExportTagTable tools in McpServer.cs. Affected API: none existing - all members are new.
+        // ExportTagTable writes one .xml file to the path the caller supplies; nothing else here
         // touches the file system.
         //
         // Path shape: tag table paths are root-relative, e.g. "TagGroup1/Table1"; tag paths append
@@ -147,9 +147,9 @@ namespace TiaMcpServer.Siemens
         /// type exports mirror "Program blocks" and "PLC data types".
         /// Filesystem only - it does not modify the project, so it is not gated behind '--allow-write'.
         /// </summary>
-        public PlcTagTable? ExportXmlTagTable(string softwarePath, string tagTablePath, string exportPath, bool preservePath = false)
+        public PlcTagTable? ExportTagTable(string softwarePath, string tagTablePath, string exportPath, bool preservePath = false)
         {
-            return Operation.Run(_logger, nameof(ExportXmlTagTable), PortalErrorCode.ExportFailed,
+            return Operation.Run(_logger, nameof(ExportTagTable), PortalErrorCode.ExportFailed,
                 () =>
                 {
                     var table = GetTagTable(softwarePath, tagTablePath)
@@ -286,9 +286,9 @@ namespace TiaMcpServer.Siemens
         // From the former Portal.WatchTables.cs:
         // PLC watch and force tables (read side).
         //
-        // Callers: the GetWatchTables / GetWatchTableInfo / GetForceTables / ExportXmlWatchTable tools
+        // Callers: the GetWatchTables / GetWatchTableInfo / GetForceTables / ExportWatchTable tools
         // in McpServer.Tags.cs. Affected API: none existing - all members are new.
-        // ExportXmlWatchTable writes one .xml to the caller-supplied path; nothing else does file I/O.
+        // ExportWatchTable writes one .xml to the caller-supplied path; nothing else does file I/O.
         //
         // Openness asymmetry to be aware of: watch tables can be created and deleted, force tables
         // cannot - PlcForceTableComposition has no Create and PlcForceTable has no Delete, because
@@ -442,9 +442,9 @@ namespace TiaMcpServer.Siemens
         /// the same way block, type and tag table exports mirror "Program blocks", "PLC data types" and
         /// "PLC tags". Filesystem only, so it is not gated behind '--allow-write'.
         /// </summary>
-        public PlcWatchTable? ExportXmlWatchTable(string softwarePath, string watchTablePath, string exportPath, bool preservePath = false)
+        public PlcWatchTable? ExportWatchTable(string softwarePath, string watchTablePath, string exportPath, bool preservePath = false)
         {
-            return Operation.Run(_logger, nameof(ExportXmlWatchTable), PortalErrorCode.ExportFailed,
+            return Operation.Run(_logger, nameof(ExportWatchTable), PortalErrorCode.ExportFailed,
                 () =>
                 {
                     var table = GetWatchTable(softwarePath, watchTablePath)
@@ -483,9 +483,9 @@ namespace TiaMcpServer.Siemens
         /// watch tables go as well. A force table is system owned and has no groups, so there is no
         /// preservePath. Filesystem only, so it is not gated behind '--allow-write'.
         /// </summary>
-        public PlcForceTable? ExportXmlForceTable(string softwarePath, string forceTablePath, string exportPath)
+        public PlcForceTable? ExportForceTable(string softwarePath, string forceTablePath, string exportPath)
         {
-            return Operation.Run(_logger, nameof(ExportXmlForceTable), PortalErrorCode.ExportFailed,
+            return Operation.Run(_logger, nameof(ExportForceTable), PortalErrorCode.ExportFailed,
                 () =>
                 {
                     var table = GetForceTable(softwarePath, forceTablePath)
@@ -608,43 +608,6 @@ namespace TiaMcpServer.Siemens
                     return true;
                 },
                 ("softwarePath", softwarePath), ("groupPath", groupPath));
-        }
-
-        /// <summary>
-        /// Imports one tag table XML file. A rooted <paramref name="importPath"/> is used as is; a
-        /// relative one is looked up in '&lt;exportPath&gt;/&lt;softwarePath&gt;/PLC tags/' (the folder
-        /// <see cref="ExportXmlTagTable"/> writes to, in the current interface language) when
-        /// <paramref name="exportPath"/> is given.
-        /// </summary>
-        public bool ImportXmlTagTable(string softwarePath, string groupPath, string importPath, bool overwrite = true, string exportPath = "")
-        {
-            return Operation.Run(_logger, nameof(ImportXmlTagTable), PortalErrorCode.ImportFailed,
-                () =>
-                {
-                    var group = GetTagTableGroupByPath(softwarePath, groupPath)
-                        ?? throw new PortalException(PortalErrorCode.NotFound,
-                            $"Tag table group not found at '{groupPath}'.");
-
-                    if (!Path.IsPathRooted(importPath) && !string.IsNullOrWhiteSpace(exportPath))
-                    {
-                        var rootName = GetTagTableRootGroup(softwarePath)?.Name ?? "PLC tags";
-
-                        importPath = Path.Combine(ResolveSoftwareRoot(exportPath, softwarePath), rootName, importPath);
-                    }
-
-                    if (!File.Exists(importPath))
-                    {
-                        throw new PortalException(PortalErrorCode.InvalidParams,
-                            $"Import file '{importPath}' does not exist on the machine running this server.");
-                    }
-
-                    group.TagTables.Import(
-                        new FileInfo(importPath),
-                        overwrite ? ImportOptions.Override : ImportOptions.None);
-
-                    return true;
-                },
-                ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath));
         }
 
         #endregion

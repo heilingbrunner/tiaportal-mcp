@@ -20,6 +20,17 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        public void Test_905_ResolveSoftwareRoot_MakesARelativeBaseAbsolute()
+        {
+            // Arrange / Act
+            var root = Portal.ResolveSoftwareRoot("Project", "PLC_1");
+
+            // Assert: TIA Portal exports into a directory it is given, so it must not be relative
+            Assert.IsTrue(System.IO.Path.IsPathRooted(root), root);
+            Assert.AreEqual(System.IO.Path.Combine(System.IO.Path.GetFullPath("Project"), "PLC_1"), root);
+        }
+
+        [TestMethod]
         public void Test_901_ResolveSoftwareRoot_TurnsEverySlashIntoAFolderLevel()
         {
             // Arrange / Act

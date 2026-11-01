@@ -3,7 +3,9 @@ using Siemens.Engineering;
 using Siemens.Engineering.SW;
 using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.ExternalSources;
+using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.Types;
+using Siemens.Engineering.SW.WatchAndForceTables;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -48,11 +50,66 @@ namespace TiaMcpServer.Siemens
         /// object that cannot be written is reported in Skipped (no usable format, inconsistent,
         /// know-how protected) or Failures.
         /// </summary>
-        public GeneratedSourcesResult ExportPlcProgram(string softwarePath, string exportPath)
+        /// <param name="blocks">Export the program blocks. The porcelain 'TiaPullTypes' turns it off.</param>
+        /// <param name="types">Export the PLC data types. The porcelain 'TiaPullBlocks' turns it off.</param>
+        /// <param name="regexName">Only objects whose name matches; empty means all. Applies to blocks and types alike.</param>
+        public GeneratedSourcesResult ExportPlcProgram(string softwarePath, string exportPath, bool blocks = true, bool types = true, string regexName = "")
         {
-            return Operation.Run(_logger, nameof(ExportPlcProgram), PortalErrorCode.ExportFailed,
+            return ExportProgramObjects(
+                nameof(ExportPlcProgram), softwarePath, exportPath, regexName,
+                () => blocks ? GetBlocks(softwarePath, regexName) : new List<PlcBlock>(),
+                () => types ? GetTypes(softwarePath, regexName) : null);
+        }
+
+        /// <summary>
+        /// Writes exactly one program block, in the format 'tia.json' configures for its type and
+        /// language, to the same folder and file as <see cref="ExportPlcProgram"/>. Same result shape,
+        /// Skipped and Failures included.
+        /// </summary>
+        /// <param name="blockPath">Full path of the block in the project structure, e.g. 'Group/Subgroup/Name'.</param>
+        public GeneratedSourcesResult ExportPlcBlock(string softwarePath, string exportPath, string blockPath)
+        {
+            return ExportProgramObjects(
+                nameof(ExportPlcBlock), softwarePath, exportPath, string.Empty,
+                () => new List<PlcBlock>
+                {
+                    GetBlock(softwarePath, blockPath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound, $"Block not found at '{blockPath}'. Use 'GetBlocks' to list the available blocks.")
+                },
+                () => null);
+        }
+
+        /// <summary>
+        /// Writes exactly one PLC data type, in the format 'tia.json' configures for PLC data types, to
+        /// the same folder and file as <see cref="ExportPlcProgram"/>.
+        /// </summary>
+        /// <param name="typePath">Full path of the type in the project structure, e.g. 'Group/Name'.</param>
+        public GeneratedSourcesResult ExportPlcType(string softwarePath, string exportPath, string typePath)
+        {
+            return ExportProgramObjects(
+                nameof(ExportPlcType), softwarePath, exportPath, string.Empty,
+                () => new List<PlcBlock>(),
+                () => new List<PlcType>
+                {
+                    GetType(softwarePath, typePath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound, $"Type not found at '{typePath}'. Use 'GetTypes' to list the available types.")
+                });
+        }
+
+        /// <param name="selectTypes">Returns the types to write, or null to write none and not require the PLC data types entry of 'tia.json'.</param>
+        private GeneratedSourcesResult ExportProgramObjects(
+            string operation,
+            string softwarePath,
+            string exportPath,
+            string regexName,
+            Func<List<PlcBlock>> selectBlocks,
+            Func<List<PlcType>?> selectTypes)
+        {
+            return Operation.Run(_logger, operation, PortalErrorCode.ExportFailed,
                 () =>
                 {
+                    RequireValidRegex(regexName);
+
                     // Fail before writing anything when the path is wrong or the settings are missing.
                     var group = GetSourceSystemGroup(softwarePath);
 
@@ -72,7 +129,9 @@ namespace TiaMcpServer.Siemens
                     var xmlBlocks = new List<PlcBlock>();
                     var documentBlocks = new List<PlcBlock>();
 
-                    foreach (var block in GetBlocks(softwarePath))
+                    var selectedBlocks = selectBlocks();
+
+                    foreach (var block in selectedBlocks)
                     {
                         var plan = PlcProgram.PlanBlock(block is DataBlock, block.ProgrammingLanguage, settings);
 
@@ -96,10 +155,15 @@ namespace TiaMcpServer.Siemens
                         }
                     }
 
-                    var types = GetTypes(softwarePath);
-                    var typeFormat = PlcProgram.PlanType(settings);
+                    var selectedTypes = selectTypes();
 
-                    ExportProgramTypes(result, group, types, typeFormat, exportPath);
+                    if (selectedTypes != null)
+                    {
+                        var typeFormat = PlcProgram.PlanType(settings);
+
+                        ExportProgramTypes(result, group, selectedTypes, typeFormat, exportPath);
+                    }
+
                     GenerateBlocks(result, group, sourceBlocks, exportPath, withDependencies: false, preservePath: true);
 
                     foreach (var block in xmlBlocks)
@@ -128,7 +192,183 @@ namespace TiaMcpServer.Siemens
 
                     return result;
                 },
-                ("softwarePath", softwarePath), ("exportPath", exportPath));
+                ("softwarePath", softwarePath), ("exportPath", exportPath), ("regexName", regexName));
+        }
+
+        /// <summary>
+        /// Writes the PLC tag tables whose name matches <paramref name="regexName"/> (empty: all) as
+        /// XML below '&lt;exportPath&gt;/&lt;softwarePath&gt;/PLC tags/&lt;groups&gt;', next to the
+        /// 'Program blocks' and 'PLC data types' folders of <see cref="ExportPlcProgram"/>. Tag tables
+        /// have one format only, so 'tia.json' is not consulted. Skip-and-continue: a table that
+        /// cannot be written is reported in Failures. Filesystem only.
+        /// </summary>
+        public GeneratedSourcesResult ExportPlcTagTables(string softwarePath, string exportPath, string regexName = "")
+        {
+            return ExportTableFiles(
+                nameof(ExportPlcTagTables), "tag table", GeneratedSourcesResult.TagTableLanguage, softwarePath, exportPath, regexName,
+                () => GetTagTables(softwarePath, regexName),
+                table => GetTagTablePath(table),
+                table => table.Name,
+                tablePath => ExportTagTable(softwarePath, tablePath, exportPath, preservePath: true),
+                table => GetTagTablePath(table, includeSystemRoot: true).Replace('/', '\\') + PlcProgram.XmlExtension);
+        }
+
+        /// <summary>
+        /// Writes exactly one tag table as XML, to the same folder and file as <see cref="ExportPlcTagTables"/>.
+        /// </summary>
+        /// <param name="tagTablePath">Root-relative path of the tag table, e.g. 'TagGroup1/Table1'.</param>
+        public GeneratedSourcesResult ExportPlcTagTable(string softwarePath, string exportPath, string tagTablePath)
+        {
+            return ExportTableFiles(
+                nameof(ExportPlcTagTable), "tag table", GeneratedSourcesResult.TagTableLanguage, softwarePath, exportPath, string.Empty,
+                () => new List<PlcTagTable>
+                {
+                    GetTagTable(softwarePath, tagTablePath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound, $"Tag table not found at '{tagTablePath}'. Use 'GetTagTables' to list the available tables.")
+                },
+                table => GetTagTablePath(table),
+                table => table.Name,
+                path => ExportTagTable(softwarePath, path, exportPath, preservePath: true),
+                table => GetTagTablePath(table, includeSystemRoot: true).Replace('/', '\\') + PlcProgram.XmlExtension);
+        }
+
+        /// <summary>
+        /// Writes the PLC watch tables whose name matches <paramref name="regexName"/> (empty: all) as
+        /// XML below '&lt;exportPath&gt;/&lt;softwarePath&gt;/&lt;system folder&gt;/&lt;groups&gt;', the watch and
+        /// force tables folder as TIA Portal names it. Watch tables have one format only, so 'tia.json'
+        /// is not consulted. Skip-and-continue like <see cref="ExportPlcTagTables"/>. Filesystem only.
+        /// </summary>
+        public GeneratedSourcesResult ExportPlcWatchTables(string softwarePath, string exportPath, string regexName = "")
+        {
+            return ExportTableFiles(
+                nameof(ExportPlcWatchTables), "watch table", GeneratedSourcesResult.WatchTableLanguage, softwarePath, exportPath, regexName,
+                () => GetWatchTables(softwarePath, regexName),
+                GetWatchTablePath,
+                table => table.Name,
+                tablePath => ExportWatchTable(softwarePath, tablePath, exportPath, preservePath: true),
+                table => Path.Combine(WatchTableSystemFolder(softwarePath), GetWatchTablePath(table).Replace('/', '\\') + PlcProgram.XmlExtension));
+        }
+
+        /// <summary>
+        /// Writes exactly one watch table as XML, to the same folder and file as <see cref="ExportPlcWatchTables"/>.
+        /// </summary>
+        /// <param name="watchTablePath">Root-relative path of the watch table, e.g. 'WatchGroup1/WatchTable_1'.</param>
+        public GeneratedSourcesResult ExportPlcWatchTable(string softwarePath, string exportPath, string watchTablePath)
+        {
+            return ExportTableFiles(
+                nameof(ExportPlcWatchTable), "watch table", GeneratedSourcesResult.WatchTableLanguage, softwarePath, exportPath, string.Empty,
+                () => new List<PlcWatchTable>
+                {
+                    GetWatchTable(softwarePath, watchTablePath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound, $"Watch table not found at '{watchTablePath}'. Use 'GetWatchTables' to list the available tables.")
+                },
+                GetWatchTablePath,
+                table => table.Name,
+                path => ExportWatchTable(softwarePath, path, exportPath, preservePath: true),
+                table => Path.Combine(WatchTableSystemFolder(softwarePath), GetWatchTablePath(table).Replace('/', '\\') + PlcProgram.XmlExtension));
+        }
+
+        /// <summary>
+        /// Writes one force table as XML into the same watch and force tables folder as
+        /// <see cref="ExportPlcWatchTables"/>. A force table is system owned, a PLC has one.
+        /// </summary>
+        /// <param name="forceTablePath">Path of the force table as 'GetForceTables' lists it.</param>
+        public GeneratedSourcesResult ExportPlcForceTable(string softwarePath, string exportPath, string forceTablePath)
+        {
+            return ExportTableFiles(
+                nameof(ExportPlcForceTable), "force table", GeneratedSourcesResult.ForceTableLanguage, softwarePath, exportPath, string.Empty,
+                () => new List<PlcForceTable>
+                {
+                    GetForceTable(softwarePath, forceTablePath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound, $"Force table not found at '{forceTablePath}'. Use 'GetForceTables' to list the available tables.")
+                },
+                GetForceTablePath,
+                table => table.Name,
+                path => ExportForceTable(softwarePath, path, exportPath),
+                table => Path.Combine(WatchTableSystemFolder(softwarePath), FileNames.Safe(table.Name) + PlcProgram.XmlExtension));
+        }
+
+        private string WatchTableSystemFolder(string softwarePath)
+        {
+            return GetPlcSoftwareOrThrow(softwarePath).WatchAndForceTableGroup?.Name ?? string.Empty;
+        }
+
+        /// <summary>
+        /// The skip-and-continue walk of every table export: each table is written by <paramref name="export"/>
+        /// (given its root-relative path) and reported under <paramref name="relativeFile"/> below the software folder.
+        /// </summary>
+        private GeneratedSourcesResult ExportTableFiles<TTable>(
+            string operation,
+            string label,
+            string language,
+            string softwarePath,
+            string exportPath,
+            string regexName,
+            Func<List<TTable>> selectTables,
+            Func<TTable, string> pathOf,
+            Func<TTable, string> nameOf,
+            Action<string> export,
+            Func<TTable, string> relativeFile)
+        {
+            return Operation.Run(_logger, operation, PortalErrorCode.ExportFailed,
+                () =>
+                {
+                    RequireValidRegex(regexName);
+
+                    var tables = selectTables();
+                    var root = ResolveSoftwareRoot(exportPath, softwarePath);
+                    var result = new GeneratedSourcesResult { Directory = root };
+
+                    foreach (var table in tables)
+                    {
+                        var tablePath = pathOf(table);
+
+                        TryGenerate(result, label, tablePath, () =>
+                        {
+                            export(tablePath);
+
+                            var file = Path.Combine(root, relativeFile(table));
+
+                            return new GeneratedSource
+                            {
+                                Name = nameOf(table),
+                                Path = tablePath,
+                                File = file,
+                                Format = PlcProgram.XmlExtension,
+                                Language = language,
+                                Size = new FileInfo(file).Length
+                            };
+                        });
+                    }
+
+                    _logger?.LogInformation(
+                        "{Count} {Label}(s) of '{Software}' written to '{Directory}': {Failed} failed",
+                        result.Files.Count, label, softwarePath, root, result.Failures.Count);
+
+                    return result;
+                },
+                ("softwarePath", softwarePath), ("exportPath", exportPath), ("regexName", regexName));
+        }
+
+        /// <summary>
+        /// The object walkers skip everything for a pattern that does not compile, which would make a
+        /// pull with a typo look like a successful one that found nothing, so reject it up front.
+        /// </summary>
+        public static void RequireValidRegex(string regexName)
+        {
+            if (string.IsNullOrEmpty(regexName))
+            {
+                return;
+            }
+
+            try
+            {
+                _ = new System.Text.RegularExpressions.Regex(regexName);
+            }
+            catch (ArgumentException ex)
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams, $"regexName '{regexName}' is not a valid regular expression: {ex.Message}");
+            }
         }
 
         /// <summary>The PLC data types in the configured format: source file, SimaticML or SIMATIC SD documents.</summary>

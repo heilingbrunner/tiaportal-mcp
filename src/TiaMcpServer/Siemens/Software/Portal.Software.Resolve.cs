@@ -78,7 +78,10 @@ namespace TiaMcpServer.Siemens
                 }
             }
 
-            return System.IO.Path.Combine(new[] { baseDirectory }.Concat(segments).ToArray());
+            // A relative base (e.g. '--export-path Project') is made absolute here, against the working
+            // directory of this server: Openness hands the directory on to TIA Portal, which runs in its
+            // own process and does not resolve a relative path the way this server does.
+            return System.IO.Path.Combine(new[] { System.IO.Path.GetFullPath(baseDirectory) }.Concat(segments).ToArray());
         }
 
         /// <summary>

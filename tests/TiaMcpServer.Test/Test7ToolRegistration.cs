@@ -20,7 +20,7 @@ namespace TiaMcpServer.Test
     {
         private const string SampleReadTool = "GetTags";
         private const string SampleWriteTool = "CreateTag";
-        private const string SampleDocumentWriteTool = "ImportSources";
+        private const string SampleDocumentWriteTool = "OverwritePlcProgram";
 
         [TestInitialize]
         public void ClassInit()
@@ -295,7 +295,7 @@ namespace TiaMcpServer.Test
         [TestMethod]
         public void Test_712_PromptArguments_JoinsAQuotedValueThatClaudeCodeCutAtTheSpace()
         {
-            // Arrange: /ExportXmlBlocks "PC-System_1/Software PLC_1" D:\export  arrives as three pieces
+            // Arrange: /ExportBlocks "PC-System_1/Software PLC_1" D:\export  arrives as three pieces
             var arguments = new Dictionary<string, string>
             {
                 ["softwarePath"] = "\"PC-System_1/Software",
@@ -372,12 +372,12 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        [DataRow("GetXmlBlock", "ExportXmlBlock", false)]
-        [DataRow("GetXmlType", "ExportXmlType", false)]
-        [DataRow("GetSourceBlock", "ExportSourceBlock", true)]
-        [DataRow("GetSourceType", "ExportSourceType", true)]
-        [DataRow("GetDocumentsBlock", "ExportAsDocuments", false)]
-        [DataRow("GetDocumentsType", "ExportTypeAsDocuments", false)]
+        [DataRow("GetXmlBlock", "ExportBlock", false)]
+        [DataRow("GetXmlType", "ExportType", false)]
+        [DataRow("GetSourceBlock", "ExportBlock", true)]
+        [DataRow("GetSourceType", "ExportType", true)]
+        [DataRow("GetDocumentsBlock", "ExportBlock", false)]
+        [DataRow("GetDocumentsType", "ExportType", false)]
         public void Test_716_InlineReaders_AreReadOnlyAndTakeNoFormat(string name, string counterpart, bool hasWithDependencies)
         {
             // Arrange
@@ -414,10 +414,10 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        [DataRow("ImportXmlBlock")]
-        [DataRow("ImportXmlType")]
-        [DataRow("ImportFromDocuments")]
-        [DataRow("ImportBlocksFromDocuments")]
+        [DataRow("OverwritePlcProgram")]
+        [DataRow("ImportPlcProgramChanges")]
+        [DataRow("TiaPush")]
+        [DataRow("TiaPushPreview")]
         public void Test_718_ImportTools_AreWriteToolsAndOnlyRegisteredWithAllowWrite(string name)
         {
             // Arrange
@@ -432,36 +432,6 @@ namespace TiaMcpServer.Test
             Assert.IsNotNull(tool.Method!.GetCustomAttribute<WriteToolAttribute>(), $"'{name}' modifies the project and must carry [WriteTool]");
             Assert.IsFalse(withoutWrite.Contains(name), $"'{name}' must not be registered without --allow-write");
             Assert.IsTrue(withWrite.Contains(name), $"'{name}' must be registered with --allow-write");
-        }
-
-        [TestMethod]
-        public async System.Threading.Tasks.Task Test_719_ImportTools_WriteDisabled_Throw()
-        {
-            // Arrange
-            var previous = WritePolicy.AllowWrite;
-            WritePolicy.AllowWrite = false;
-
-            try
-            {
-                // Act / Assert: the guard runs before any Portal access, so no TIA Portal is needed
-                var calls = new (string Name, Func<System.Threading.Tasks.Task> Call)[]
-                {
-                    ("ImportXmlBlock", () => { McpServer.ImportXmlBlock("sw", "group", "file.xml"); return System.Threading.Tasks.Task.CompletedTask; }),
-                    ("ImportXmlType", () => { McpServer.ImportXmlType("sw", "group", "file.xml"); return System.Threading.Tasks.Task.CompletedTask; }),
-                    ("ImportFromDocuments", () => { McpServer.ImportFromDocuments("sw", "group", "dir", "name"); return System.Threading.Tasks.Task.CompletedTask; }),
-                    ("ImportBlocksFromDocuments", () => McpServer.ImportBlocksFromDocuments(null!, "sw", "group", "dir"))
-                };
-
-                foreach (var (name, call) in calls)
-                {
-                    var ex = await Assert.ThrowsExactlyAsync<global::ModelContextProtocol.McpException>(call);
-                    StringAssert.Contains(ex.Message, "--allow-write", $"'{name}' must be refused without --allow-write");
-                }
-            }
-            finally
-            {
-                WritePolicy.AllowWrite = previous;
-            }
         }
 
         private static List<(string Name, MethodInfo Method, string? Title)> ToolMethods()

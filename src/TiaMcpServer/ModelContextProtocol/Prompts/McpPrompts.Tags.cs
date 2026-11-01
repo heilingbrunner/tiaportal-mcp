@@ -123,40 +123,6 @@ Use the GetForceTables tool with these parameters:
 - softwarePath: {softwarePath}";
         }
 
-        [McpServerPrompt(Name = "ExportXmlWatchTable"), Description("Export one PLC watch table as XML")]
-        public static string ExportXmlWatchTable(string softwarePath, string watchTablePath, string exportPath, string preservePath = "false")
-        {
-            return $@"Export a PLC watch table to an XML file on the file system of the machine running this server. Does not modify the project.
-
-Common parameter values:
-- softwarePath: defines the path in the project structure to the PLC software
-- watchTablePath: root-relative path of the watch table, e.g. 'WatchGroup1/WatchTable_1'
-- exportPath: directory on this machine that receives the XML file
-- preservePath: recreate the watch table group structure below <exportPath>/<softwarePath>, inside the watch and force tables system folder as TIA Portal names it in the current interface language (the file always lands in that folder)
-
-Use the ExportXmlWatchTable tool with these parameters:
-- softwarePath: {softwarePath}
-- watchTablePath: {watchTablePath}
-- exportPath: {exportPath}
-- preservePath: {NormalizeBool(preservePath)}";
-        }
-
-        [McpServerPrompt(Name = "ExportXmlForceTable"), Description("Export the PLC force table as XML")]
-        public static string ExportXmlForceTable(string softwarePath, string forceTablePath, string exportPath)
-        {
-            return $@"Export the PLC force table to an XML file on the file system of the machine running this server. Does not modify the project. A PLC has one force table, owned by the system.
-
-Common parameter values:
-- softwarePath: defines the path in the project structure to the PLC software
-- forceTablePath: path of the force table as GetForceTables lists it
-- exportPath: directory on this machine that receives the XML file; the file lands in the watch and force tables system folder below <exportPath>/<softwarePath>, as TIA Portal names it in the current interface language, next to the watch tables
-
-Use the ExportXmlForceTable tool with these parameters:
-- softwarePath: {softwarePath}
-- forceTablePath: {forceTablePath}
-- exportPath: {exportPath}";
-        }
-
         [McpServerPrompt(Name = "CreateTagTable"), Description("Create a PLC tag table")]
         public static string CreateTagTable(string softwarePath, string groupPath, string name)
         {
@@ -231,24 +197,6 @@ Common parameter values:
 Use the DeleteTagTableGroup tool with these parameters:
 - softwarePath: {softwarePath}
 - groupPath: {groupPath}";
-        }
-
-        [McpServerPrompt(Name = "ImportXmlTagTable"), Description("Import a PLC tag table from an XML file")]
-        public static string ImportXmlTagTable(string softwarePath, string groupPath, string importPath, string overwrite = "true")
-        {
-            return $@"Import a PLC tag table from an XML file on the file system of the machine running this server (requires the server started with '--allow-write').
-
-Common parameter values:
-- softwarePath: defines the path in the project structure to the PLC software
-- groupPath: root-relative tag table group that receives the table; empty uses the PLC tags root. A leading 'PLC tags' segment, as written by preservePath exports, is accepted and ignored
-- importPath: full path of the XML file to import
-- overwrite: replace an existing tag table of the same name (default true)
-
-Use the ImportXmlTagTable tool with these parameters:
-- softwarePath: {softwarePath}
-- groupPath: {groupPath}
-- importPath: {importPath}
-- overwrite: {NormalizeBool(overwrite)}";
         }
 
         [McpServerPrompt(Name = "CreateTag"), Description("Create a PLC tag in a tag table")]

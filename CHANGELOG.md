@@ -2,9 +2,35 @@
 
 ## [Unreleased]
 
+### Removed
+
+- __The per-format export and import tools__ (breaking): `ExportXmlBlock`, `ExportXmlBlocks`, `ExportXmlType`,
+  `ExportXmlTypes`, `ExportXmlTagTable`, `ExportSourceBlock`, `ExportSourceBlocks`, `ExportSourceType`,
+  `ExportSourceTypes`, `ExportSources`, `ExportAsDocuments`, `ExportBlocksAsDocuments`, `ExportTypeAsDocuments`,
+  `ExportTypesAsDocuments`, `ExportPlcAsDocuments`, `ImportXmlBlock`, `ImportXmlType`, `ImportXmlTagTable`,
+  `ImportSourceBlock`, `ImportSourceBlocks`, `ImportSourceType`, `ImportSourceTypes`, `ImportSources`,
+  `ImportExternalSource`, `ImportFromDocuments`, `ImportBlocksFromDocuments`, `ImportTypeFromDocuments` and
+  `ImportTypesFromDocuments`, with their prompts, response types and Portal methods that nothing else used. Use
+  `ExportBlock`, `ExportType`, `ExportTagTable` (one object), `ExportBlocks`, `ExportTypes`, `ExportTagTables` (by regular
+  expression) or `ExportPlcProgram` to export, and `OverwritePlcProgram` or `ImportPlcProgramChanges` to import. There
+  is no tool left that imports a single tag table, a single block or a single type. `ExportOpcUaXml`,
+  `ImportWatchTable` stays. `ExportXmlWatchTable` and `ExportXmlForceTable` are renamed `ExportWatchTable` and `ExportForceTable`, as these tables only have an XML format.
+
 ### Added
 
-- __`ExportXmlForceTable`__: exports the force table of a PLC (`PlcForceTable.Export`) as
+- __`ExportBlock`, `ExportType`, `ExportTagTable`, `ExportBlocks`, `ExportTypes`, `ExportTagTables`, `ExportWatchTable`, `ExportWatchTables`, `ExportForceTable`__: export exactly one object
+  by its path, or the objects whose name matches a regular expression, into the tree `ExportPlcProgram` writes. Blocks
+  and PLC data types are written in the format `<exportPath>/tia.json` gives for their object type; tag tables are
+  always XML, because they have no entry in the export format settings. Prompts of the same names are included.
+  Tag, watch and force tables follow the same layout (one table, or all by regular expression) and now take `softwarePath`, `exportPath` and the table path in this order; `ExportWatchTable` and `ExportForceTable` lost their old `preservePath` argument and always mirror the groups.
+- __`TiaConnect`, `TiaPull`, `TiaPullBlocks`, `TiaPullTypes`, `TiaPullTagTables`, `TiaPullBlock`, `TiaPullType`,
+  `TiaPullTagTable`, `TiaPullWatchTables`, `TiaPullWatchTable`, `TiaPullForceTable`, `TiaPush`, `TiaPushPreview`__: git-like short commands in the chat (`tia connect <project>`,
+  `tia pull blocks <regex>`, `tia push preview`, ...) on top of the tools above. The push tools need `--allow-write`.
+  The preview of an import has a `Table` with the columns Git, Type and File.
+- __Relative export and import paths__ are made absolute against the working directory of the server before TIA
+  Portal gets them.
+
+- __`ExportForceTable`__: exports the force table of a PLC (`PlcForceTable.Export`) as
   `<exportPath>/<softwarePath>/<system folder>/<table>.xml`, the watch and force tables folder of the project
   tree in the interface language of TIA Portal, next to the exported watch tables. A force table is owned by the
   system and has no groups, so the tool has no `preservePath`. Like the other export tools it only writes files and

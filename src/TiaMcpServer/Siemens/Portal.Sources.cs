@@ -287,112 +287,6 @@ namespace TiaMcpServer.Siemens
 
         #region whole-plc snapshot
 
-        /// <summary>
-        /// Writes one PLC software to a folder tree that mirrors the project: program blocks and
-        /// PLC data types as SIMATIC Source Documents where TIA Portal supports them, tag tables
-        /// and watch tables as XML, each below its localised system folder. The result is a
-        /// directory a version control system can diff.
-        ///
-        /// Composes the existing bulk exporters rather than calling Openness directly, so it
-        /// inherits their skip-and-continue behaviour: one object that cannot be exported does
-        /// not lose the rest of the snapshot.
-        /// </summary>
-        public SourceTreeResult ExportPlcAsDocuments(string softwarePath, string exportPath)
-        {
-            return Operation.Run(_logger, nameof(ExportPlcAsDocuments), PortalErrorCode.ExportFailed,
-                () =>
-                {
-                    // Fail before writing anything when the path is wrong.
-                    GetPlcSoftwareOrThrow(softwarePath);
-
-                    var result = new SourceTreeResult { Directory = ResolveSoftwareRoot(exportPath, softwarePath) };
-
-                    // Blocks: documents when the Portal is new enough, XML otherwise, since a
-                    // snapshot missing every block would be worse than a less readable one.
-                    if (Engineering.TiaMajorVersion >= 20)
-                    {
-                        var blocks = ExportBlocksAsDocuments(softwarePath, exportPath, string.Empty, preservePath: true);
-
-                        Record(result, "blocks", "document", blocks?.Count() ?? 0);
-                    }
-                    else
-                    {
-                        var blocks = ExportXmlBlocks(softwarePath, exportPath, string.Empty, preservePath: true);
-
-                        Record(result, "blocks", "xml", blocks?.Count() ?? 0);
-                    }
-
-                    if (Engineering.TiaMajorVersion >= MinVersionForTypeDocuments)
-                    {
-                        var types = ExportTypesAsDocuments(softwarePath, exportPath, string.Empty, preservePath: true);
-
-                        Record(result, "types", "document", types.Exported.Count);
-                        result.Skipped.AddRange(types.Inconsistent.Select(t => $"type {GetTypePath(t)}: inconsistent"));
-                        result.Failures.AddRange(types.Failures.Select(f => $"type {f}"));
-                    }
-                    else
-                    {
-                        var types = ExportXmlTypes(softwarePath, exportPath, string.Empty, preservePath: true);
-
-                        Record(result, "types", "xml", types?.Count() ?? 0);
-                    }
-
-                    // Tag and watch tables have no document format in V21; XML is all there is.
-                    Record(result, "tagTables", "xml", ExportEach(
-                        GetTagTables(softwarePath).Select(t => (GetTagTablePath(t), (Action)(() => ExportXmlTagTable(softwarePath, GetTagTablePath(t), exportPath, preservePath: true)))),
-                        "tag table",
-                        result));
-
-                    Record(result, "watchTables", "xml", ExportEach(
-                        GetWatchTables(softwarePath).Select(t => (GetWatchTablePath(t), (Action)(() => ExportXmlWatchTable(softwarePath, GetWatchTablePath(t), exportPath, preservePath: true)))),
-                        "watch table",
-                        result));
-
-                    Record(result, "forceTables", "xml", ExportEach(
-                        GetForceTables(softwarePath).Select(t => (GetForceTablePath(t), (Action)(() => ExportXmlForceTable(softwarePath, GetForceTablePath(t), exportPath)))),
-                        "force table",
-                        result));
-
-                    _logger?.LogInformation(
-                        "Source tree for '{Software}' written to '{Directory}': {Written} object(s), {Skipped} skipped, {Failed} failed",
-                        softwarePath, exportPath, result.TotalWritten, result.Skipped.Count, result.Failures.Count);
-
-                    return result;
-                },
-                ("softwarePath", softwarePath), ("exportPath", exportPath));
-        }
-
-        private static void Record(SourceTreeResult result, string area, string format, int count)
-        {
-            result.Written[area] = count;
-            result.Formats[area] = format;
-        }
-
-        /// <summary>
-        /// Runs one export per object, collecting failures instead of aborting - the table
-        /// exporters throw per object, unlike the bulk block and type exporters.
-        /// </summary>
-        private int ExportEach(IEnumerable<(string Path, Action Export)> items, string kind, SourceTreeResult result)
-        {
-            var written = 0;
-
-            foreach (var item in items)
-            {
-                try
-                {
-                    item.Export();
-                    written++;
-                }
-                catch (Exception ex)
-                {
-                    result.Failures.Add($"{kind} {item.Path}: {ex.Message}");
-                    _logger?.LogWarning(ex, "Snapshot could not export {Kind} '{Path}'", kind, item.Path);
-                }
-            }
-
-            return written;
-        }
-
         #endregion
 
         // From the former Portal.GenerateSource.cs:
@@ -530,129 +424,6 @@ namespace TiaMcpServer.Siemens
         #endregion
 
         #region whole plc
-
-        /// <summary>
-        /// Writes every block and PLC data type of one PLC software as external source files into
-        /// a folder tree that mirrors the project groups: '&lt;exportPath&gt;/Program blocks/...'
-        /// and '&lt;exportPath&gt;/PLC data types/...', one file per object.
-        ///
-        /// The whole-PLC form of <see cref="ExportSourceBlocks"/> and <see cref="ExportSourceTypes"/>
-        /// and the counterpart to <see cref="ExportPlcAsDocuments"/>, which snapshots the same tree
-        /// as source documents and XML. This one produces the format TIA Portal can compile back
-        /// into blocks - <see cref="ImportSources"/> reads such a tree back - at the cost of
-        /// leaving out everything that has no source form - LAD, FBD and GRAPH blocks among them.
-        ///
-        /// Skip-and-continue throughout: one object Openness refuses does not lose the rest, and
-        /// every omission is reported with its reason rather than swallowed.
-        /// </summary>
-        public GeneratedSourcesResult ExportSources(string softwarePath, string exportPath, string regexName = "", bool withDependencies = false)
-        {
-            return Operation.Run(_logger, nameof(ExportSources), PortalErrorCode.ExportFailed,
-                () =>
-                {
-                    // Fail before writing anything when the path is wrong.
-                    var group = GetSourceSystemGroup(softwarePath);
-
-                    exportPath = ResolveSoftwareRoot(exportPath, softwarePath);
-
-                    var result = new GeneratedSourcesResult { Directory = exportPath };
-
-                    GenerateBlocks(result, group, GetBlocks(softwarePath, regexName), exportPath, withDependencies, preservePath: true);
-                    GenerateTypes(result, group, GetTypes(softwarePath, regexName), exportPath, withDependencies, preservePath: true);
-
-                    _logger?.LogInformation(
-                        "Sources for '{Software}' written to '{Directory}': {Written} file(s), {Skipped} skipped, {Failed} failed",
-                        softwarePath, exportPath, result.Files.Count, result.Skipped.Count, result.Failures.Count);
-
-                    return result;
-                },
-                ("softwarePath", softwarePath), ("exportPath", exportPath), ("regexName", regexName));
-        }
-
-        /// <summary>
-        /// Writes every block below a group, including all subgroups, as external source files.
-        /// An empty <paramref name="groupPath"/> means the 'Program blocks' root, which makes it
-        /// the same as <see cref="ExportSources"/> restricted to blocks.
-        ///
-        /// With <paramref name="preservePath"/> the project groups are mirrored below
-        /// '&lt;exportPath&gt;/Program blocks'; without it every file lands directly in
-        /// '&lt;exportPath&gt;', so two blocks of the same name in different groups overwrite
-        /// each other. Skip-and-continue, like <see cref="ExportSources"/>.
-        /// </summary>
-        public GeneratedSourcesResult ExportSourceBlocks(string softwarePath, string groupPath, string exportPath, bool withDependencies = false, bool preservePath = false, string regexName = "")
-        {
-            return Operation.Run(_logger, nameof(ExportSourceBlocks), PortalErrorCode.ExportFailed,
-                () =>
-                {
-                    var sourceGroup = GetSourceSystemGroup(softwarePath);
-
-                    var group = NormalizeGroupPath(groupPath).Length == 0
-                        ? GetPlcSoftwareOrThrow(softwarePath).BlockGroup
-                        : GetPlcBlockGroupByPath(softwarePath, groupPath);
-
-                    if (group == null)
-                    {
-                        throw new PortalException(PortalErrorCode.NotFound,
-                            $"Block group not found at '{groupPath}'. Use 'GetBlocks' or 'ResolveObjectPath' to find the path.");
-                    }
-
-                    var blocks = new List<PlcBlock>();
-                    GetBlocksRecursive(group, blocks, regexName);
-
-                    exportPath = ResolveSoftwareRoot(exportPath, softwarePath);
-
-                    var result = new GeneratedSourcesResult { Directory = exportPath };
-
-                    GenerateBlocks(result, sourceGroup, blocks, exportPath, withDependencies, preservePath);
-
-                    _logger?.LogInformation(
-                        "Block sources below '{Group}' written to '{Directory}': {Written} file(s), {Skipped} skipped, {Failed} failed",
-                        groupPath, exportPath, result.Files.Count, result.Skipped.Count, result.Failures.Count);
-
-                    return result;
-                },
-                ("softwarePath", softwarePath), ("groupPath", groupPath), ("exportPath", exportPath), ("regexName", regexName));
-        }
-
-        /// <summary>
-        /// Writes every PLC data type below a group, including all subgroups, as '*.udt' files.
-        /// An empty <paramref name="groupPath"/> means the 'PLC data types' root. See
-        /// <see cref="ExportSourceBlocks"/> for the effect of <paramref name="preservePath"/>.
-        /// </summary>
-        public GeneratedSourcesResult ExportSourceTypes(string softwarePath, string groupPath, string exportPath, bool withDependencies = false, bool preservePath = false, string regexName = "")
-        {
-            return Operation.Run(_logger, nameof(ExportSourceTypes), PortalErrorCode.ExportFailed,
-                () =>
-                {
-                    var sourceGroup = GetSourceSystemGroup(softwarePath);
-
-                    var group = NormalizeGroupPath(groupPath).Length == 0
-                        ? GetPlcSoftwareOrThrow(softwarePath).TypeGroup
-                        : GetPlcTypeGroupByPath(softwarePath, groupPath);
-
-                    if (group == null)
-                    {
-                        throw new PortalException(PortalErrorCode.NotFound,
-                            $"PLC data type group not found at '{groupPath}'. Use 'GetTypes' or 'ResolveObjectPath' to find the path.");
-                    }
-
-                    var types = new List<PlcType>();
-                    GetTypesRecursive(group, types, regexName);
-
-                    exportPath = ResolveSoftwareRoot(exportPath, softwarePath);
-
-                    var result = new GeneratedSourcesResult { Directory = exportPath };
-
-                    GenerateTypes(result, sourceGroup, types, exportPath, withDependencies, preservePath);
-
-                    _logger?.LogInformation(
-                        "Type sources below '{Group}' written to '{Directory}': {Written} file(s), {Skipped} skipped, {Failed} failed",
-                        groupPath, exportPath, result.Files.Count, result.Skipped.Count, result.Failures.Count);
-
-                    return result;
-                },
-                ("softwarePath", softwarePath), ("groupPath", groupPath), ("exportPath", exportPath), ("regexName", regexName));
-        }
 
         private void GenerateBlocks(
             GeneratedSourcesResult result,
@@ -907,212 +678,6 @@ namespace TiaMcpServer.Siemens
         // [WriteTool] tool.
 
         #region whole tree
-
-        private static bool IsTypeSourceExtension(string extension) =>
-            extension.Equals(".udt", StringComparison.OrdinalIgnoreCase);
-
-        private static bool IsBlockSourceExtension(string extension) =>
-            extension.Equals(".db", StringComparison.OrdinalIgnoreCase) ||
-            extension.Equals(".awl", StringComparison.OrdinalIgnoreCase) ||
-            extension.Equals(".scl", StringComparison.OrdinalIgnoreCase);
-
-        /// <summary>
-        /// Walks a folder tree of external source files and generates a block or PLC data type
-        /// from each, into the group its folder path implies. The compilable counterpart to
-        /// ExportSources: skip-and-continue throughout, so one bad file does not lose the rest
-        /// of the tree.
-        /// </summary>
-        public ImportedSourcesResult ImportSources(string softwarePath, string importPath, string regexName = "", bool keepOnError = false)
-        {
-            return Operation.Run(_logger, nameof(ImportSources), PortalErrorCode.ImportFailed,
-                () => ImportSourceFiles(softwarePath, importPath, string.Empty, regexName, keepOnError, preservePath: true, includeBlocks: true, includeTypes: true),
-                ("softwarePath", softwarePath), ("importPath", importPath), ("regexName", regexName));
-        }
-
-        /// <summary>
-        /// Generates the blocks of one source file (*.db, *.awl, *.scl) into a block group. The
-        /// counterpart to <see cref="ExportSourceBlock"/>. An empty <paramref name="groupPath"/>
-        /// uses the source's default location; otherwise it must be an existing block user group,
-        /// because the 'Program blocks' system root does not accept generated blocks. A file that
-        /// uses data types or other blocks may generate several objects, all listed in the result.
-        /// </summary>
-        public ImportedSourcesResult ImportSourceBlock(string softwarePath, string groupPath, string importPath, bool keepOnError = false)
-        {
-            return Operation.Run(_logger, nameof(ImportSourceBlock), PortalErrorCode.ImportFailed,
-                () => ImportSourceFile(softwarePath, groupPath, importPath, keepOnError, isType: false),
-                ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath));
-        }
-
-        /// <summary>
-        /// Generates the PLC data types of one '*.udt' source file into a type group. The
-        /// counterpart to <see cref="ExportSourceType"/>; see <see cref="ImportSourceBlock"/> for
-        /// the rules about <paramref name="groupPath"/>.
-        /// </summary>
-        public ImportedSourcesResult ImportSourceType(string softwarePath, string groupPath, string importPath, bool keepOnError = false)
-        {
-            return Operation.Run(_logger, nameof(ImportSourceType), PortalErrorCode.ImportFailed,
-                () => ImportSourceFile(softwarePath, groupPath, importPath, keepOnError, isType: true),
-                ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath));
-        }
-
-        /// <summary>
-        /// Generates blocks from every block source file (*.db, *.awl, *.scl) in a folder. The
-        /// counterpart to <see cref="ExportSourceBlocks"/>, with the same meaning of
-        /// <paramref name="preservePath"/>: without it only the files directly in
-        /// <paramref name="importPath"/> are read and all go into <paramref name="groupPath"/>;
-        /// with it the folder tree below <paramref name="importPath"/> is walked and each file goes
-        /// into the subgroup its folder implies, below <paramref name="groupPath"/>. A leading
-        /// 'Program blocks' folder, as <see cref="ExportSourceBlocks"/> writes it, is dropped.
-        /// Skip-and-continue: a file that fails is reported and the rest are still imported.
-        /// </summary>
-        public ImportedSourcesResult ImportSourceBlocks(string softwarePath, string groupPath, string importPath, string regexName = "", bool preservePath = false, bool keepOnError = false)
-        {
-            return Operation.Run(_logger, nameof(ImportSourceBlocks), PortalErrorCode.ImportFailed,
-                () =>
-                {
-                    // Fail once, before any file is touched, when the target group is wrong.
-                    ResolveBlockUserGroupForGenerate(softwarePath, groupPath);
-
-                    return ImportSourceFiles(softwarePath, importPath, groupPath, regexName, keepOnError, preservePath, includeBlocks: true, includeTypes: false);
-                },
-                ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath), ("regexName", regexName));
-        }
-
-        /// <summary>
-        /// Generates PLC data types from every '*.udt' file in a folder. The counterpart to
-        /// <see cref="ExportSourceTypes"/>; see <see cref="ImportSourceBlocks"/> for the effect of
-        /// <paramref name="preservePath"/>.
-        /// </summary>
-        public ImportedSourcesResult ImportSourceTypes(string softwarePath, string groupPath, string importPath, string regexName = "", bool preservePath = false, bool keepOnError = false)
-        {
-            return Operation.Run(_logger, nameof(ImportSourceTypes), PortalErrorCode.ImportFailed,
-                () =>
-                {
-                    ResolveTypeUserGroupForGenerate(softwarePath, groupPath);
-
-                    return ImportSourceFiles(softwarePath, importPath, groupPath, regexName, keepOnError, preservePath, includeBlocks: false, includeTypes: true);
-                },
-                ("softwarePath", softwarePath), ("groupPath", groupPath), ("importPath", importPath), ("regexName", regexName));
-        }
-
-        private ImportedSourcesResult ImportSourceFile(string softwarePath, string groupPath, string importPath, bool keepOnError, bool isType)
-        {
-            GetPlcSoftwareOrThrow(softwarePath);
-
-            if (!File.Exists(importPath))
-            {
-                throw new PortalException(PortalErrorCode.InvalidParams,
-                    $"Source file '{importPath}' does not exist on the machine running this server.");
-            }
-
-            var extension = Path.GetExtension(importPath);
-
-            if (isType ? !IsTypeSourceExtension(extension) : !IsBlockSourceExtension(extension))
-            {
-                throw new PortalException(PortalErrorCode.InvalidParams, isType
-                    ? $"'{importPath}' is not a PLC data type source: expected '.udt'. Use 'ImportSourceBlock' for '.db', '.awl' and '.scl' files."
-                    : $"'{importPath}' is not a block source: expected '.db', '.awl' or '.scl'. Use 'ImportSourceType' for '.udt' files.");
-            }
-
-            var option = keepOnError ? GenerateBlockOption.KeepOnError : GenerateBlockOption.None;
-            var result = new ImportedSourcesResult { Directory = Path.GetDirectoryName(Path.GetFullPath(importPath)) ?? string.Empty };
-
-            result.Items.AddRange(ImportOneSource(softwarePath, importPath, groupPath, option, isType));
-
-            _logger?.LogInformation(
-                "Source '{File}' imported into '{Software}': {Imported} object(s)",
-                importPath, softwarePath, result.Items.Count);
-
-            return result;
-        }
-
-        /// <summary>
-        /// Shared walk of the three bulk imports: pick the files of the wanted kinds, work out the
-        /// target group of each, and import them one by one, collecting failures instead of aborting.
-        /// </summary>
-        private ImportedSourcesResult ImportSourceFiles(
-            string softwarePath,
-            string importPath,
-            string targetGroupPath,
-            string regexName,
-            bool keepOnError,
-            bool preservePath,
-            bool includeBlocks,
-            bool includeTypes)
-        {
-            var software = GetPlcSoftwareOrThrow(softwarePath);
-
-            importPath = ResolveSoftwareRoot(importPath, softwarePath);
-
-            if (!Directory.Exists(importPath))
-            {
-                throw new PortalException(PortalErrorCode.InvalidParams,
-                    $"Import directory '{importPath}' does not exist.");
-            }
-
-            var blockRootName = software.BlockGroup?.Name ?? string.Empty;
-            var typeRootName = software.TypeGroup?.Name ?? string.Empty;
-            var option = keepOnError ? GenerateBlockOption.KeepOnError : GenerateBlockOption.None;
-
-            var result = new ImportedSourcesResult { Directory = importPath };
-
-            var files = Directory
-                .EnumerateFiles(importPath, "*.*", preservePath ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
-                .Where(f =>
-                    (includeBlocks && IsBlockSourceExtension(Path.GetExtension(f))) ||
-                    (includeTypes && IsTypeSourceExtension(Path.GetExtension(f))))
-                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var file in files)
-            {
-                var extension = Path.GetExtension(file);
-                var isType = IsTypeSourceExtension(extension);
-                var name = Path.GetFileNameWithoutExtension(file);
-
-                if (!string.IsNullOrEmpty(regexName) && !MatchesRegex(name, regexName))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    var groupPath = targetGroupPath;
-
-                    if (preservePath)
-                    {
-                        var below = StripSystemRootSegment(isType ? typeRootName : blockRootName, RelativeDirectory(importPath, file));
-
-                        groupPath = CombineGroupPath(targetGroupPath, below);
-                    }
-
-                    result.Items.AddRange(ImportOneSource(softwarePath, file, groupPath, option, isType));
-                }
-                catch (Exception ex)
-                {
-                    result.Failures.Add($"{name}{extension}: {ex.Message}");
-                    _logger?.LogWarning(ex, "Could not import source '{File}'", file);
-                }
-            }
-
-            _logger?.LogInformation(
-                "Sources imported from '{Directory}' into '{Software}': {Imported} object(s), {Failed} failed",
-                importPath, softwarePath, result.Items.Count, result.Failures.Count);
-
-            return result;
-        }
-
-        private static string CombineGroupPath(string parent, string child)
-        {
-            parent = NormalizeGroupPath(parent);
-            child = NormalizeGroupPath(child);
-
-            if (parent.Length == 0)
-            {
-                return child;
-            }
-
-            return child.Length == 0 ? parent : parent + "/" + child;
-        }
 
         /// <summary>
         /// Registers one file as a scratch external source, compiles it, and removes the scratch
@@ -1404,63 +969,6 @@ namespace TiaMcpServer.Siemens
                 ("softwarePath", softwarePath), ("groupPath", groupPath));
         }
 
-        /// <summary>
-        /// Compiles an external source into blocks. An empty target generates into the source's
-        /// default location; a target must resolve to a block USER group - the system root does
-        /// not bind to the PlcBlockUserGroup overload.
-        /// </summary>
-        public List<string> ImportExternalSource(string softwarePath, string sourcePath, string targetGroupPath = "", bool keepOnError = false)
-        {
-            return Operation.Run(_logger, nameof(ImportExternalSource), PortalErrorCode.CreateFailed,
-                () =>
-                {
-                    var source = GetExternalSource(softwarePath, sourcePath)
-                        ?? throw new PortalException(PortalErrorCode.NotFound,
-                            $"External source not found at '{sourcePath}'.");
-
-                    var option = keepOnError ? GenerateBlockOption.KeepOnError : GenerateBlockOption.None;
-
-                    // Verified against the V21 reference assembly: the overloads return
-                    // IList<IEngineeringObject>, which holds PlcBlock and PlcType instances.
-                    IList<IEngineeringObject> generated;
-
-                    if (NormalizeGroupPath(targetGroupPath).Length == 0)
-                    {
-                        generated = source.GenerateBlocksFromSource(option);
-                    }
-                    else
-                    {
-                        var target = GetPlcBlockGroupByPath(softwarePath, targetGroupPath) as PlcBlockUserGroup
-                            ?? throw new PortalException(PortalErrorCode.InvalidParams,
-                                $"'{targetGroupPath}' must be a block user group. Blocks cannot be generated into the 'Program blocks' system root; " +
-                                "leave targetGroupPath empty to use the source's default location.");
-
-                        generated = source.GenerateBlocksFromSource(target, option);
-                    }
-
-                    var names = new List<string>();
-
-                    foreach (var item in generated)
-                    {
-                        if (item is PlcBlock block)
-                        {
-                            names.Add(block.Name);
-                        }
-                        else if (item is PlcType type)
-                        {
-                            names.Add(type.Name);
-                        }
-                        else
-                        {
-                            names.Add(item?.ToString() ?? string.Empty);
-                        }
-                    }
-
-                    return names;
-                },
-                ("softwarePath", softwarePath), ("sourcePath", sourcePath), ("targetGroupPath", targetGroupPath));
-        }
-
         #endregion
     }
 
@@ -1483,26 +991,6 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>File names TIA Portal produced, without the scratch directory.</summary>
         public List<string> FileNames { get; set; } = new List<string>();
-    }
-
-    /// <summary>What a whole-PLC snapshot produced.</summary>
-    public class SourceTreeResult
-    {
-        public string Directory { get; set; } = string.Empty;
-
-        /// <summary>Objects written per area: blocks, types, tagTables, watchTables, forceTables.</summary>
-        public Dictionary<string, int> Written { get; set; } = new Dictionary<string, int>();
-
-        /// <summary>Format used per area: 'document' where TIA Portal supports it, else 'xml'.</summary>
-        public Dictionary<string, string> Formats { get; set; } = new Dictionary<string, string>();
-
-        /// <summary>Objects deliberately left out, with the reason.</summary>
-        public List<string> Skipped { get; set; } = new List<string>();
-
-        /// <summary>Objects that failed to export, with the reason.</summary>
-        public List<string> Failures { get; set; } = new List<string>();
-
-        public int TotalWritten => Written.Values.Sum();
     }
 
     /// <summary>One external source file that was written.</summary>
@@ -1531,6 +1019,17 @@ namespace TiaMcpServer.Siemens
         /// <summary>The extension that marks a file as coming from a PLC data type.</summary>
         private const string TypeExtension = ".udt";
 
+        /// <summary>The 'Language' of a file that is a PLC tag table, so it is neither counted as a block nor as a type.</summary>
+        public const string TagTableLanguage = "TagTable";
+
+        /// <summary>The 'Language' of a file that is a PLC watch table.</summary>
+        public const string WatchTableLanguage = "WatchTable";
+
+        /// <summary>The 'Language' of a file that is a PLC force table.</summary>
+        public const string ForceTableLanguage = "ForceTable";
+
+        private static readonly string[] TableLanguages = { TagTableLanguage, WatchTableLanguage, ForceTableLanguage };
+
         public string Directory { get; set; } = string.Empty;
 
         public List<GeneratedSource> Files { get; set; } = new List<GeneratedSource>();
@@ -1545,11 +1044,30 @@ namespace TiaMcpServer.Siemens
         public List<string> Notes { get; set; } = new List<string>();
 
         /// <summary>Files written per area, so a caller need not count the list itself.</summary>
-        public Dictionary<string, int> Written => new Dictionary<string, int>
+        public Dictionary<string, int> Written
         {
-            ["blocks"] = Files.Count(f => f.Format != TypeExtension),
-            ["types"] = Files.Count(f => f.Format == TypeExtension)
-        };
+            get
+            {
+                var written = new Dictionary<string, int>
+                {
+                    ["blocks"] = Files.Count(f => !TableLanguages.Contains(f.Language) && f.Format != TypeExtension),
+                    ["types"] = Files.Count(f => !TableLanguages.Contains(f.Language) && f.Format == TypeExtension)
+                };
+
+                // Only a table export has these areas, so the response of every other export is unchanged.
+                foreach (var (language, area) in new[] { (TagTableLanguage, "tagTables"), (WatchTableLanguage, "watchTables"), (ForceTableLanguage, "forceTables") })
+                {
+                    var count = Files.Count(f => f.Language == language);
+
+                    if (count > 0)
+                    {
+                        written[area] = count;
+                    }
+                }
+
+                return written;
+            }
+        }
     }
 
     /// <summary>One block or PLC data type generated by ImportSources.</summary>
@@ -1564,21 +1082,4 @@ namespace TiaMcpServer.Siemens
         public string Kind { get; set; } = string.Empty;
     }
 
-    /// <summary>What a whole-tree source import produced.</summary>
-    public class ImportedSourcesResult
-    {
-        public string Directory { get; set; } = string.Empty;
-
-        public List<ImportedSource> Items { get; set; } = new List<ImportedSource>();
-
-        /// <summary>Files that could not be imported, with the reason.</summary>
-        public List<string> Failures { get; set; } = new List<string>();
-
-        /// <summary>Objects generated per area, so a caller need not count the list itself.</summary>
-        public Dictionary<string, int> Written => new Dictionary<string, int>
-        {
-            ["blocks"] = Items.Count(i => i.Kind == "block"),
-            ["types"] = Items.Count(i => i.Kind == "type")
-        };
-    }
 }

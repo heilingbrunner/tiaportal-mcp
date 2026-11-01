@@ -14,7 +14,7 @@ namespace TiaMcpServer.Test
     [DoNotParallelize]
     public class Test8ToolDefaults
     {
-        private const string ExportTool = "ExportXmlBlocks";
+        private const string ExportTool = "ExportBlocks";
 
         [TestInitialize]
         public void ClassInit()
@@ -300,7 +300,6 @@ namespace TiaMcpServer.Test
                 }
             }
 
-            CollectionAssert.Contains(PropertiesOf(tools.Single(t => t.ProtocolTool.Name == ExportTool)), ToolDefaults.PreservePath, "flags stay overridable");
             CollectionAssert.Contains(PropertiesOf(tools.Single(t => t.ProtocolTool.Name == ExportTool)), "regexName");
         }
 
