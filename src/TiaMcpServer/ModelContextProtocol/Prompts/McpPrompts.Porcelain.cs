@@ -10,6 +10,26 @@ namespace TiaMcpServer.ModelContextProtocol
 
         #region Porcelain Templates
 
+        [McpServerPrompt(Name = "TiaInit"), Description("Set up tia.json with the args and export formats in the export folder")]
+        public static string TiaInit(string exportPath = "", string path = "", string softwarePath = "")
+        {
+            return $@"Set up <exportPath>/tia.json, like 'tia init'. The file holds the export formats of TIA Portal ('version-control-interface'), which the pull tools read, and the 'args' (project, software-path, export-path) that other programs read.
+
+The server opens a dialog of the client in which the user checks or enters the three args and submits; do not answer it for the user. Nothing is written when the user cancels. A client without dialogs uses the parameters below as they are.
+
+What you get: a missing file is created with the export formats TIA Portal offers for a new workspace. An existing file is completed and never overwritten: missing keys are added and every existing value is kept. Tell the user to check the export formats against Options > Settings > Version control interface > Export formats, and pass on which keys were added or kept.
+
+Common parameter values (all optional, they are only the start values of the dialog):
+- exportPath: '${{workspacefolder}}/export/Program' is a good default; the file is created there
+- path: full path of the .apXX project or .alsXX session file; blank leaves 'project' out of the args
+- softwarePath: e.g. 'PLC_1' for hardware PLC; blank leaves 'software-path' out of the args
+
+Use the TiaInit tool with these parameters:
+- exportPath: {exportPath}
+- path: {path}
+- softwarePath: {softwarePath}";
+        }
+
         [McpServerPrompt(Name = "TiaConnect"), Description("Connect to TIA Portal and open a project or session")]
         public static string TiaConnect(string projectPath, string portalId = "")
         {

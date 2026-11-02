@@ -1,5 +1,6 @@
 using Siemens.Engineering.SW.Blocks;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using TiaMcpServer.Siemens;
@@ -41,7 +42,7 @@ namespace TiaMcpServer.Test
         {
             var body = string.Join(", ", entries.Select(e => $"\"{e.Key}\": \"{e.Value}\""));
 
-            return ExportFormatSettings.Parse($"{{ \"version control interface\": {{ {body} }} }}", "test.json");
+            return ExportFormatSettings.Parse($"{{ \"version-control-interface\": {{ {body} }} }}", "test.json");
         }
 
         private static PortalException Throws(Action action)
@@ -85,12 +86,12 @@ namespace TiaMcpServer.Test
         [TestMethod]
         public void Test_1010_BlockKey_FollowsTheLanguageAndDataBlocks()
         {
-            Assert.AreEqual("code blocks-LAD", ExportFormats.BlockKey(false, ProgrammingLanguage.LAD));
-            Assert.AreEqual("code blocks-FBD", ExportFormats.BlockKey(false, ProgrammingLanguage.FBD));
-            Assert.AreEqual("code blocks-SCL", ExportFormats.BlockKey(false, ProgrammingLanguage.SCL));
-            Assert.AreEqual("code blocks-STL", ExportFormats.BlockKey(false, ProgrammingLanguage.STL));
+            Assert.AreEqual("code-blocks-LAD", ExportFormats.BlockKey(false, ProgrammingLanguage.LAD));
+            Assert.AreEqual("code-blocks-FBD", ExportFormats.BlockKey(false, ProgrammingLanguage.FBD));
+            Assert.AreEqual("code-blocks-SCL", ExportFormats.BlockKey(false, ProgrammingLanguage.SCL));
+            Assert.AreEqual("code-blocks-STL", ExportFormats.BlockKey(false, ProgrammingLanguage.STL));
             Assert.IsNull(ExportFormats.BlockKey(false, ProgrammingLanguage.GRAPH), "GRAPH has no entry in the settings");
-            Assert.AreEqual("data blocks", ExportFormats.BlockKey(true, ProgrammingLanguage.LAD), "a data block is matched by type, not by language");
+            Assert.AreEqual("data-blocks", ExportFormats.BlockKey(true, ProgrammingLanguage.LAD), "a data block is matched by type, not by language");
             Assert.IsNull(ExportFormats.BlockKey(false, (ProgrammingLanguage)(-1)));
         }
 
@@ -98,22 +99,22 @@ namespace TiaMcpServer.Test
         public void Test_1020_RecommendedTool_NamesTheToolThatWritesTheFormat()
         {
             // The format comes from tia.json, so one tool per object kind writes every format
-            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code blocks-LAD", ExportFormatKind.SimaticSd));
-            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code blocks-FBD", ExportFormatKind.Xml));
-            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code blocks-STL", ExportFormatKind.Source));
-            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("data blocks", ExportFormatKind.Source));
-            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC data types", ExportFormatKind.SimaticSd));
-            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC data types", ExportFormatKind.Xml));
-            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC data types", ExportFormatKind.Source));
+            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code-blocks-LAD", ExportFormatKind.SimaticSd));
+            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code-blocks-FBD", ExportFormatKind.Xml));
+            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code-blocks-STL", ExportFormatKind.Source));
+            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("data-blocks", ExportFormatKind.Source));
+            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC-data-types", ExportFormatKind.SimaticSd));
+            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC-data-types", ExportFormatKind.Xml));
+            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC-data-types", ExportFormatKind.Source));
             Assert.IsNull(ExportFormats.RecommendedTool("PLC tag tables", ExportFormatKind.Xml), "an object type without an export tool for it");
-            Assert.IsNull(ExportFormats.RecommendedTool("code blocks-LAD", ExportFormatKind.Unknown));
+            Assert.IsNull(ExportFormats.RecommendedTool("code-blocks-LAD", ExportFormatKind.Unknown));
         }
 
         [TestMethod]
         public void Test_1030_Parse_ReadsStringValuesAndIgnoresTheRest()
         {
             // Arrange
-            var json = "{ \"Version Control Interface\": { \"code blocks-LAD\": \"" + SimaticSd + "\", \"count\": 3 }, \"other\": {} }";
+            var json = "{ \"Version-Control-Interface\": { \"code-blocks-LAD\": \"" + SimaticSd + "\", \"count\": 3 }, \"other\": {} }";
 
             // Act
             var settings = ExportFormatSettings.Parse(json, "test.json");
@@ -121,6 +122,22 @@ namespace TiaMcpServer.Test
             // Assert
             Assert.AreEqual(SimaticSd, settings.Get("CODE BLOCKS-lad"), "the group and the keys are matched without regard to case");
             Assert.IsNull(settings.Get("count"));
+            Assert.AreEqual(1, settings.Values.Count);
+        }
+
+        [TestMethod]
+        public void Test_1032_Parse_IgnoresTheArgsSectionForOtherPrograms()
+        {
+            // Arrange
+            var json = "{ \"args\": { \"project\": \"P.ap21\", \"software-path\": \"PLC_1\", \"export-path\": \"export\" }, " +
+                       "\"version-control-interface\": { \"code-blocks-STL\": \".awl\" } }";
+
+            // Act
+            var settings = ExportFormatSettings.Parse(json, "test.json");
+
+            // Assert
+            Assert.AreEqual(".awl", settings.Get("code-blocks-STL"));
+            Assert.IsNull(settings.Get("project"));
             Assert.AreEqual(1, settings.Values.Count);
         }
 
@@ -133,7 +150,121 @@ namespace TiaMcpServer.Test
             Assert.AreEqual(PortalErrorCode.InvalidParams, broken.Code);
             StringAssert.Contains(broken.Message, "broken.json");
             Assert.AreEqual(PortalErrorCode.InvalidParams, noGroup.Code);
-            StringAssert.Contains(noGroup.Message, "version control interface");
+            StringAssert.Contains(noGroup.Message, "version-control-interface");
+        }
+
+        private static Dictionary<string, string> InitArgs(string project = "", string software = "", string export = "") =>
+            new Dictionary<string, string>
+            {
+                [ExportFormats.ArgsProjectKey] = project,
+                [ExportFormats.ArgsSoftwarePathKey] = software,
+                [ExportFormats.ArgsExportPathKey] = export
+            };
+
+        private string TiaJson => Path.Combine(_directory, ExportFormats.SettingsFileName);
+
+        [TestMethod]
+        public void Test_1080_Init_CreatesTheFileWithTheArgsFirstAndTheFormatDefaults()
+        {
+            // Arrange / Act
+            var result = ExportFormatSettings.Init(_directory, InitArgs("Demo.ap21", "PLC_1", "export"));
+
+            // Assert
+            var text = File.ReadAllText(TiaJson);
+
+            Assert.IsTrue(result.Created);
+            Assert.IsTrue(result.Changed);
+            CollectionAssert.AreEqual(new[] { "project", "software-path", "export-path" }, result.AddedArgs);
+            Assert.AreEqual(ExportFormats.Defaults.Count, result.AddedFormats.Count);
+            Assert.IsTrue(text.IndexOf("\"args\"", StringComparison.Ordinal) < text.IndexOf("\"version-control-interface\"", StringComparison.Ordinal),
+                "args come first in a new file");
+            Assert.AreEqual(".awl", ExportFormatSettings.Load(_directory).Get("code-blocks-STL"), "the server reads what init wrote");
+        }
+
+        [TestMethod]
+        public void Test_1081_Init_LeavesOutBlankArgsAndTheWholeSectionWhenAllAreBlank()
+        {
+            // Arrange / Act
+            var onlyExport = ExportFormatSettings.Init(_directory, InitArgs(export: "export"));
+            var none = ExportFormatSettings.Init(Path.Combine(_directory, "none"), InitArgs());
+
+            // Assert
+            CollectionAssert.AreEqual(new[] { "export-path" }, onlyExport.AddedArgs);
+            Assert.IsFalse(File.ReadAllText(none.File).Contains("\"args\""));
+        }
+
+        [TestMethod]
+        public void Test_1082_Init_MergesAnExistingFileAndKeepsEveryExistingValue()
+        {
+            // Arrange
+            File.WriteAllText(
+                TiaJson,
+                "{ \"args\": { \"project\": \"Mine.ap20\" }, " +
+                "\"version-control-interface\": { \"code-blocks-STL\": \".xml\" }, \"other\": { \"a\": 1 } }");
+
+            // Act
+            var result = ExportFormatSettings.Init(_directory, InitArgs("New.ap21", "PLC_1"));
+
+            // Assert
+            var text = File.ReadAllText(TiaJson);
+
+            Assert.IsFalse(result.Created);
+            Assert.IsTrue(result.Changed);
+            CollectionAssert.AreEqual(new[] { "software-path" }, result.AddedArgs);
+            CollectionAssert.AreEqual(new[] { "project" }, result.KeptArgs);
+            Assert.AreEqual(ExportFormats.Defaults.Count - 1, result.AddedFormats.Count);
+            Assert.AreEqual(".xml", ExportFormatSettings.Load(_directory).Get("code-blocks-STL"));
+            StringAssert.Contains(text, "Mine.ap20");
+            Assert.IsFalse(text.Contains("New.ap21"), "an existing value is never replaced");
+            StringAssert.Contains(text, "\"other\"");
+        }
+
+        [TestMethod]
+        public void Test_1083_Init_SecondCallChangesNothingAndDoesNotRewriteTheFile()
+        {
+            // Arrange
+            ExportFormatSettings.Init(_directory, InitArgs("Demo.ap21", "PLC_1", "export"));
+            var before = File.ReadAllText(TiaJson);
+
+            // Act
+            var second = ExportFormatSettings.Init(_directory, InitArgs("Demo.ap21", "PLC_1", "export"));
+
+            // Assert
+            Assert.IsFalse(second.Changed);
+            Assert.AreEqual(0, second.AddedArgs.Count + second.AddedFormats.Count + second.KeptArgs.Count);
+            Assert.AreEqual(before, File.ReadAllText(TiaJson));
+        }
+
+        [TestMethod]
+        [DataRow("{ not json")]
+        [DataRow("[1, 2]")]
+        public void Test_1084_Init_RejectsAFileThatIsNotAJsonObjectAndLeavesItUntouched(string content)
+        {
+            // Arrange
+            File.WriteAllText(TiaJson, content);
+
+            // Act
+            var ex = Throws(() => ExportFormatSettings.Init(_directory, InitArgs(export: "export")));
+
+            // Assert
+            Assert.AreEqual(PortalErrorCode.InvalidParams, ex.Code);
+            StringAssert.Contains(ex.Message, "tia.json");
+            Assert.AreEqual(content, File.ReadAllText(TiaJson));
+        }
+
+        [TestMethod]
+        public void Test_1085_Init_AddsTheFormatGroupToAnEmptyObject()
+        {
+            // Arrange
+            File.WriteAllText(TiaJson, "{}");
+
+            // Act
+            var result = ExportFormatSettings.Init(_directory, InitArgs());
+
+            // Assert
+            Assert.IsFalse(result.Created);
+            Assert.AreEqual(ExportFormats.Defaults.Count, result.AddedFormats.Count);
+            Assert.AreEqual(SimaticSd, ExportFormatSettings.Load(_directory).Get("code-blocks-LAD"));
         }
 
         [TestMethod]
@@ -142,13 +273,13 @@ namespace TiaMcpServer.Test
             // Arrange
             File.WriteAllText(
                 Path.Combine(_directory, ExportFormats.SettingsFileName),
-                "{ \"version control interface\": { \"code blocks-STL\": \".awl\" } }");
+                "{ \"version-control-interface\": { \"code-blocks-STL\": \".awl\" } }");
 
             // Act
             var settings = ExportFormatSettings.Load(_directory);
 
             // Assert
-            Assert.AreEqual(".awl", settings.Get("code blocks-STL"));
+            Assert.AreEqual(".awl", settings.Get("code-blocks-STL"));
             Assert.AreEqual(Path.Combine(_directory, ExportFormats.SettingsFileName), settings.File);
         }
 
@@ -166,8 +297,8 @@ namespace TiaMcpServer.Test
             Assert.IsTrue(File.Exists(file));
             StringAssert.Contains(settings.Hint, file);
             StringAssert.Contains(settings.Hint, "check");
-            Assert.AreEqual(".awl", settings.Get("code blocks-STL"));
-            Assert.AreEqual(SimaticSd, settings.Get("PLC data types"));
+            Assert.AreEqual(".awl", settings.Get("code-blocks-STL"));
+            Assert.AreEqual(SimaticSd, settings.Get("PLC-data-types"));
             Assert.AreEqual(ExportFormats.Defaults.Count, settings.Values.Count);
         }
 
@@ -208,7 +339,7 @@ namespace TiaMcpServer.Test
         {
             // Arrange
             var file = Path.Combine(_directory, ExportFormats.SettingsFileName);
-            var own = "{ \"version control interface\": { \"code blocks-STL\": \".xml\" } }";
+            var own = "{ \"version-control-interface\": { \"code-blocks-STL\": \".xml\" } }";
             File.WriteAllText(file, own);
 
             // Act
@@ -227,8 +358,8 @@ namespace TiaMcpServer.Test
 
             foreach (var key in new[]
             {
-                "code blocks-LAD", "code blocks-FBD", "code blocks-SCL", "code blocks-STL",
-                "data blocks", "safety data blocks (F-DBs)", "PLC data types", "F-compliant PLC data types (UDT)"
+                "code-blocks-LAD", "code-blocks-FBD", "code-blocks-SCL", "code-blocks-STL",
+                "data-blocks", "safety-data-blocks-(F-DBs)", "PLC-data-types", "F-compliant-PLC-data-types-(UDT)"
             })
             {
                 CollectionAssert.Contains(keys, key);
@@ -236,9 +367,9 @@ namespace TiaMcpServer.Test
 
             Assert.AreEqual(8, keys.Count);
             Assert.IsTrue(ExportFormats.Defaults.All(d => ExportFormats.ParseKind(d.Value) != ExportFormatKind.Unknown));
-            Assert.AreEqual(".awl", ExportFormats.Defaults.Single(d => d.Key == "code blocks-STL").Value);
+            Assert.AreEqual(".awl", ExportFormats.Defaults.Single(d => d.Key == "code-blocks-STL").Value);
 
-            foreach (var removed in new[] { "hmi unified global scripts", "code blocks-GRAPH", "PLC tag tables", "technology objects" })
+            foreach (var removed in new[] { "hmi unified global scripts", "code-blocks-GRAPH", "PLC tag tables", "technology objects" })
             {
                 CollectionAssert.DoesNotContain(keys, removed);
             }
@@ -255,10 +386,10 @@ namespace TiaMcpServer.Test
         {
             // Arrange
             var settings = SettingsOf(
-                ("code blocks-LAD", SimaticSd),
-                ("code blocks-FBD", ".xml"),
-                ("code blocks-STL", ".awl"),
-                ("data blocks", ".db"));
+                ("code-blocks-LAD", SimaticSd),
+                ("code-blocks-FBD", ".xml"),
+                ("code-blocks-STL", ".awl"),
+                ("data-blocks", ".db"));
 
             // Act
             var lad = PlcProgram.PlanBlock(false, ProgrammingLanguage.LAD, settings);
@@ -280,7 +411,7 @@ namespace TiaMcpServer.Test
         public void Test_1051_PlanBlock_SourceFormatForABlockWithoutSourceFormIsSkippedWithAReason()
         {
             // Arrange
-            var settings = SettingsOf(("code blocks-LAD", ".awl"));
+            var settings = SettingsOf(("code-blocks-LAD", ".awl"));
 
             // Act
             var plan = PlcProgram.PlanBlock(false, ProgrammingLanguage.LAD, settings);
@@ -293,7 +424,7 @@ namespace TiaMcpServer.Test
         [TestMethod]
         public void Test_1052_PlanBlock_LanguageWithoutASettingIsSkipped()
         {
-            var plan = PlcProgram.PlanBlock(false, (ProgrammingLanguage)(-1), SettingsOf(("code blocks-LAD", ".xml")));
+            var plan = PlcProgram.PlanBlock(false, (ProgrammingLanguage)(-1), SettingsOf(("code-blocks-LAD", ".xml")));
 
             Assert.AreEqual(ProgramBlockFormat.None, plan.Format);
             StringAssert.Contains(plan.Reason, "export format settings");
@@ -302,7 +433,7 @@ namespace TiaMcpServer.Test
         [TestMethod]
         public void Test_1054_PlanBlock_GraphBlockHasNoSettingAndIsSkippedNotFailed()
         {
-            var plan = PlcProgram.PlanBlock(false, ProgrammingLanguage.GRAPH, SettingsOf(("code blocks-LAD", ".xml")));
+            var plan = PlcProgram.PlanBlock(false, ProgrammingLanguage.GRAPH, SettingsOf(("code-blocks-LAD", ".xml")));
 
             Assert.AreEqual(ProgramBlockFormat.None, plan.Format);
             StringAssert.Contains(plan.Reason, "GRAPH");
@@ -312,13 +443,13 @@ namespace TiaMcpServer.Test
         [TestMethod]
         public void Test_1053_PlanBlock_MissingEntryAndUnknownFormatFail()
         {
-            var settings = SettingsOf(("code blocks-LAD", ".txt"));
+            var settings = SettingsOf(("code-blocks-LAD", ".txt"));
 
             var missing = Throws(() => PlcProgram.PlanBlock(false, ProgrammingLanguage.SCL, settings));
             var unknown = Throws(() => PlcProgram.PlanBlock(false, ProgrammingLanguage.LAD, settings));
 
             Assert.AreEqual(PortalErrorCode.InvalidParams, missing.Code);
-            StringAssert.Contains(missing.Message, "code blocks-SCL");
+            StringAssert.Contains(missing.Message, "code-blocks-SCL");
             Assert.AreEqual(PortalErrorCode.InvalidParams, unknown.Code);
             StringAssert.Contains(unknown.Message, ".txt");
         }
@@ -326,13 +457,13 @@ namespace TiaMcpServer.Test
         [TestMethod]
         public void Test_1060_PlanType_ReadsThePlcDataTypeEntryAndFailsWithoutIt()
         {
-            Assert.AreEqual(ExportFormatKind.SimaticSd, PlcProgram.PlanType(SettingsOf(("PLC data types", SimaticSd))));
-            Assert.AreEqual(ExportFormatKind.Source, PlcProgram.PlanType(SettingsOf(("PLC data types", ".udt"))));
+            Assert.AreEqual(ExportFormatKind.SimaticSd, PlcProgram.PlanType(SettingsOf(("PLC-data-types", SimaticSd))));
+            Assert.AreEqual(ExportFormatKind.Source, PlcProgram.PlanType(SettingsOf(("PLC-data-types", ".udt"))));
 
-            var ex = Throws(() => PlcProgram.PlanType(SettingsOf(("code blocks-LAD", ".xml"))));
+            var ex = Throws(() => PlcProgram.PlanType(SettingsOf(("code-blocks-LAD", ".xml"))));
 
             Assert.AreEqual(PortalErrorCode.InvalidParams, ex.Code);
-            StringAssert.Contains(ex.Message, "PLC data types");
+            StringAssert.Contains(ex.Message, "PLC-data-types");
         }
 
         [TestMethod]

@@ -16,8 +16,19 @@
   is no tool left that imports a single tag table, a single block or a single type. `ExportOpcUaXml`,
   `ImportWatchTable` stays. `ExportXmlWatchTable` and `ExportXmlForceTable` are renamed `ExportWatchTable` and `ExportForceTable`, as these tables only have an XML format.
 
+### Changed
+
+- __`tia.json` keys use hyphens instead of spaces__ (breaking): `version-control-interface`, `code-blocks-LAD`,
+  `data-blocks`, `PLC-data-types`, ... An existing file with the old keys is not read any more; rename them. The file
+  may also hold an `args` section (`project`, `software-path`, `export-path`) for other programs; the server ignores it.
+
 ### Added
 
+- __`TiaInit`__ (`tia init`): sets up `<exportPath>/tia.json`. A dialog asks for the `args` (`project`, `software-path`,
+  `export-path`), starting with the call arguments or the `--project-path`, `--software-path` and `--export-path`
+  presets. A missing file is created with the export formats TIA Portal offers for a new workspace; an existing file is
+  completed and never overwritten, so existing values are kept. Needs no `--allow-write`. A prompt of the same name is
+  included.
 - __`ExportBlock`, `ExportType`, `ExportTagTable`, `ExportBlocks`, `ExportTypes`, `ExportTagTables`, `ExportWatchTable`, `ExportWatchTables`, `ExportForceTable`__: export exactly one object
   by its path, or the objects whose name matches a regular expression, into the tree `ExportPlcProgram` writes. Blocks
   and PLC data types are written in the format `<exportPath>/tia.json` gives for their object type; tag tables are
@@ -41,7 +52,7 @@
   SIMATIC SD documents (`.s7dcl`, `.s7res`), SimaticML (`.xml`) or a source file (`.scl`, `.awl`, `.db`, `.udt`).
   Openness cannot read that setting (the settings tree it offers has no export formats), so it is read from
   `<exportPath>/tia.json`:
-  `{"version control interface": {"code blocks-LAD": "SIMATIC SD(.s7dcl, .s7res)", "code blocks-STL": ".awl", ...}}`.
+  `{"version-control-interface": {"code-blocks-LAD": "SIMATIC SD(.s7dcl, .s7res)", "code-blocks-STL": ".awl", ...}}`.
   A missing file is created with the defaults TIA Portal offers for a new workspace, and the response asks the
   user to check it (`Notes` of `ExportPlcProgram`, `Created` and `Hint` of `GetExportFormats`); an existing file is
   never overwritten. Without an entry for an object type of the PLC, or with an unknown format, the call fails

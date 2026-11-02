@@ -266,6 +266,39 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        public void Test_1130_TiaInit_IsRegisteredWithoutAllowWriteAndIsNotAWriteTool()
+        {
+            // Arrange / Act
+            var names = RegisteredNames(allowWrite: false);
+
+            // Assert: it only writes tia.json into the export folder and never touches the project
+            Assert.IsTrue(names.Contains("TiaInit"));
+            Assert.IsNull(ToolMethod("TiaInit").GetCustomAttribute<WriteToolAttribute>());
+            Assert.AreEqual("Tia init", Registered("TiaInit", allowWrite: false).Title);
+        }
+
+        [TestMethod]
+        public void Test_1131_TiaInit_TakesOnlyOptionalArgumentsThatTheServerPresetsFill()
+        {
+            // Arrange / Act / Assert
+            CollectionAssert.AreEqual(new[] { "exportPath", "path", "softwarePath" }, ArgumentNames("TiaInit"));
+            Assert.AreEqual(0, RequiredArguments("TiaInit").Count, "the dialog asks for what is missing");
+        }
+
+        [TestMethod]
+        public void Test_1132_TiaInitPrompt_PassesTheThreeStartValuesOfTheDialog()
+        {
+            // Arrange / Act
+            var body = McpPrompts.TiaInit(@"D:\export", @"D:\projects\Demo.ap20", "PLC_1");
+
+            // Assert
+            StringAssert.Contains(body, "Use the TiaInit tool");
+            StringAssert.Contains(body, @"- exportPath: D:\export");
+            StringAssert.Contains(body, @"- path: D:\projects\Demo.ap20");
+            StringAssert.Contains(body, "- softwarePath: PLC_1");
+        }
+
+        [TestMethod]
         public void Test_1116_PlannedTable_ListsPlannedAndDeletedFilesAsMarkdownRows()
         {
             // Arrange

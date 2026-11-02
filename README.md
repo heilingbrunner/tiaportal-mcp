@@ -85,7 +85,7 @@ To enable write mode, add the argument to your client configuration, for example
 
 ## Tools
 
-Read-only tools (70) are always available.
+Read-only tools (71) are always available.
 
 | Area                          | Tools                                                                                                                                                                                                                                 |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -104,7 +104,7 @@ Read-only tools (70) are always available.
 | Multiuser                     | `GetMarkedObjects`, `CheckIsUpToDate`                                                                                                                                                                                                 |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`                                                                                                               |
 | Whole PLC program             | `ExportPlcProgram` (format per object type from `tia.json`, see below), `GetExportFormats`                                                                                                                                            |
-| Git-like connect and pull     | `TiaConnect`, `TiaPull`, `TiaPullBlocks`, `TiaPullTypes`, `TiaPullTagTables`, `TiaPullBlock`, `TiaPullType`, `TiaPullTagTable`, `TiaPullWatchTables`, `TiaPullWatchTable`, `TiaPullForceTable` (see "`tia` porcelain commands" below) |
+| Git-like connect and pull     | `TiaInit`, `TiaConnect`, `TiaPull`, `TiaPullBlocks`, `TiaPullTypes`, `TiaPullTagTables`, `TiaPullBlock`, `TiaPullType`, `TiaPullTagTable`, `TiaPullWatchTables`, `TiaPullWatchTable`, `TiaPullForceTable` (see "`tia` porcelain commands" below) |
 
 Write tools (40) require `--allow-write`.
 
@@ -142,37 +142,57 @@ visible file at the root of the export folder:
 It is one file for all PLCs below `<exportPath>`, because the setting is global. It is meant to be kept and committed
 together with the export, so everyone who works with the folder uses the same formats.
 
-**You normally do not write it.** The first time a tool needs it and it does not exist, the server creates it with the
-defaults TIA Portal offers for a new workspace:
+**You normally do not write it.** `tia init` sets it up (see "`tia` porcelain commands"). The first time a tool needs it
+and it does not exist, the server creates it with the defaults TIA Portal offers for a new workspace:
 
 
 ```json
 {
-  "version control interface": {
-    "code blocks-LAD": "SIMATIC SD(.s7dcl, .s7res)",
-    "code blocks-FBD": "SIMATIC SD(.s7dcl, .s7res)",
-    "code blocks-SCL": "SIMATIC SD(.s7dcl, .s7res)",
-    "code blocks-STL": ".awl",
-    "data blocks": "SIMATIC SD(.s7dcl, .s7res)",
-    "safety data blocks (F-DBs)": "SIMATIC SD(.s7dcl, .s7res)",
-    "PLC data types": "SIMATIC SD(.s7dcl, .s7res)",
-    "F-compliant PLC data types (UDT)": "SIMATIC SD(.s7dcl, .s7res)"
+  "version-control-interface": {
+    "code-blocks-LAD": "SIMATIC SD(.s7dcl, .s7res)",
+    "code-blocks-FBD": "SIMATIC SD(.s7dcl, .s7res)",
+    "code-blocks-SCL": "SIMATIC SD(.s7dcl, .s7res)",
+    "code-blocks-STL": ".awl",
+    "data-blocks": "SIMATIC SD(.s7dcl, .s7res)",
+    "safety-data-blocks-(F-DBs)": "SIMATIC SD(.s7dcl, .s7res)",
+    "PLC-data-types": "SIMATIC SD(.s7dcl, .s7res)",
+    "F-compliant-PLC-data-types-(UDT)": "SIMATIC SD(.s7dcl, .s7res)"
   }
 }
 ```
+
+The file can also carry an optional `args` section for other programs that work with the same TIA Portal project.
+Its keys follow the server arguments `--project-path`, `--software-path` and `--export-path`. **The server does not
+read it**; only `tia init` writes it (the automatic creation does not) and every tool keeps it as it is:
+
+```json
+{
+  "args": {
+    "project": "C:\\Projects\\Plant\\Plant.ap21",
+    "software-path": "PLC_1",
+    "export-path": "C:\\Projects\\Plant\\export"
+  },
+  "version-control-interface": {
+    "code-blocks-LAD": "SIMATIC SD(.s7dcl, .s7res)"
+  }
+}
+```
+
+All keys use hyphens instead of spaces. A file with the old spaced keys (`version control interface`,
+`code blocks-LAD`, ...) is not read any more: rename the keys.
 
 Available file formats per object type; the first one listed is the default of a new file:
 
 | Key                                | Available formats                            |
 | ---------------------------------- | -------------------------------------------- |
-| `code blocks-LAD`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
-| `code blocks-FBD`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
-| `code blocks-SCL`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.scl`, `.xml` |
-| `code blocks-STL`                  | `.awl`, `.xml`                               |
-| `data blocks`                      | `SIMATIC SD(.s7dcl, .s7res)`, `.db`, `.xml`  |
-| `safety data blocks (F-DBs)`       | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
-| `PLC data types`                   | `SIMATIC SD(.s7dcl, .s7res)`, `.udt`, `.xml` |
-| `F-compliant PLC data types (UDT)` | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
+| `code-blocks-LAD`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
+| `code-blocks-FBD`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
+| `code-blocks-SCL`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.scl`, `.xml` |
+| `code-blocks-STL`                  | `.awl`, `.xml`                               |
+| `data-blocks`                      | `SIMATIC SD(.s7dcl, .s7res)`, `.db`, `.xml`  |
+| `safety-data-blocks-(F-DBs)`       | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
+| `PLC-data-types`                   | `SIMATIC SD(.s7dcl, .s7res)`, `.udt`, `.xml` |
+| `F-compliant-PLC-data-types-(UDT)` | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
 
 **Check a created file.** The server cannot see your TIA Portal settings, so the defaults may differ from yours. The
 response of `ExportPlcProgram` (`Notes` and the message) and of `GetExportFormats` (`Created`, `Hint`) says when the
@@ -190,10 +210,10 @@ Each key names an object type, the value is the text TIA Portal shows for it:
 
 | Key                                                              | Controls                                                 |
 | ---------------------------------------------------------------- | -------------------------------------------------------- |
-| `code blocks-LAD`, `-FBD`, `-SCL`, `-STL`                        | blocks of that language                                  |
-| `data blocks`                                                    | data blocks                                              |
-| `PLC data types`                                                 | PLC data types                                           |
-| `safety data blocks (F-DBs)`, `F-compliant PLC data types (UDT)` | listed as TIA Portal shows them; not read separately yet |
+| `code-blocks-LAD`, `-FBD`, `-SCL`, `-STL`                        | blocks of that language                                  |
+| `data-blocks`                                                    | data blocks                                              |
+| `PLC-data-types`                                                 | PLC data types                                           |
+| `safety-data-blocks-(F-DBs)`, `F-compliant-PLC-data-types-(UDT)` | listed as TIA Portal shows them; not read separately yet |
 
 Rules:
 - Keys and values are not case sensitive. Other keys are kept and shown but have no effect, so a longer file from a
@@ -271,6 +291,7 @@ Type the command in the chat, e.g. `tia pull blocks ".+HMI"`, or pick the tool o
 
 | You say                      | Tool                 | Same as                                                  |
 | ---------------------------- | -------------------- | -------------------------------------------------------- |
+| `tia init`                   | `TiaInit`            | sets up `<exportPath>/tia.json`                          |
 | `tia connect <project>`      | `TiaConnect`         | `OpenTiaProject`                                         |
 | `tia pull`                   | `TiaPull`            | `ExportPlcProgram`                                       |
 | `tia pull blocks [rx]`       | `TiaPullBlocks`      | `ExportBlocks`, optionally by regex                      |
@@ -285,6 +306,13 @@ Type the command in the chat, e.g. `tia pull blocks ".+HMI"`, or pick the tool o
 | `tia push`                   | `TiaPush`            | `ImportPlcProgramChanges` with `dryRun=false`            |
 | `tia push preview`           | `TiaPushPreview`     | `ImportPlcProgramChanges` with `dryRun=true`             |
 
+- `TiaInit` sets up [`tia.json`](#tiajson-the-export-formats-of-tia-portal): it opens a dialog in which you check or
+  enter the `args` (`project`, `software-path`, `export-path`), starting with the values of the call or of the
+  `--project-path`, `--software-path` and `--export-path` presets, and writes the file into the export path. A missing
+  file is created with the export formats TIA Portal offers for a new workspace; an existing file is only completed
+  (missing keys are added) and never overwritten, so a value you wrote is kept. Cancel the dialog and nothing is
+  written. A client without dialogs uses the arguments and presets as they are. It does not touch the project and needs
+  no `--allow-write`. Check the export formats against the dialog of TIA Portal afterwards.
 - `TiaConnect` connects to the running TIA Portal (or starts one), opens the `.apXX` project or `.alsXX` session
   and returns the PLC software paths to use as `softwarePath`. `path` takes the preset of `--project-path`; pass
   `portalId` when several instances run. It closes the project that is open first, unless it is the one asked for.
@@ -342,6 +370,7 @@ Prompts:
 Prompts using the `tia` commands (see "`tia` porcelain commands" above; with the presets from the json config
 file `softwarePath` and `exportPath` can be left out):
 
+- 'tia init'
 - 'tia connect'
 - 'tia pull'
 - 'tia pull blocks'

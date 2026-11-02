@@ -19,7 +19,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
     public class ResponseExportFormat
     {
-        /// <summary>The object type as the settings file names it, e.g. 'code blocks-LAD'.</summary>
+        /// <summary>The object type as the settings file names it, e.g. 'code-blocks-LAD'.</summary>
         public string ObjectType { get; set; } = string.Empty;
 
         /// <summary>The format text of the settings file, e.g. 'SIMATIC SD(.s7dcl, .s7res)'.</summary>

@@ -20,7 +20,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region export formats
 
         [McpServerTool(Name = "GetExportFormats", Title = "Get export formats", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use this to see which export format TIA Portal is configured for each object type (Version control interface > Export formats) and which export tool writes it, before choosing an export tool. Openness cannot read these settings, so they are read from '<exportPath>/tia.json', which the user maintains: {\"version control interface\": {\"code blocks-LAD\": \"SIMATIC SD(.s7dcl, .s7res)\", \"code blocks-STL\": \".awl\", ...}}. When the file does not exist it is created with the defaults of TIA Portal for a new workspace and 'Hint' asks the user to check it; tell the user. 'ExportPlcProgram' uses the same file")]
+         Description("Use this to see which export format TIA Portal is configured for each object type (Version control interface > Export formats) and which export tool writes it, before choosing an export tool. Openness cannot read these settings, so they are read from '<exportPath>/tia.json', which the user maintains: {\"version-control-interface\": {\"code-blocks-LAD\": \"SIMATIC SD(.s7dcl, .s7res)\", \"code-blocks-STL\": \".awl\", ...}}. When the file does not exist it is created with the defaults of TIA Portal for a new workspace and 'Hint' asks the user to check it; tell the user. 'ExportPlcProgram' uses the same file")]
         public static ResponseExportFormats GetExportFormats(
             [Description("exportPath: the export folder that holds tia.json")] string exportPath)
         {

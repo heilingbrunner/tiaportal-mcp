@@ -1,6 +1,12 @@
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using TiaMcpServer.Siemens;
@@ -13,6 +19,7 @@ namespace TiaMcpServer.ModelContextProtocol
         // Porcelain tools: short, git-like commands for the chat ('tia pull', 'tia push preview')
         // on top of the plumbing tools, the way 'git pull' sits on top of fetch and merge.
         //
+        //   tia init                  sets up '<exportPath>/tia.json' (args and export formats)
         //   tia connect <project>     OpenTiaProject
         //   tia pull                  ExportPlcProgram
         //   tia pull blocks [regex]   ExportBlocks
@@ -47,6 +54,142 @@ namespace TiaMcpServer.ModelContextProtocol
             CancellationToken cancellationToken = default)
         {
             return OpenTiaProject(path, portalId, cancellationToken);
+        }
+
+        [McpServerTool(Name = "TiaInit", Title = "Tia init", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Use this when the user says 'tia init': set up '<exportPath>/tia.json', the file with the export formats of TIA Portal ('version-control-interface') and the 'args' (project, software-path, export-path) that other programs read. The server opens a dialog of the client in which the user checks or enters the three args and submits; do not answer it for the user. A missing file is created with the formats TIA Portal offers for a new workspace. An existing file is completed and never overwritten: missing keys are added, every existing value is kept. A client without dialogs uses the arguments or presets as they are. Tell the user to check the formats against Options > Settings > Version control interface > Export formats. Never opens or changes the TIA Portal project")]
+        public static async Task<ResponseTiaInit> TiaInit(
+            SdkMcpServer server,
+            [Description("exportPath: directory on this machine that holds tia.json; the file is created there. The dialog starts with this value")] string exportPath = "",
+            [Description("path: full path of the .apXX project or .alsXX session file; written to 'args' as 'project'. The dialog starts with this value; blank leaves it out")] string path = "",
+            [Description("softwarePath: path of the PLC software in the project structure; written to 'args' as 'software-path'. The dialog starts with this value; blank leaves it out")] string softwarePath = "",
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var args = new Dictionary<string, string>
+                {
+                    [ExportFormats.ArgsProjectKey] = path,
+                    [ExportFormats.ArgsSoftwarePathKey] = softwarePath,
+                    [ExportFormats.ArgsExportPathKey] = exportPath
+                };
+
+                if (server.ClientCapabilities?.Elicitation != null)
+                {
+                    var answered = await AskTiaInitAsync(server, args, cancellationToken).ConfigureAwait(false);
+
+                    if (answered == null)
+                    {
+                        return new ResponseTiaInit
+                        {
+                            Message = "Nothing was written: the user did not submit the tia init dialog. Do not ask again unless the user asks for it.",
+                            Meta = Ok(new JsonObject { ["changed"] = false })
+                        };
+                    }
+
+                    args = answered;
+                }
+
+                var root = args[ExportFormats.ArgsExportPathKey];
+
+                if (string.IsNullOrWhiteSpace(root))
+                {
+                    throw new McpException(
+                        "The export path is empty, so tia.json has no place. Pass 'exportPath', enter it in the dialog, or start the server with '--export-path'.");
+                }
+
+                var result = ExportFormatSettings.Init(Path.GetFullPath(root), args);
+
+                return new ResponseTiaInit
+                {
+                    Message = InitMessage(result),
+                    File = result.File,
+                    Created = result.Created,
+                    Changed = result.Changed,
+                    AddedArgs = result.AddedArgs,
+                    KeptArgs = result.KeptArgs,
+                    AddedFormats = result.AddedFormats,
+                    Hint = result.AddedFormats.Count > 0
+                        ? "Please check the export formats against Options > Settings > Version control interface > Export formats and correct the file if your settings differ."
+                        : null,
+                    Meta = Ok(new JsonObject
+                    {
+                        ["created"] = result.Created,
+                        ["changed"] = result.Changed
+                    })
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (System.Exception ex) when (ex is not McpException && ex is not System.OperationCanceledException)
+            {
+                throw new McpException($"Unexpected error setting up tia.json: {ex.Message}", ex);
+            }
+        }
+
+        private static string InitMessage(TiaJsonInitResult result)
+        {
+            if (!result.Changed)
+            {
+                return $"'{result.File}' already has everything; nothing was changed.";
+            }
+
+            var kept = result.KeptArgs.Count > 0
+                ? $" Kept the existing value of: {string.Join(", ", result.KeptArgs)}."
+                : string.Empty;
+
+            return (result.Created ? $"Created '{result.File}'." : $"Completed '{result.File}'.") +
+                   $" Added {result.AddedArgs.Count} arg(s) and {result.AddedFormats.Count} export format(s).{kept}";
+        }
+
+        /// <summary>
+        /// The dialog of 'tia init': the three args of tia.json, each starting with the value the
+        /// call or preset gave. Null when the user declines or cancels.
+        /// </summary>
+        private static async Task<Dictionary<string, string>?> AskTiaInitAsync(
+            SdkMcpServer server, IReadOnlyDictionary<string, string> start, CancellationToken cancellationToken)
+        {
+            ElicitRequestParams.PrimitiveSchemaDefinition Field(string key, string title, string description) =>
+                new ElicitRequestParams.StringSchema
+                {
+                    Title = title,
+                    Description = description,
+                    Default = string.IsNullOrWhiteSpace(start[key]) ? null : start[key]
+                };
+
+            var result = await server.ElicitAsync(new ElicitRequestParams
+            {
+                Message = "Set up tia.json: check the args other programs read from it. Missing keys are added, existing values are kept.",
+                RequestedSchema = new ElicitRequestParams.RequestSchema
+                {
+                    Properties = new Dictionary<string, ElicitRequestParams.PrimitiveSchemaDefinition>
+                    {
+                        [ExportFormats.ArgsProjectKey] = Field(ExportFormats.ArgsProjectKey, "Project", "Full path of the .apXX project or .alsXX session file (optional)"),
+                        [ExportFormats.ArgsSoftwarePathKey] = Field(ExportFormats.ArgsSoftwarePathKey, "Software path", "Path of the PLC software, e.g. PLC_1 (optional)"),
+                        [ExportFormats.ArgsExportPathKey] = Field(ExportFormats.ArgsExportPathKey, "Export path", "Folder that holds tia.json")
+                    },
+                    Required = new List<string> { ExportFormats.ArgsExportPathKey }
+                }
+            }, cancellationToken).ConfigureAwait(false);
+
+            if (!result.IsAccepted)
+            {
+                return null;
+            }
+
+            return start.Keys.ToDictionary(key => key, key => ElicitedText(result, key));
+        }
+
+        private static string ElicitedText(ElicitResult result, string field)
+        {
+            return result.Content != null
+                && result.Content.TryGetValue(field, out var value)
+                && value.ValueKind == JsonValueKind.String
+                    // Explorer's "Copy as path" adds quotes, which Path.GetFullPath rejects
+                    ? (value.GetString() ?? string.Empty).Trim().Trim('"').Trim()
+                    : string.Empty;
         }
 
         [McpServerTool(Name = "TiaPull", Title = "Tia pull", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),

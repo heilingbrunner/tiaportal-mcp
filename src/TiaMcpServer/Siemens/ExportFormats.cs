@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -31,7 +32,7 @@ namespace TiaMcpServer.Siemens
     /// them, so they live in 'tia.json' at the root of the export folder, written by the
     /// user:
     /// <code>
-    /// { "version control interface": { "code blocks-LAD": "SIMATIC SD(.s7dcl, .s7res)", "code blocks-STL": ".awl" } }
+    /// { "version-control-interface": { "code-blocks-LAD": "SIMATIC SD(.s7dcl, .s7res)", "code-blocks-STL": ".awl" } }
     /// </code>
     ///
     /// Callers: PlcProgram.cs, Portal.Plc.cs (ExportPlcProgram) and the GetExportFormats tool.
@@ -42,14 +43,21 @@ namespace TiaMcpServer.Siemens
     {
         public const string SettingsFileName = "tia.json";
 
-        public const string GroupName = "version control interface";
+        public const string GroupName = "version-control-interface";
 
-        public const string LadBlocksKey = "code blocks-LAD";
-        public const string FbdBlocksKey = "code blocks-FBD";
-        public const string SclBlocksKey = "code blocks-SCL";
-        public const string StlBlocksKey = "code blocks-STL";
-        public const string DataBlocksKey = "data blocks";
-        public const string PlcTypesKey = "PLC data types";
+        /// <summary>The section for other programs that work with the same project; the server never reads it.</summary>
+        public const string ArgsGroupName = "args";
+
+        public const string ArgsProjectKey = "project";
+        public const string ArgsSoftwarePathKey = "software-path";
+        public const string ArgsExportPathKey = "export-path";
+
+        public const string LadBlocksKey = "code-blocks-LAD";
+        public const string FbdBlocksKey = "code-blocks-FBD";
+        public const string SclBlocksKey = "code-blocks-SCL";
+        public const string StlBlocksKey = "code-blocks-STL";
+        public const string DataBlocksKey = "data-blocks";
+        public const string PlcTypesKey = "PLC-data-types";
 
         private const string SimaticSdText = "SIMATIC SD(.s7dcl, .s7res)";
 
@@ -65,9 +73,9 @@ namespace TiaMcpServer.Siemens
             new KeyValuePair<string, string>(SclBlocksKey, SimaticSdText),
             new KeyValuePair<string, string>(StlBlocksKey, ".awl"),
             new KeyValuePair<string, string>(DataBlocksKey, SimaticSdText),
-            new KeyValuePair<string, string>("safety data blocks (F-DBs)", SimaticSdText),
+            new KeyValuePair<string, string>("safety-data-blocks-(F-DBs)", SimaticSdText),
             new KeyValuePair<string, string>(PlcTypesKey, SimaticSdText),
-            new KeyValuePair<string, string>("F-compliant PLC data types (UDT)", SimaticSdText)
+            new KeyValuePair<string, string>("F-compliant-PLC-data-types-(UDT)", SimaticSdText)
         };
 
         public const string Example =
@@ -146,14 +154,14 @@ namespace TiaMcpServer.Siemens
             }
 
             if (key.StartsWith(PlcTypesKey, StringComparison.OrdinalIgnoreCase) ||
-                key.StartsWith("F-compliant PLC data types", StringComparison.OrdinalIgnoreCase))
+                key.StartsWith("F-compliant-PLC-data-types", StringComparison.OrdinalIgnoreCase))
             {
                 return "ExportType";
             }
 
-            var isBlock = key.StartsWith("code blocks", StringComparison.OrdinalIgnoreCase) ||
+            var isBlock = key.StartsWith("code-blocks", StringComparison.OrdinalIgnoreCase) ||
                           key.StartsWith(DataBlocksKey, StringComparison.OrdinalIgnoreCase) ||
-                          key.StartsWith("safety data blocks", StringComparison.OrdinalIgnoreCase);
+                          key.StartsWith("safety-data-blocks", StringComparison.OrdinalIgnoreCase);
 
             return isBlock ? "ExportBlock" : null;
         }
@@ -232,7 +240,121 @@ namespace TiaMcpServer.Siemens
                 group[entry.Key] = entry.Value;
             }
 
-            var root = new JsonObject { [ExportFormats.GroupName] = group };
+            WriteAtomically(file, new JsonObject { [ExportFormats.GroupName] = group });
+        }
+
+        /// <summary>
+        /// Creates or completes 'tia.json' for 'tia init'. A missing file is created with the
+        /// 'args' that were given (blank ones are left out) and the format defaults of TIA Portal.
+        /// An existing file is merged, never overwritten: missing 'args' keys and missing format keys
+        /// are added, every existing value and every other key stays as it is. A file that is not
+        /// valid JSON is an error and stays untouched. Nothing is written when nothing changes.
+        /// </summary>
+        public static TiaJsonInitResult Init(string exportRoot, IReadOnlyDictionary<string, string> args)
+        {
+            if (string.IsNullOrWhiteSpace(exportRoot))
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams,
+                    $"The export path is empty, so '{ExportFormats.SettingsFileName}' cannot be written.");
+            }
+
+            var file = Path.Combine(exportRoot, ExportFormats.SettingsFileName);
+            var created = !System.IO.File.Exists(file);
+            var root = created ? new JsonObject() : ReadRoot(file);
+            var result = new TiaJsonInitResult { File = file, Created = created };
+            var given = args.Where(a => !string.IsNullOrWhiteSpace(a.Value)).ToList();
+
+            if (given.Count > 0)
+            {
+                var argsGroup = GetOrAddObject(root, ExportFormats.ArgsGroupName, file);
+
+                AddMissing(argsGroup, given, result.AddedArgs, result.KeptArgs);
+            }
+
+            var formats = GetOrAddObject(root, ExportFormats.GroupName, file);
+
+            AddMissing(formats, ExportFormats.Defaults, result.AddedFormats, null);
+
+            result.Changed = created || result.AddedArgs.Count > 0 || result.AddedFormats.Count > 0;
+
+            if (result.Changed)
+            {
+                WriteAtomically(file, root);
+            }
+
+            return result;
+        }
+
+        private static JsonObject ReadRoot(string file)
+        {
+            JsonNode? root;
+
+            try
+            {
+                root = JsonNode.Parse(System.IO.File.ReadAllText(file));
+            }
+            catch (JsonException ex)
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams, $"'{file}' is not valid JSON: {ex.Message}", null, ex);
+            }
+
+            return root as JsonObject
+                ?? throw new PortalException(PortalErrorCode.InvalidParams, $"'{file}' does not hold a JSON object at its top level.");
+        }
+
+        /// <summary>The object of that name (matched without regard to case), added when it does not exist yet.</summary>
+        private static JsonObject GetOrAddObject(JsonObject parent, string name, string file)
+        {
+            var match = parent.FirstOrDefault(p => string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase));
+
+            if (match.Key == null)
+            {
+                var added = new JsonObject();
+
+                parent[name] = added;
+
+                return added;
+            }
+
+            return match.Value as JsonObject
+                ?? throw new PortalException(PortalErrorCode.InvalidParams, $"'{file}' has \"{match.Key}\", but it is not an object.");
+        }
+
+        /// <summary>Adds the entries the group does not have; an entry with another value is only reported as kept.</summary>
+        private static void AddMissing(
+            JsonObject group, IEnumerable<KeyValuePair<string, string>> entries, List<string> added, List<string>? kept)
+        {
+            foreach (var entry in entries)
+            {
+                var match = group.FirstOrDefault(p => string.Equals(p.Key, entry.Key, StringComparison.OrdinalIgnoreCase));
+
+                if (match.Key == null)
+                {
+                    group[entry.Key] = entry.Value;
+                    added.Add(entry.Key);
+                }
+                else if (kept != null && !(match.Value is JsonValue node && node.TryGetValue<string>(out var text) && text == entry.Value))
+                {
+                    kept.Add(entry.Key);
+                }
+            }
+        }
+
+        private static void TryDelete(string file)
+        {
+            try
+            {
+                System.IO.File.Delete(file);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                // the original error is the one worth reporting
+            }
+        }
+
+        /// <summary>Writes through a temporary file, so a crash never leaves half a file behind.</summary>
+        private static void WriteAtomically(string file, JsonObject root)
+        {
             var temporary = file + ".tmp";
 
             try
@@ -240,14 +362,30 @@ namespace TiaMcpServer.Siemens
                 Directory.CreateDirectory(Path.GetDirectoryName(file)!);
                 System.IO.File.WriteAllText(
                     temporary,
-                    root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+                    root.ToJsonString(new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    }),
                     new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-                System.IO.File.Move(temporary, file);
+
+                // File.Move cannot overwrite on .NET Framework; File.Replace swaps in one step, so the
+                // user's file is never gone while the new one is not in place yet.
+                if (System.IO.File.Exists(file))
+                {
+                    System.IO.File.Replace(temporary, file, null);
+                }
+                else
+                {
+                    System.IO.File.Move(temporary, file);
+                }
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
+                TryDelete(temporary);
+
                 throw new PortalException(PortalErrorCode.ExportFailed,
-                    $"'{file}' does not exist and could not be created: {ex.Message}", null, ex);
+                    $"'{file}' could not be written: {ex.Message}", null, ex);
             }
         }
 
@@ -286,5 +424,27 @@ namespace TiaMcpServer.Siemens
 
             return new ExportFormatSettings(file, values, wasCreated: false);
         }
+    }
+
+    /// <summary>What 'tia init' did to 'tia.json'.</summary>
+    public sealed class TiaJsonInitResult
+    {
+        /// <summary>The settings file that was created or completed.</summary>
+        public string File { get; set; } = string.Empty;
+
+        /// <summary>True when the file did not exist and was created.</summary>
+        public bool Created { get; set; }
+
+        /// <summary>False when the file already had everything and was not rewritten.</summary>
+        public bool Changed { get; set; }
+
+        /// <summary>The 'args' keys that were added.</summary>
+        public List<string> AddedArgs { get; } = new List<string>();
+
+        /// <summary>The 'args' keys whose different value in the file was kept.</summary>
+        public List<string> KeptArgs { get; } = new List<string>();
+
+        /// <summary>The export format keys that were added.</summary>
+        public List<string> AddedFormats { get; } = new List<string>();
     }
 }
