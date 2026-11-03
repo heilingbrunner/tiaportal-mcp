@@ -51,6 +51,7 @@ namespace TiaMcpServer.Siemens
         public const string ArgsProjectKey = "project";
         public const string ArgsSoftwarePathKey = "software-path";
         public const string ArgsExportPathKey = "export-path";
+        public const string ArgsPreservePathKey = "preserve-path";
 
         public const string LadBlocksKey = "code-blocks-LAD";
         public const string FbdBlocksKey = "code-blocks-FBD";

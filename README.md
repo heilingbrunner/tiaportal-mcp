@@ -162,7 +162,8 @@ and it does not exist, the server creates it with the defaults TIA Portal offers
 ```
 
 The file can also carry an optional `args` section for other programs that work with the same TIA Portal project.
-Its keys follow the server arguments `--project-path`, `--software-path` and `--export-path`. **The server does not
+Its keys follow the server arguments `--project-path`, `--software-path`, `--export-path` and `--preserve-path`
+(`"preserve-path": "true"` is written only when checked). **The server does not
 read it**; only `tia init` writes it (the automatic creation does not) and every tool keeps it as it is:
 
 ```json
@@ -307,8 +308,8 @@ Type the command in the chat, e.g. `tia pull blocks ".+HMI"`, or pick the tool o
 | `tia push preview`           | `TiaPushPreview`     | `ImportPlcProgramChanges` with `dryRun=true`             |
 
 - `TiaInit` sets up [`tia.json`](#tiajson-the-export-formats-of-tia-portal): it opens a dialog in which you check or
-  enter the `args` (`project`, `software-path`, `export-path`), starting with the values of the call or of the
-  `--project-path`, `--software-path` and `--export-path` presets, and writes the file into the export path. A missing
+  enter the `args` (`project`, `software-path`, `export-path`, `preserve-path`), starting with the values of the call or
+  of the `--project-path`, `--software-path`, `--export-path` and `--preserve-path` presets, and writes the file into the export path. A missing
   file is created with the export formats TIA Portal offers for a new workspace; an existing file is only completed
   (missing keys are added) and never overwritten, so a value you wrote is kept. Cancel the dialog and nothing is
   written. A client without dialogs uses the arguments and presets as they are. It does not touch the project and needs

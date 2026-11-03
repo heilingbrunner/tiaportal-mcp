@@ -182,6 +182,22 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        public void Test_1086_Init_WritesPreservePathOnlyWhenItIsSet()
+        {
+            // Arrange
+            var withFlag = InitArgs("", "", "export");
+            withFlag[ExportFormats.ArgsPreservePathKey] = "true";
+
+            // Act
+            var result = ExportFormatSettings.Init(_directory, withFlag);
+            var text = File.ReadAllText(TiaJson);
+
+            // Assert
+            CollectionAssert.AreEqual(new[] { "export-path", "preserve-path" }, result.AddedArgs);
+            StringAssert.Contains(text, "\"preserve-path\": \"true\"");
+        }
+
+        [TestMethod]
         public void Test_1081_Init_LeavesOutBlankArgsAndTheWholeSectionWhenAllAreBlank()
         {
             // Arrange / Act
