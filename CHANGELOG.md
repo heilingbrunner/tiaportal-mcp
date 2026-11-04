@@ -25,8 +25,9 @@
 ### Added
 
 - __`TiaInit`__ (`tia init`): sets up `<exportPath>/tia.json`. A dialog asks for the `args` (`project`, `software-path`,
-  `export-path`, `preserve-path`), starting with the call arguments or the `--project-path`, `--software-path`,
-  `--export-path` and `--preserve-path` presets. `preserve-path` is a checkbox and is written only when checked. A missing file is created with the export formats TIA Portal offers for a new workspace; an existing file is
+  `export-path`, `preserve-path`, `with-user-interface`), starting with the call arguments or the `--project-path`,
+  `--software-path`, `--export-path` and `--preserve-path` presets. `preserve-path` and `with-user-interface` are
+  checkboxes and are written only when checked. A missing file is created with the export formats TIA Portal offers for a new workspace; an existing file is
   completed and never overwritten, so existing values are kept. Needs no `--allow-write`. A prompt of the same name is
   included.
 - __`ExportBlock`, `ExportType`, `ExportTagTable`, `ExportBlocks`, `ExportTypes`, `ExportTagTables`, `ExportWatchTable`, `ExportWatchTables`, `ExportForceTable`__: export exactly one object

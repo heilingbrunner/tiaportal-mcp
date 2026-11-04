@@ -187,14 +187,16 @@ namespace TiaMcpServer.Test
             // Arrange
             var withFlag = InitArgs("", "", "export");
             withFlag[ExportFormats.ArgsPreservePathKey] = "true";
+            withFlag[ExportFormats.ArgsWithUserInterfaceKey] = "true";
 
             // Act
             var result = ExportFormatSettings.Init(_directory, withFlag);
             var text = File.ReadAllText(TiaJson);
 
             // Assert
-            CollectionAssert.AreEqual(new[] { "export-path", "preserve-path" }, result.AddedArgs);
+            CollectionAssert.AreEqual(new[] { "export-path", "preserve-path", "with-user-interface" }, result.AddedArgs);
             StringAssert.Contains(text, "\"preserve-path\": \"true\"");
+            StringAssert.Contains(text, "\"with-user-interface\": \"true\"");
         }
 
         [TestMethod]
