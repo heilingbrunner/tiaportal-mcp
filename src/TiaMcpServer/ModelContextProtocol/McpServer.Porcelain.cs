@@ -33,6 +33,8 @@ namespace TiaMcpServer.ModelContextProtocol
         //   tia pull forcetable <path>     ExportForceTable
         //   tia push                  ImportPlcProgramChanges with dryRun=false
         //   tia push preview          ImportPlcProgramChanges with dryRun=true
+        //   tia pull hardware         ExportHardware (the device of the PLC as an .aml file)
+        //   tia push hardware         ImportHardware with dryRun=false (only with '--allow-write')
         //
         // 'pull' brings TIA Portal into the export folder, 'push' brings the changed files of that
         // folder into TIA Portal. The pull tools write the same tree as ExportPlcProgram, in the
@@ -360,6 +362,28 @@ namespace TiaMcpServer.ModelContextProtocol
             return ImportProgramAsync(server, nameof(TiaPushPreview), softwarePath, exportPath, keepOnError, dryRun: true,
                 preview => Portal.ImportPlcProgramChanges(softwarePath, exportPath, regexName, keepOnError, preview),
                 cancellationToken);
+        }
+
+        [McpServerTool(Name = "TiaPullHardware", Title = "Tia pull hardware", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Use this when the user says 'tia pull hardware': get the hardware configuration of the device that owns the PLC software out of TIA Portal into the export folder as an AutomationML file '<exportPath>/<softwarePath>/Hardware/<device name>.aml'. It is 'ExportHardware' under a shorter name; see there for the result. An existing file of that name is overwritten; tell the user to review it with 'git diff' in the export folder. It does not change the project; 'tia push hardware' reads the file back")]
+        public static ResponseHardwareTransfer TiaPullHardware(
+            [Description("softwarePath: defines the path in the project structure to the PLC software; its device is exported")] string softwarePath,
+            [Description("exportPath: directory on this machine that receives the file; it is written to <exportPath>/<softwarePath>/Hardware/")] string exportPath)
+        {
+            return ExportHardware(softwarePath, exportPath);
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "TiaPushHardware", Title = "Tia push hardware", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Use this when the user says 'tia push hardware': put the AutomationML file '<exportPath>/<softwarePath>/Hardware/<device name>.aml' of the export folder back into TIA Portal, so the hardware configuration of the device changes. It is 'ImportHardware' with dryRun=false. Call it right away and do not ask in the chat first: the server shows the user a dialog of the client with a 'Yes, import' checkbox and imports nothing unless the user ticks it and submits, so do not answer for the user; a client without such dialogs cannot run it. 'importOption' decides what happens to a device that exists: RetainTiaDevice (default), OverwriteTiaDevice or MoveToParkingLot. Never save on your own: after the push tell the user the change is only in memory, and call SaveProject (SaveSession in a local session) only after the user explicitly says 'save project'")]
+        public static Task<ResponseHardwareTransfer> TiaPushHardware(
+            SdkMcpServer server,
+            [Description("softwarePath: defines the path in the project structure to the PLC software; its device receives the import")] string softwarePath,
+            [Description("exportPath: directory on this machine that holds the file 'TiaPullHardware' wrote; read from <exportPath>/<softwarePath>/Hardware/")] string exportPath,
+            [Description("importOption: RetainTiaDevice (default), OverwriteTiaDevice or MoveToParkingLot; what happens to a device that already exists")] string importOption = "RetainTiaDevice",
+            CancellationToken cancellationToken = default)
+        {
+            return ImportHardwareAsync(server, nameof(TiaPushHardware), softwarePath, exportPath, importOption, dryRun: false, cancellationToken);
         }
 
         #endregion

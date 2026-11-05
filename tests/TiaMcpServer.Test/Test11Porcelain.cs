@@ -40,8 +40,10 @@ namespace TiaMcpServer.Test
             typeof(McpServer).GetMethod(name, BindingFlags.Public | BindingFlags.Static)
                 ?? throw new AssertFailedException($"'{name}' is not a method of McpServer");
 
+        // 'portalId' is added to every tool by the portal selection, so it is not one of the tool's own arguments.
         private static List<string> ArgumentNames(string name) =>
-            Registered(name).InputSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToList();
+            Registered(name).InputSchema.GetProperty("properties").EnumerateObject()
+                .Select(p => p.Name).Where(n => n != "portalId").ToList();
 
         private static List<string> RequiredArguments(string name) =>
             Registered(name).InputSchema.TryGetProperty("required", out var required)
@@ -281,7 +283,7 @@ namespace TiaMcpServer.Test
         public void Test_1131_TiaInit_TakesOnlyOptionalArgumentsThatTheServerPresetsFill()
         {
             // Arrange / Act / Assert
-            CollectionAssert.AreEqual(new[] { "exportPath", "path", "softwarePath" }, ArgumentNames("TiaInit"));
+            CollectionAssert.AreEqual(new[] { "exportPath", "path", "softwarePath", "preservePath", "withUserInterface" }, ArgumentNames("TiaInit"));
             Assert.AreEqual(0, RequiredArguments("TiaInit").Count, "the dialog asks for what is missing");
         }
 

@@ -119,6 +119,7 @@ Write tools (40) require `--allow-write`.
 | External sources      | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`                 |
 | Whole PLC program     | `OverwritePlcProgram`, `ImportPlcProgramChanges` (sources, XML and SIMATIC SD documents, preview by default, see below)          |
 | Git-like push         | `TiaPush`, `TiaPushPreview` (see "`tia` porcelain commands" below)                                                               |
+| Hardware (AML)        | `ExportHardware`, `TiaPullHardware`; with `--allow-write` also `ImportHardware`, `TiaPushHardware`                               |
 | Multiuser             | `CommitChanges` (commits the local session to the server and closes the session)                                                 |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
@@ -306,6 +307,8 @@ Type the command in the chat, e.g. `tia pull blocks ".+HMI"`, or pick the tool o
 | `tia pull forcetable <path>` | `TiaPullForceTable`  | `ExportForceTable`, the force table of the PLC           |
 | `tia push`                   | `TiaPush`            | `ImportPlcProgramChanges` with `dryRun=false`            |
 | `tia push preview`           | `TiaPushPreview`     | `ImportPlcProgramChanges` with `dryRun=true`             |
+| `tia pull hardware`          | `TiaPullHardware`    | `ExportHardware` (device of the PLC as `Hardware/<device>.aml`) |
+| `tia push hardware`          | `TiaPushHardware`    | `ImportHardware` with `dryRun=false` (`--allow-write`, confirmation dialog) |
 
 - `TiaInit` sets up [`tia.json`](#tiajson-the-export-formats-of-tia-portal): it opens a dialog in which you check or
   enter the `args` (`project`, `software-path`, `export-path`, `preserve-path`, `with-user-interface`), starting with the values of the call or

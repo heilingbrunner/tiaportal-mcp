@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- __`ExportHardware`, `ImportHardware`, `TiaPullHardware` (`tia pull hardware`) and `TiaPushHardware`
+  (`tia push hardware`)__: export the hardware configuration of the device that owns a PLC software as an AutomationML
+  file `<exportPath>/<softwarePath>/Hardware/<device name>.aml` and import it back (Openness `CaxProvider`).
+  `ImportHardware` and `TiaPushHardware` change the project, so they are only available with `--allow-write`; a real
+  import asks the user to tick "Yes, import" in a dialog of the client. `importOption` is `RetainTiaDevice` (default),
+  `OverwriteTiaDevice` or `MoveToParkingLot`.
+
 ### Removed
 
 - __The per-format export and import tools__ (breaking): `ExportXmlBlock`, `ExportXmlBlocks`, `ExportXmlType`,

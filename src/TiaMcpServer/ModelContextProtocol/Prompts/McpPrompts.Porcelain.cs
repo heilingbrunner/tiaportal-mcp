@@ -251,6 +251,40 @@ Use the TiaPushPreview tool with these parameters:
 - keepOnError: {NormalizeBool(keepOnError)}";
         }
 
+        [McpServerPrompt(Name = "TiaPullHardware"), Description("Pull the hardware of a PLC device out of TIA Portal as an AML file")]
+        public static string TiaPullHardware(string softwarePath, string exportPath)
+        {
+            return $@"Pull the hardware configuration (AutomationML) of the device that owns a PLC software out of TIA Portal into the export folder, like 'tia pull hardware'. This is ExportHardware under a shorter name. An existing file of the same name is overwritten; tell the user to review it with 'git diff' in the export folder.
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC
+- exportPath: '${{workspacefolder}}/export/Program' is a good default; the file is written to <exportPath>/<softwarePath>/Hardware/<device name>.aml
+
+Use the TiaPullHardware tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}";
+        }
+
+        [McpServerPrompt(Name = "TiaPushHardware"), Description("Push the hardware AML file of a PLC device back into TIA Portal")]
+        public static string TiaPushHardware(string softwarePath, string exportPath, string importOption = "RetainTiaDevice")
+        {
+            return $@"Push the hardware configuration (AutomationML) file of a PLC device back into TIA Portal, like 'tia push hardware'. This is ImportHardware with dryRun false under a shorter name (requires the server started with '--allow-write').
+
+The server asks the user itself, so do not ask in the chat first:
+1. Call the tool. The server opens a dialog with a 'Yes, import' checkbox and a Submit button; do not answer it for the user. Nothing is imported unless the user ticks the box and submits, and a client without such dialogs cannot run the push
+2. Do not save on your own. Tell the user the change is only in memory and ask whether to save; call SaveProject (or SaveSession in a local session) only after the user explicitly says 'save project'
+
+Common parameter values:
+- softwarePath: e.g. 'PLC_1' for hardware PLC
+- exportPath: folder that holds the file TiaPullHardware wrote; it is read from <exportPath>/<softwarePath>/Hardware/<device name>.aml
+- importOption: RetainTiaDevice (default) keeps an existing device, OverwriteTiaDevice replaces it, MoveToParkingLot moves it to the parking lot
+
+Use the TiaPushHardware tool with these parameters:
+- softwarePath: {softwarePath}
+- exportPath: {exportPath}
+- importOption: {importOption}";
+        }
+
         #endregion
     }
 }
