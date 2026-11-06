@@ -4,6 +4,17 @@
 
 ### Added
 
+- __`code-blocks-GRAPH` export format__: GRAPH blocks follow a new setting `"code-blocks-GRAPH"` of `tia.json`
+  (default `.xml`), written by `tia init` and by the automatic creation of a missing file; `tia init` adds it to an
+  existing file. A `tia.json` without the key exports GRAPH blocks as `.xml`, so existing files keep working. Before,
+  GRAPH blocks were skipped. Failsafe LAD blocks (`F_LAD`) use the `code-blocks-LAD` setting instead of being skipped.
+  `tia.json` also gets `"PLC-tag-tables": ".xml"` (default of `tia init`); tag tables are always exported as XML and
+  the export tools do not read the entry, so a file without it changes nothing. `"technology-objects": ".xml"` is
+  added the same way; no tool exports technology objects yet, so nothing reads it. The keys
+  `safety-data-blocks-(F-DBs)` and `F-compliant-PLC-data-types-(UDT)` are now `safety-data-blocks-F-DBs` and
+  `F-compliant-PLC-data-types-UDT`, without parentheses. Nothing reads them; an old key in an existing file stays as it
+  is, and `tia init` adds the new key beside it.
+
 - __`Report` in the result of every pull, push, hardware and compile tool__: the complete result as markdown tables,
   built by the server (counts, every skipped object, every failure, every note, every compiler or hardware message;
   never shortened). A model condensed the `Skipped` and `Failures` lists into a short summary; the server

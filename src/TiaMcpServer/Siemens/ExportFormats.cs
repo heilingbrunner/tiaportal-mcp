@@ -61,8 +61,23 @@ namespace TiaMcpServer.Siemens
         public const string FbdBlocksKey = "code-blocks-FBD";
         public const string SclBlocksKey = "code-blocks-SCL";
         public const string StlBlocksKey = "code-blocks-STL";
+        public const string GraphBlocksKey = "code-blocks-GRAPH";
         public const string DataBlocksKey = "data-blocks";
         public const string PlcTypesKey = "PLC-data-types";
+
+        /// <summary>
+        /// PLC tag tables are only exported as XML, so the export tools do not read this entry: a file
+        /// without it behaves the same as one that says ".xml". It is listed so 'tia init' and
+        /// 'GetExportFormats' show every object type.
+        /// </summary>
+        public const string PlcTagTablesKey = "PLC-tag-tables";
+
+        /// <summary>
+        /// No tool exports technology objects yet, so nothing reads this entry: a file without it behaves
+        /// the same as one that says ".xml". It is listed so 'tia init' and 'GetExportFormats' show every
+        /// object type.
+        /// </summary>
+        public const string TechnologyObjectsKey = "technology-objects";
 
         private const string SimaticSdText = "SIMATIC SD(.s7dcl, .s7res)";
 
@@ -77,10 +92,13 @@ namespace TiaMcpServer.Siemens
             new KeyValuePair<string, string>(FbdBlocksKey, SimaticSdText),
             new KeyValuePair<string, string>(SclBlocksKey, SimaticSdText),
             new KeyValuePair<string, string>(StlBlocksKey, ".awl"),
+            new KeyValuePair<string, string>(GraphBlocksKey, ".xml"),
             new KeyValuePair<string, string>(DataBlocksKey, SimaticSdText),
-            new KeyValuePair<string, string>("safety-data-blocks-(F-DBs)", SimaticSdText),
+            new KeyValuePair<string, string>("safety-data-blocks-F-DBs", SimaticSdText),
             new KeyValuePair<string, string>(PlcTypesKey, SimaticSdText),
-            new KeyValuePair<string, string>("F-compliant-PLC-data-types-(UDT)", SimaticSdText)
+            new KeyValuePair<string, string>("F-compliant-PLC-data-types-UDT", SimaticSdText),
+            new KeyValuePair<string, string>(PlcTagTablesKey, ".xml"),
+            new KeyValuePair<string, string>(TechnologyObjectsKey, ".xml")
         };
 
         public const string Example =
@@ -130,6 +148,7 @@ namespace TiaMcpServer.Siemens
 
             switch (language)
             {
+                case ProgrammingLanguage.F_LAD:
                 case ProgrammingLanguage.LAD:
                     return LadBlocksKey;
 
@@ -141,6 +160,9 @@ namespace TiaMcpServer.Siemens
 
                 case ProgrammingLanguage.STL:
                     return StlBlocksKey;
+
+                case ProgrammingLanguage.GRAPH:
+                    return GraphBlocksKey;
 
                 default:
                     return null;
@@ -162,6 +184,11 @@ namespace TiaMcpServer.Siemens
                 key.StartsWith("F-compliant-PLC-data-types", StringComparison.OrdinalIgnoreCase))
             {
                 return "ExportType";
+            }
+
+            if (key.StartsWith(PlcTagTablesKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return "ExportTagTable";
             }
 
             var isBlock = key.StartsWith("code-blocks", StringComparison.OrdinalIgnoreCase) ||

@@ -173,10 +173,13 @@ and it does not exist, the server creates it with the defaults TIA Portal offers
     "code-blocks-FBD": "SIMATIC SD(.s7dcl, .s7res)",
     "code-blocks-SCL": "SIMATIC SD(.s7dcl, .s7res)",
     "code-blocks-STL": ".awl",
+    "code-blocks-GRAPH": ".xml",
     "data-blocks": "SIMATIC SD(.s7dcl, .s7res)",
-    "safety-data-blocks-(F-DBs)": "SIMATIC SD(.s7dcl, .s7res)",
+    "safety-data-blocks-F-DBs": "SIMATIC SD(.s7dcl, .s7res)",
     "PLC-data-types": "SIMATIC SD(.s7dcl, .s7res)",
-    "F-compliant-PLC-data-types-(UDT)": "SIMATIC SD(.s7dcl, .s7res)"
+    "F-compliant-PLC-data-types-UDT": "SIMATIC SD(.s7dcl, .s7res)",
+    "PLC-tag-tables": ".xml",
+    "technology-objects": ".xml"
   }
 }
 ```
@@ -211,10 +214,13 @@ Available file formats per object type; the first one listed is the default of a
 | `code-blocks-FBD`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
 | `code-blocks-SCL`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.scl`, `.xml` |
 | `code-blocks-STL`                  | `.awl`, `.xml`                               |
+| `code-blocks-GRAPH`                | `.xml`                                       |
 | `data-blocks`                      | `SIMATIC SD(.s7dcl, .s7res)`, `.db`, `.xml`  |
-| `safety-data-blocks-(F-DBs)`       | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
+| `safety-data-blocks-F-DBs`         | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
 | `PLC-data-types`                   | `SIMATIC SD(.s7dcl, .s7res)`, `.udt`, `.xml` |
-| `F-compliant-PLC-data-types-(UDT)` | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
+| `F-compliant-PLC-data-types-UDT`   | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
+| `PLC-tag-tables`                   | `.xml`                                       |
+| `technology-objects`               | `.xml`                                       |
 
 **Check a created file.** The server cannot see your TIA Portal settings, so the defaults may differ from yours. The
 response of `ExportPlcProgram` (`Notes` and the message) and of `GetExportFormats` (`Created`, `Hint`) says when the
@@ -235,20 +241,21 @@ Each key names an object type, the value is the text TIA Portal shows for it:
 | `code-blocks-LAD`, `-FBD`, `-SCL`, `-STL`                        | blocks of that language                                  |
 | `data-blocks`                                                    | data blocks                                              |
 | `PLC-data-types`                                                 | PLC data types                                           |
-| `safety-data-blocks-(F-DBs)`, `F-compliant-PLC-data-types-(UDT)` | listed as TIA Portal shows them; not read separately yet |
+| `safety-data-blocks-F-DBs`, `F-compliant-PLC-data-types-UDT` | listed as TIA Portal shows them; not read separately yet |
 
 Rules:
 - Keys and values are not case sensitive. Other keys are kept and shown but have no effect, so a longer file from a
   copy does not break anything.
 - If the file has no entry for an object type that occurs in the PLC, holds a value that is not one of the formats
   above, or is not valid JSON, `ExportPlcProgram` fails **before it writes anything** and names the file and the key.
-- A block of a language without an entry (GRAPH, for example) is skipped and listed in `Skipped`. A source format for
+- GRAPH blocks use `code-blocks-GRAPH`; a file written before that key existed exports them as `.xml`, and `tia init`
+  adds the key. A block of any other language without an entry is skipped and listed in `Skipped`. A source format for
   a block that has no source form (LAD as `.awl`) is skipped with a reason.
 
 Who reads it: `ExportPlcProgram` decides the format of every object from it. `GetExportFormats(exportPath)` shows what
 the file says and which export tool writes each object type. `ExportBlock`, `ExportBlocks`, `ExportType` and
 `ExportTypes` read it too, so one tool per object kind writes every format. `ExportTagTable`, `ExportTagTables`, `ExportWatchTable`, `ExportWatchTables` and `ExportForceTable` do not,
-because tag, watch and force tables have no entry in the export format settings and are always XML. The import tools do not read it.
+because tag, watch and force tables are always XML. `tia.json` lists `PLC-tag-tables` and `technology-objects` (`.xml`) so the file names every object type, but no tool reads them: tag tables are always XML and there is no export tool for technology objects; a file without them behaves the same. The import tools do not read it.
 
 ### Whole PLC program: `ExportPlcProgram`, `OverwritePlcProgram` and `ImportPlcProgramChanges`
 
@@ -262,7 +269,7 @@ has no call for that step, so `ExportPlcProgram` cannot do it. Such an object is
 message of TIA Portal, and the export goes on with the others; an export that finished with warnings is named in
 `Notes`.
 
-Blocks of a language that has no entry in the settings (GRAPH, for example) are skipped and listed in `Skipped`; read them with `GetXmlBlock`. `OverwritePlcProgram` and `ImportPlcProgramChanges` still import only sources and
+Blocks of a language that has no entry in the settings are skipped and listed in `Skipped`; read them with `GetXmlBlock`. `OverwritePlcProgram` and `ImportPlcProgramChanges` still import only sources and
 XML, so the files of a SIMATIC SD folder are not imported by them.
 
 - Layout: `<exportPath>/<softwarePath>/Program blocks/<groups>/` and `.../PLC data types/<groups>/`, one file per

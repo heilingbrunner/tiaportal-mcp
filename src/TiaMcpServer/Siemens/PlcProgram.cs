@@ -171,6 +171,13 @@ namespace TiaMcpServer.Siemens
                     "read it with 'GetXmlBlock' instead");
             }
 
+            // A tia.json written before GRAPH had a setting has no entry for it. GRAPH is exported as
+            // XML (the default of a new file), so such a file keeps working instead of failing the export.
+            if (key == ExportFormats.GraphBlocksKey && settings.Get(key) == null)
+            {
+                return new BlockPlan(ProgramBlockFormat.Xml, XmlExtension, null);
+            }
+
             switch (RequireKind(settings, key))
             {
                 case ExportFormatKind.SimaticSd:

@@ -87,10 +87,11 @@ namespace TiaMcpServer.Test
         public void Test_1010_BlockKey_FollowsTheLanguageAndDataBlocks()
         {
             Assert.AreEqual("code-blocks-LAD", ExportFormats.BlockKey(false, ProgrammingLanguage.LAD));
+            Assert.AreEqual("code-blocks-LAD", ExportFormats.BlockKey(false, ProgrammingLanguage.F_LAD), "a failsafe LAD block follows the LAD setting");
             Assert.AreEqual("code-blocks-FBD", ExportFormats.BlockKey(false, ProgrammingLanguage.FBD));
             Assert.AreEqual("code-blocks-SCL", ExportFormats.BlockKey(false, ProgrammingLanguage.SCL));
             Assert.AreEqual("code-blocks-STL", ExportFormats.BlockKey(false, ProgrammingLanguage.STL));
-            Assert.IsNull(ExportFormats.BlockKey(false, ProgrammingLanguage.GRAPH), "GRAPH has no entry in the settings");
+            Assert.AreEqual("code-blocks-GRAPH", ExportFormats.BlockKey(false, ProgrammingLanguage.GRAPH));
             Assert.AreEqual("data-blocks", ExportFormats.BlockKey(true, ProgrammingLanguage.LAD), "a data block is matched by type, not by language");
             Assert.IsNull(ExportFormats.BlockKey(false, (ProgrammingLanguage)(-1)));
         }
@@ -288,6 +289,7 @@ namespace TiaMcpServer.Test
             CollectionAssert.AreEqual(new[] { "project" }, result.KeptArgs);
             Assert.AreEqual(ExportFormats.Defaults.Count - 1, result.AddedFormats.Count);
             Assert.AreEqual(".xml", ExportFormatSettings.Load(_directory).Get("code-blocks-STL"));
+            Assert.AreEqual(".xml", ExportFormatSettings.Load(_directory).Get("code-blocks-GRAPH"), "init adds the GRAPH setting to a file that lacks it");
             StringAssert.Contains(text, "Mine.ap20");
             Assert.IsFalse(text.Contains("New.ap21"), "an existing value is never replaced");
             StringAssert.Contains(text, "\"other\"");
@@ -432,18 +434,23 @@ namespace TiaMcpServer.Test
 
             foreach (var key in new[]
             {
-                "code-blocks-LAD", "code-blocks-FBD", "code-blocks-SCL", "code-blocks-STL",
-                "data-blocks", "safety-data-blocks-(F-DBs)", "PLC-data-types", "F-compliant-PLC-data-types-(UDT)"
+                "code-blocks-LAD", "code-blocks-FBD", "code-blocks-SCL", "code-blocks-STL", "code-blocks-GRAPH",
+                "data-blocks", "safety-data-blocks-F-DBs", "PLC-data-types", "F-compliant-PLC-data-types-UDT", "PLC-tag-tables", "technology-objects"
             })
             {
                 CollectionAssert.Contains(keys, key);
             }
 
-            Assert.AreEqual(8, keys.Count);
+            Assert.AreEqual(11, keys.Count);
             Assert.IsTrue(ExportFormats.Defaults.All(d => ExportFormats.ParseKind(d.Value) != ExportFormatKind.Unknown));
             Assert.AreEqual(".awl", ExportFormats.Defaults.Single(d => d.Key == "code-blocks-STL").Value);
+            Assert.AreEqual(".xml", ExportFormats.Defaults.Single(d => d.Key == "code-blocks-GRAPH").Value);
+            Assert.AreEqual(".xml", ExportFormats.Defaults.Single(d => d.Key == "PLC-tag-tables").Value);
+            Assert.AreEqual("ExportTagTable", ExportFormats.RecommendedTool("PLC-tag-tables", ExportFormatKind.Xml));
+            Assert.AreEqual(".xml", ExportFormats.Defaults.Single(d => d.Key == "technology-objects").Value);
+            Assert.IsNull(ExportFormats.RecommendedTool("technology-objects", ExportFormatKind.Xml), "no tool exports technology objects");
 
-            foreach (var removed in new[] { "hmi unified global scripts", "code-blocks-GRAPH", "PLC tag tables", "technology objects" })
+            foreach (var removed in new[] { "hmi unified global scripts", "PLC tag tables", "technology objects" })
             {
                 CollectionAssert.DoesNotContain(keys, removed);
             }
@@ -479,6 +486,44 @@ namespace TiaMcpServer.Test
             Assert.AreEqual(".awl", stl.Extension);
             Assert.AreEqual(ProgramBlockFormat.Source, db.Format);
             Assert.AreEqual(".db", db.Extension);
+        }
+
+        [TestMethod]
+        public void Test_1051_PlanBlock_GraphFollowsItsSetting()
+        {
+            // Arrange
+            var settings = SettingsOf(("code-blocks-GRAPH", ".xml"));
+
+            // Act
+            var graph = PlcProgram.PlanBlock(false, ProgrammingLanguage.GRAPH, settings);
+
+            // Assert
+            Assert.AreEqual(ProgramBlockFormat.Xml, graph.Format);
+            Assert.AreEqual(".xml", graph.Extension);
+        }
+
+        [TestMethod]
+        public void Test_1052_PlanBlock_GraphWithoutEntryFallsBackToXml()
+        {
+            // Arrange: a tia.json written before GRAPH had a setting
+            var settings = SettingsOf(("code-blocks-LAD", SimaticSd));
+
+            // Act
+            var graph = PlcProgram.PlanBlock(false, ProgrammingLanguage.GRAPH, settings);
+
+            // Assert
+            Assert.AreEqual(ProgramBlockFormat.Xml, graph.Format);
+            Assert.AreEqual(".xml", graph.Extension);
+        }
+
+        [TestMethod]
+        public void Test_1053_PlanBlock_OtherTypeWithoutEntryStillFails()
+        {
+            // Arrange
+            var settings = SettingsOf(("code-blocks-GRAPH", ".xml"));
+
+            // Act and Assert
+            Assert.AreEqual(PortalErrorCode.InvalidParams, Throws(() => PlcProgram.PlanBlock(false, ProgrammingLanguage.LAD, settings)).Code);
         }
 
         [TestMethod]
