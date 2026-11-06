@@ -11,14 +11,15 @@ namespace TiaMcpServer.ModelContextProtocol
 {
     /// <summary>
     /// Lets the server's command line preset the tool arguments 'path' (the project file of
-    /// OpenProject), 'softwarePath', 'exportPath', 'keepStructure' and 'withDependencies', so a client configures them once (the "args" of its MCP server entry)
-    /// instead of the model passing them on every call.
+    /// OpenProject), 'softwarePath', 'exportPath', 'importPath' (follows '--export-path'), 'keepStructure' and
+    /// 'withDependencies', so a client configures them once (the "args" of its MCP server entry) and the model
+    /// can neither forget nor change them.
     ///
     /// Callers: Program.cs (Configure at startup, Apply for each registered tool, Filter as the
     /// call-tool filter) and McpServer.GetState (Presets). Affected API: for every tool that
-    /// declares a preset argument, the argument is dropped from the schema's 'required' list and
-    /// filled from the preset when a call omits it; a value passed in the call always wins.
-    /// Without any preset nothing changes. Reads/writes no data files.
+    /// declares a preset argument, the argument is removed from the tool schema and every call
+    /// gets the preset, whatever it sent. Every preset is binding. Without any preset nothing
+    /// changes. Reads/writes no data files.
     ///
     /// Same shape as PortalSelection: one filter rather than a default on every tool method.
     /// Tools invoked directly (the MSTest suite) bypass it.
@@ -28,6 +29,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public const string Path = "path";
         public const string SoftwarePath = "softwarePath";
         public const string ExportPath = "exportPath";
+        public const string ImportPath = "importPath";
         public const string KeepStructure = "keepStructure";
         public const string WithDependencies = "withDependencies";
 
@@ -41,9 +43,9 @@ namespace TiaMcpServer.ModelContextProtocol
         public static IReadOnlyDictionary<string, JsonElement> Presets { get; private set; } = _none;
 
         /// <summary>
-        /// The preset arguments a call cannot override ('--force-presets'): those of 'path',
-        /// 'softwarePath' and 'exportPath' that have a preset. They are hidden from the tool schema.
-        /// Empty without the option.
+        /// The preset arguments a call cannot override: every argument that has a preset ('path',
+        /// 'softwarePath', 'exportPath', 'importPath' and the flags). They are hidden from the tool
+        /// schema. Empty without any preset. ('--force-presets' is deprecated and changes nothing.)
         /// </summary>
         public static ISet<string> Forced { get; private set; } = _noneForced;
 
@@ -77,11 +79,18 @@ namespace TiaMcpServer.ModelContextProtocol
                 presets[WithDependencies] = JsonSerializer.SerializeToElement(true);
             }
 
+            // A folder-based import reads the tree an export wrote, so 'importPath' follows '--export-path'.
+            if (options.ExportPath != null)
+            {
+                presets[ImportPath] = presets[ExportPath];
+            }
+
             Presets = presets;
 
-            Forced = options.ForcePresets
-                ? new HashSet<string>(new[] { Path, SoftwarePath, ExportPath }.Where(presets.ContainsKey), StringComparer.Ordinal)
-                : _noneForced;
+            // Every preset is binding: what the configuration sets cannot be changed in the chat.
+            Forced = presets.Count == 0
+                ? _noneForced
+                : new HashSet<string>(presets.Keys, StringComparer.Ordinal);
         }
 
         public static McpServerTool Apply(MethodInfo method, McpServerTool tool)
@@ -118,18 +127,10 @@ namespace TiaMcpServer.ModelContextProtocol
 
             if (schema["properties"] is JsonObject properties)
             {
+                // Every preset is binding, so the argument is not offered at all
                 foreach (var name in names)
                 {
-                    if (Forced.Contains(name))
-                    {
-                        properties.Remove(name);
-                    }
-                    else if (properties[name] is JsonObject property)
-                    {
-                        var description = property["description"]?.GetValue<string>();
-                        property["description"] = (description == null ? string.Empty : description + ". ") +
-                            "Optional: the server has a preset that is used when omitted or empty";
-                    }
+                    properties.Remove(name);
                 }
             }
 

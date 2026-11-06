@@ -4,6 +4,16 @@
 
 ### Changed
 
+- __Every preset of the command line is binding__ (breaking): `--project-path`, `--software-path`, `--export-path`
+  (and `--keep-structure`, `--with-dependencies`) are no longer only defaults a tool call may override. The arguments
+  are removed from `tools/list` and from the prompt arguments, and a call that still sends one gets the preset. Before,
+  a model could pass its own `exportPath` and create folders nobody configured (e.g. a `...PullStaging` folder with a
+  `tia.json` next to the export folder). `importPath` (`OverwritePlcProgram`, `ImportHardware`, `PreviewImport`,
+  `ImportWatchTable`) now follows `--export-path`. An argument without a preset is unchanged. A single
+  `--software-path` pins every call to that PLC, so leave it out for projects with several PLCs. `--force-presets`,
+  which did this for `path`, `softwarePath` and `exportPath` only, is deprecated and has no effect; it is still accepted
+  and `--doctor` lists it as `--force-presets (deprecated, presets are always binding) = used|not used`.
+
 - __`--preserve-path` is now `--keep-structure`__: every other `...-path` option takes a string, this one is a flag, so
   the name was misleading. The old name `--preserve-path` is still accepted (deprecated) and `--doctor` / the `Doctor`
   tool list it as `--preserve-path (deprecated, use --keep-structure)` with `used` or `not used`. The same rename applies

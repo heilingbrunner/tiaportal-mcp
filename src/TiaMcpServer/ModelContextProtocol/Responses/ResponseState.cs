@@ -17,13 +17,14 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>
         /// The tool arguments preset on the command line ('--software-path', '--export-path',
-        /// '--keep-structure'); a call may omit them. Null when no preset is configured.
+        /// '--keep-structure'); every preset is binding, a call cannot change it. Null when no preset is configured.
         /// </summary>
         public System.Text.Json.Nodes.JsonObject? Presets { get; set; }
 
         /// <summary>
-        /// The presets a call cannot override ('--force-presets'); they are not tool arguments.
-        /// Null when nothing is forced.
+        /// The presets a call cannot override; they are not tool arguments. Every preset is binding,
+        /// so this lists the same names as <see cref="Presets"/> (kept for older clients).
+        /// Null when no preset is configured.
         /// </summary>
         public string[]? ForcedPresets { get; set; }
     }

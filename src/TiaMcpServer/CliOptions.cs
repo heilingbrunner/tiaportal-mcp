@@ -14,7 +14,7 @@ namespace TiaMcpServer
         public bool KeepStructure { get; set; } // preset for the 'keepStructure' tool argument (only when true)
         public bool UsedDeprecatedPreservePath { get; set; } // '--preserve-path', the old name of '--keep-structure', was given
         public bool WithDependencies { get; set; } // preset for the 'withDependencies' tool argument (only when true)
-        public bool ForcePresets { get; set; } // the 'path', 'softwarePath' and 'exportPath' presets cannot be overridden by a call
+        public bool UsedDeprecatedForcePresets { get; set; } // '--force-presets' was given; it does nothing, every preset is binding
 
         /// <summary>The options this process was started with; set by Program.Main so the Doctor tool can report them.</summary>
         public static CliOptions Current { get; set; } = new CliOptions();
@@ -86,9 +86,12 @@ namespace TiaMcpServer
                         options.WithDependencies = ReadFlag(args, ref i);
                         break;
 
+                    // Deprecated and without effect: every preset is binding now. Still accepted (with its
+                    // optional true/false) so existing configurations keep working.
                     case "-force-presets":
                     case "--force-presets":
-                        options.ForcePresets = ReadFlag(args, ref i);
+                        ReadFlag(args, ref i);
+                        options.UsedDeprecatedForcePresets = true;
                         break;
 
                     case "-logging":
@@ -124,7 +127,7 @@ namespace TiaMcpServer
                 new("--keep-structure", KeepStructure ? "true" : "false"),
                 new("--preserve-path (deprecated, use --keep-structure)", UsedDeprecatedPreservePath ? "used" : "not used"),
                 new("--with-dependencies", WithDependencies ? "true" : "false"),
-                new("--force-presets", ForcePresets ? "true" : "false")
+                new("--force-presets (deprecated, presets are always binding)", UsedDeprecatedForcePresets ? "used" : "not used")
             };
         }
 

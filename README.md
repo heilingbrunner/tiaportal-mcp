@@ -31,7 +31,7 @@ A MCP server which connects to Siemens TIA Portal.
 | `--keep-structure`        | Flag: no tool uses `keepStructure` any more; accepted so existing configurations keep working.    |
 | `--preserve-path`         | Deprecated name of `--keep-structure`, still accepted; `--doctor` shows when it is used.          |
 | `--with-dependencies`     | Flag: no tool uses `withDependencies` any more; accepted so existing configurations keep working. |
-| `--force-presets`         | Flag: the `path`, `softwarePath` and `exportPath` presets cannot be overridden. See below.        |
+| `--force-presets`         | Deprecated, no effect: every preset is binding now. `--doctor` shows when it is used.             |
 | `--allow-write`           | Register the project-mutating tools. Omitted by default; see below.                               |
 
 ## Presetting tool arguments
@@ -44,25 +44,27 @@ of the MCP server entry in your client's JSON configuration and the model no lon
 "args": ["--project-path", "D:\\Projects\\Plant\\Plant.ap21", "--software-path", "PLC_1", "--export-path", "D:\\Export"]
 ```
 
-- A preset argument becomes optional in `tools/list`; a tool call that omits it (or sends `null` or an empty string) uses
-  the preset. A value passed in the call always overrides the preset.
-- Without a preset nothing changes: the argument stays required.
-- `GetState` lists the active presets in `Presets`.
-- A single `--software-path` only fits a project with one PLC; pass `softwarePath` explicitly otherwise.
+- **Every preset is binding.** A preset argument is removed from `tools/list` and from the prompt arguments, and a
+  call that still sends it is overwritten with the preset. The model can neither forget nor change what your
+  configuration sets, so it cannot write into another folder (for example an invented staging folder next to the
+  export folder) or open another project. `OpenProject` can only open the `--project-path` project.
+- `importPath` (`OverwritePlcProgram`, `ImportHardware`, `PreviewImport`, `ImportWatchTable`) follows
+  `--export-path`: a push reads the tree a pull wrote.
+- Without a preset nothing changes: the argument stays required and the model supplies it.
+- `GetState` lists the binding values in `Presets` (and the names in `ForcedPresets`, kept for older clients).
+- A single `--software-path` pins every call to that PLC, so it only fits a project with one PLC. For several PLCs
+  leave `--software-path` out and the model passes `softwarePath` per call.
+- `--force-presets` (earlier opt-in for exactly this) is deprecated and has no effect any more; it is still accepted so
+  existing configurations keep working, and `--doctor` lists it as `--force-presets (deprecated, ...) = used`.
 - `exportPath` / `importPath` is the base directory shared by all PLCs. Every export and folder-based
   import works below `<exportPath>/<softwarePath>/`, e.g. `D:\Export\Group1\PLC_1\Program blocks\...`,
   `...\PLC data types\...`, `...\PLC tags\...` and `...\Watch and force tables\...` (the folder names of the
   project tree in the interface language of TIA Portal); each `/` in `softwarePath` is a folder level. Imports that
   take the full path of a single file are unaffected.
-- Prompts (slash commands) use the presets too: an argument with a preset is optional in the prompt list and
-  is filled in when left out. Claude Code fills prompt arguments by position, so to override only `exportPath`
-  pass `softwarePath` as well.
-- With `--force-presets` the `path`, `softwarePath` and `exportPath` presets that are set become binding: they are
-  removed from `tools/list` and from the prompt arguments, and a call that still sends them is overwritten with the
-  preset. `OpenProject` can then only open the preset
-  project. `GetState` lists them in `ForcedPresets`. The option only fixes these arguments, it is not a sandbox:
-  the `importPath` / `filePath` of the import tools and the names inside `blockPath` are not restricted.
-  In a slash command, type only the arguments that are still listed.
+- Prompts (slash commands) use the presets too: an argument with a preset is not listed and is filled in. In a slash
+  command, type only the arguments that are still listed.
+- This fixes the arguments you can configure, it is not a sandbox: the `filePath` / `sourcePath` of the single-file
+  tools, `newProjectPath` of `SaveAsProject` and the names inside `blockPath` are not restricted.
 
 ## Write mode
 

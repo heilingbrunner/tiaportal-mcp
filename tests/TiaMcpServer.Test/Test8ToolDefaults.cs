@@ -287,56 +287,112 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        public void Test_809_Apply_WithSoftwarePathPreset_EveryToolWithThatArgumentTakesIt()
+        public void Test_809_Apply_WithSoftwarePathPreset_NoToolOffersTheArgumentAnyMore()
         {
             // Arrange
             ToolDefaults.Configure(new CliOptions { SoftwarePath = "PLC_1" });
 
             // Act
-            var tools = Program.BuildTools(allowWrite: true)
-                .Where(t => t.ProtocolTool.InputSchema.TryGetProperty("properties", out var properties)
-                    && properties.TryGetProperty(ToolDefaults.SoftwarePath, out _))
-                .ToList();
+            var tools = Program.BuildTools(allowWrite: true).ToList();
 
             // Assert
-            CollectionAssert.IsSubsetOf(
-                new[] { "GetBlocks", "GetBlocksWithHierarchy", "GetTypes" },
-                tools.Select(t => t.ProtocolTool.Name).ToList());
-
-            foreach (var tool in tools)
+            foreach (var name in new[] { "GetBlocks", "GetBlocksWithHierarchy", "GetTypes" })
             {
-                CollectionAssert.DoesNotContain(RequiredOf(tool), ToolDefaults.SoftwarePath, tool.ProtocolTool.Name);
+                var tool = tools.Single(t => t.ProtocolTool.Name == name);
+
+                CollectionAssert.DoesNotContain(PropertiesOf(tool), ToolDefaults.SoftwarePath, name);
+                CollectionAssert.DoesNotContain(RequiredOf(tool), ToolDefaults.SoftwarePath, name);
+            }
+
+            Assert.IsFalse(
+                tools.Any(t => PropertiesOf(t).Contains(ToolDefaults.SoftwarePath)),
+                "a preset is binding: the model cannot pick another software path");
+        }
+
+        [TestMethod]
+        public void Test_810_ParseArgs_ForcePresetsIsDeprecatedAndOnlyRemembered()
+        {
+            // Act
+            var forced = CliOptions.ParseArgs(new[] { "--software-path", "PLC_1", "-force-presets" });
+            var explicitFalse = CliOptions.ParseArgs(new[] { "--force-presets", "false", "--export-path", @"D:\Export" });
+            var absent = CliOptions.ParseArgs(new[] { "--software-path", "PLC_1" });
+
+            // Assert
+            Assert.IsTrue(forced.UsedDeprecatedForcePresets);
+            Assert.AreEqual("PLC_1", forced.SoftwarePath, "the option consumes nothing else");
+            Assert.IsTrue(explicitFalse.UsedDeprecatedForcePresets, "the old option was still used, the doctor says so");
+            Assert.AreEqual(@"D:\Export", explicitFalse.ExportPath, "its optional true/false is consumed");
+            Assert.IsFalse(absent.UsedDeprecatedForcePresets);
+        }
+
+        [TestMethod]
+        public void Test_811_Configure_EveryPresetThatIsSetIsBinding()
+        {
+            // Act
+            ToolDefaults.Configure(new CliOptions { SoftwarePath = "PLC_1", KeepStructure = true });
+            var onlySoftware = ToolDefaults.Forced.OrderBy(n => n).ToList();
+            ToolDefaults.Configure(new CliOptions { SoftwarePath = "PLC_1", ExportPath = @"D:\Export" });
+            var withExport = ToolDefaults.Forced.OrderBy(n => n).ToList();
+            ToolDefaults.Configure(new CliOptions());
+            var none = ToolDefaults.Forced.ToList();
+
+            // Assert
+            CollectionAssert.AreEqual(new[] { ToolDefaults.KeepStructure, ToolDefaults.SoftwarePath }, onlySoftware, "no --force-presets needed");
+            CollectionAssert.AreEqual(
+                new[] { ToolDefaults.ExportPath, ToolDefaults.ImportPath, ToolDefaults.SoftwarePath }, withExport,
+                "importPath follows the export path");
+            Assert.AreEqual(0, none.Count, "without presets nothing is fixed");
+        }
+
+        [TestMethod]
+        public void Test_821_Configure_ImportPathFollowsTheExportPathAndNeverStandsAlone()
+        {
+            // Act
+            ToolDefaults.Configure(new CliOptions { ExportPath = @"D:\Export" });
+            var withExport = ToolDefaults.Presets[ToolDefaults.ImportPath].GetString();
+            ToolDefaults.Configure(new CliOptions { SoftwarePath = "PLC_1" });
+            var withoutExport = ToolDefaults.Presets.ContainsKey(ToolDefaults.ImportPath);
+
+            // Assert
+            Assert.AreEqual(@"D:\Export", withExport);
+            Assert.IsFalse(withoutExport, "no export path, no importPath preset");
+        }
+
+        [TestMethod]
+        public void Test_822_Apply_WithExportPath_ImportToolsDoNotOfferImportPath()
+        {
+            // Arrange
+            ToolDefaults.Configure(new CliOptions { ExportPath = @"D:\Export", SoftwarePath = "PLC_1" });
+
+            // Act
+            var tools = Program.BuildTools(allowWrite: true).ToList();
+
+            // Assert
+            foreach (var name in new[] { "OverwritePlcProgram", "ImportHardware" })
+            {
+                var tool = tools.Single(t => t.ProtocolTool.Name == name);
+
+                CollectionAssert.DoesNotContain(PropertiesOf(tool), ToolDefaults.ImportPath, name);
+                CollectionAssert.DoesNotContain(PropertiesOf(tool), ToolDefaults.ExportPath, name);
             }
         }
 
         [TestMethod]
-        public void Test_810_ParseArgs_ReadsForcePresets()
+        public void Test_823_Describe_ListsTheDeprecatedForcePresetsForTheDoctor()
         {
-            // Act
-            var forced = CliOptions.ParseArgs(new[] { "--software-path", "PLC_1", "-force-presets" });
-            var absent = CliOptions.ParseArgs(new[] { "--software-path", "PLC_1" });
+            // Arrange
+            const string key = "--force-presets (deprecated, presets are always binding)";
+            var used = CliOptions.ParseArgs(new[] { "--force-presets" }).Describe().ToDictionary(p => p.Key, p => p.Value);
+            var notUsed = new CliOptions().Describe().ToDictionary(p => p.Key, p => p.Value);
 
             // Assert
-            Assert.IsTrue(forced.ForcePresets);
-            Assert.IsFalse(absent.ForcePresets, "forcing is opt-in");
+            Assert.AreEqual("used", used[key]);
+            Assert.AreEqual("not used", notUsed[key], "always listed, so users learn it");
+            Assert.IsFalse(notUsed.ContainsKey("--force-presets"));
         }
 
         [TestMethod]
-        public void Test_811_Configure_ForcesOnlyThePathPresetsThatAreSet()
-        {
-            // Act
-            ToolDefaults.Configure(new CliOptions { SoftwarePath = "PLC_1", KeepStructure = true, ForcePresets = true });
-            var forcedSet = ToolDefaults.Forced.ToList();
-            ToolDefaults.Configure(new CliOptions { SoftwarePath = "PLC_1", ExportPath = @"D:\Export" });
-            var withoutOption = ToolDefaults.Forced.ToList();
-
-            // Assert
-            CollectionAssert.AreEqual(new[] { ToolDefaults.SoftwarePath }, forcedSet, "only a set path preset is forced, never the flags");
-            Assert.AreEqual(0, withoutOption.Count, "no --force-presets, nothing forced");
-        }
-
-        [TestMethod]
-        public void Test_812_Apply_WithForcedPresets_HidesThemFromTheSchema()
+        public void Test_812_Apply_WithPresets_HidesThemFromTheSchema()
         {
             // Arrange
             ToolDefaults.Configure(new CliOptions
@@ -344,8 +400,7 @@ namespace TiaMcpServer.Test
                 ProjectPath = @"D:\Plant.ap21",
                 SoftwarePath = "PLC_1",
                 ExportPath = @"D:\Export",
-                KeepStructure = true,
-                ForcePresets = true
+                KeepStructure = true
             });
 
             // Act
@@ -367,10 +422,10 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        public void Test_813_Apply_WithoutForcing_KeepsThePresetArgumentsInTheSchema()
+        public void Test_813_Apply_WithoutPresets_KeepsTheArgumentsInTheSchema()
         {
             // Arrange
-            ToolDefaults.Configure(new CliOptions { SoftwarePath = "PLC_1", ExportPath = @"D:\Export" });
+            ToolDefaults.Configure(new CliOptions());
 
             // Act
             var properties = PropertiesOf(Program.BuildTools(allowWrite: false).Single(t => t.ProtocolTool.Name == ExportTool));
