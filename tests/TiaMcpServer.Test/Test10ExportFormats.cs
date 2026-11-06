@@ -434,14 +434,14 @@ namespace TiaMcpServer.Test
 
             foreach (var key in new[]
             {
-                "code-blocks-LAD", "code-blocks-FBD", "code-blocks-SCL", "code-blocks-STL", "code-blocks-GRAPH",
+                "code-blocks-LAD", "code-blocks-FBD", "code-blocks-SCL", "code-blocks-STL", "code-blocks-LAD-STL", "code-blocks-GRAPH",
                 "data-blocks", "safety-data-blocks-F-DBs", "PLC-data-types", "F-compliant-PLC-data-types-UDT", "PLC-tag-tables", "technology-objects"
             })
             {
                 CollectionAssert.Contains(keys, key);
             }
 
-            Assert.AreEqual(11, keys.Count);
+            Assert.AreEqual(12, keys.Count);
             Assert.IsTrue(ExportFormats.Defaults.All(d => ExportFormats.ParseKind(d.Value) != ExportFormatKind.Unknown));
             Assert.AreEqual(".awl", ExportFormats.Defaults.Single(d => d.Key == "code-blocks-STL").Value);
             Assert.AreEqual(".xml", ExportFormats.Defaults.Single(d => d.Key == "code-blocks-GRAPH").Value);
@@ -449,6 +449,8 @@ namespace TiaMcpServer.Test
             Assert.AreEqual("ExportTagTable", ExportFormats.RecommendedTool("PLC-tag-tables", ExportFormatKind.Xml));
             Assert.AreEqual(".xml", ExportFormats.Defaults.Single(d => d.Key == "technology-objects").Value);
             Assert.IsNull(ExportFormats.RecommendedTool("technology-objects", ExportFormatKind.Xml), "no tool exports technology objects");
+            Assert.AreEqual(".xml", ExportFormats.Defaults.Single(d => d.Key == "code-blocks-LAD-STL").Value);
+            Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code-blocks-LAD-STL", ExportFormatKind.Xml));
 
             foreach (var removed in new[] { "hmi unified global scripts", "PLC tag tables", "technology objects" })
             {
@@ -524,6 +526,61 @@ namespace TiaMcpServer.Test
 
             // Act and Assert
             Assert.AreEqual(PortalErrorCode.InvalidParams, Throws(() => PlcProgram.PlanBlock(false, ProgrammingLanguage.LAD, settings)).Code);
+        }
+
+        [TestMethod]
+        public void Test_1054_IsStlRejectedBySimaticSd_RecognizesTheMessageOfTiaPortal()
+        {
+            // Arrange: the message of the report, and a reworded one
+            const string reported = "Error when calling method ExportAsDocuments of type Siemens.Engineering.SW.Blocks.FB. " +
+                                    "Blocks with the programming language STL cannot be exported to or imported from SIMATIC SD.";
+            const string reworded = "A block with STL networks cannot be exported as a SIMATIC SD document.";
+
+            // Act and Assert
+            Assert.IsTrue(PlcProgram.IsStlRejectedBySimaticSd(reported));
+            Assert.IsTrue(PlcProgram.IsStlRejectedBySimaticSd(reworded));
+        }
+
+        [TestMethod]
+        public void Test_1055_IsStlRejectedBySimaticSd_IgnoresOtherErrors()
+        {
+            Assert.IsFalse(PlcProgram.IsStlRejectedBySimaticSd("The object needs preparation for the format of Simatic SD"), "no STL");
+            Assert.IsFalse(PlcProgram.IsStlRejectedBySimaticSd("STL blocks cannot be exported as a source"), "no SIMATIC SD");
+            Assert.IsFalse(PlcProgram.IsStlRejectedBySimaticSd("Constellation cannot be exported to SIMATIC SD"), "STL only inside another word");
+            Assert.IsFalse(PlcProgram.IsStlRejectedBySimaticSd(null));
+            Assert.IsFalse(PlcProgram.IsStlRejectedBySimaticSd(string.Empty));
+        }
+
+        [TestMethod]
+        public void Test_1056_PlanMixedBlock_MissingEntryAndXmlGiveXml()
+        {
+            // Arrange
+            var missing = SettingsOf(("code-blocks-LAD", SimaticSd));
+            var xml = SettingsOf(("code-blocks-LAD-STL", ".xml"));
+
+            // Act
+            var fromMissing = PlcProgram.PlanMixedBlock(missing);
+            var fromXml = PlcProgram.PlanMixedBlock(xml);
+
+            // Assert
+            Assert.AreEqual(ProgramBlockFormat.Xml, fromMissing.Format);
+            Assert.AreEqual(".xml", fromMissing.Extension);
+            Assert.AreEqual(ProgramBlockFormat.Xml, fromXml.Format);
+        }
+
+        [TestMethod]
+        public void Test_1057_PlanMixedBlock_OtherValuesAreSkippedAndNameTheKey()
+        {
+            foreach (var value in new[] { SimaticSd, ".awl" })
+            {
+                // Act
+                var plan = PlcProgram.PlanMixedBlock(SettingsOf(("code-blocks-LAD-STL", value)));
+
+                // Assert
+                Assert.AreEqual(ProgramBlockFormat.None, plan.Format, value);
+                StringAssert.Contains(plan.Reason, "code-blocks-LAD-STL");
+                StringAssert.Contains(plan.Reason, ".xml", "the reason names the format that works");
+            }
         }
 
         [TestMethod]

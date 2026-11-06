@@ -182,7 +182,7 @@ namespace TiaMcpServer.Siemens
 
                         if (!Skip(result, "block", blockPath, block.IsConsistent, block.IsKnowHowProtected))
                         {
-                            TryGenerate(result, "block", blockPath, () => ExportBlockDocument(block, blockPath, exportPath, result.Notes.Add));
+                            TryGenerate(result, "block", blockPath, () => ExportBlockDocumentOrMixed(settings, block, blockPath, exportPath, result));
                         }
                     }
 
@@ -440,6 +440,37 @@ namespace TiaMcpServer.Siemens
 
             return WriteDocuments(directory, block.Name, blockPath, block.ProgrammingLanguage.ToString(),
                 name => block.ExportAsDocuments(new DirectoryInfo(directory), name), warn);
+        }
+
+        /// <summary>
+        /// Writes a block as SIMATIC SD documents. TIA Portal refuses that for a LAD or FBD block that
+        /// contains STL networks; such a block is written in the format of 'code-blocks-LAD-STL' (XML)
+        /// instead and a note names it. Every other error is left to the caller.
+        /// </summary>
+        private GeneratedSource ExportBlockDocumentOrMixed(
+            ExportFormatSettings settings, PlcBlock block, string blockPath, string exportPath, GeneratedSourcesResult result)
+        {
+            try
+            {
+                return ExportBlockDocument(block, blockPath, exportPath, result.Notes.Add);
+            }
+            catch (Exception ex) when (PlcProgram.IsStlRejectedBySimaticSd(ex.Message))
+            {
+                var plan = PlcProgram.PlanMixedBlock(settings);
+
+                if (plan.Format != ProgramBlockFormat.Xml)
+                {
+                    throw new PortalException(PortalErrorCode.ExportFailed, plan.Reason + ". " + ex.Message, null, ex);
+                }
+
+                _logger?.LogInformation("Block '{Path}' contains STL networks, SIMATIC SD refused it; writing XML instead", blockPath);
+
+                var file = ExportBlockXml(block, blockPath, exportPath);
+
+                result.Notes.Add($"block {blockPath}: contains STL networks, written as XML ('{ExportFormats.LadStlBlocksKey}')");
+
+                return file;
+            }
         }
 
         /// <summary>Writes one PLC data type as SIMATIC SD documents ('.s7dcl', '.s7res'); needs TIA Portal V21.</summary>

@@ -2,6 +2,7 @@ using Siemens.Engineering.SW.Blocks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace TiaMcpServer.Siemens
 {
@@ -196,6 +197,42 @@ namespace TiaMcpServer.Siemens
                             null,
                             $"'{key}' is configured as {settings.Get(key)}, but a {language} block has no source form");
             }
+        }
+
+        private static readonly Regex StlWord = new Regex(@"\bSTL\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        /// <summary>
+        /// True when the error of TIA Portal says that SIMATIC SD cannot take a block because of its STL
+        /// networks ("Blocks with the programming language STL cannot be exported to or imported from
+        /// SIMATIC SD"). A LAD or FBD block can contain STL networks, and TIA Portal only names STL then.
+        /// Other SD errors, such as a project that is not prepared for SIMATIC SD, do not match.
+        /// </summary>
+        public static bool IsStlRejectedBySimaticSd(string? message)
+        {
+            return !string.IsNullOrEmpty(message) &&
+                   message!.IndexOf("SIMATIC SD", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                   message.IndexOf("cannot be", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                   StlWord.IsMatch(message);
+        }
+
+        /// <summary>
+        /// The format of a LAD or FBD block that contains STL networks, after SIMATIC SD refused it: the
+        /// entry 'code-blocks-LAD-STL' of the settings, where a missing entry means '.xml'. Only XML can
+        /// hold such a block, so any other value is a skip with a reason that names the key.
+        /// </summary>
+        public static BlockPlan PlanMixedBlock(ExportFormatSettings settings)
+        {
+            var value = settings.Get(ExportFormats.LadStlBlocksKey);
+
+            if (value == null || ExportFormats.ParseKind(value) == ExportFormatKind.Xml)
+            {
+                return new BlockPlan(ProgramBlockFormat.Xml, XmlExtension, null);
+            }
+
+            return new BlockPlan(
+                ProgramBlockFormat.None,
+                null,
+                $"'{ExportFormats.LadStlBlocksKey}' is configured as {value}, but a block with STL networks can only be exported as .xml");
         }
 
         /// <summary>The format of the PLC data types as the export format settings configure it; throws like <see cref="PlanBlock"/>.</summary>

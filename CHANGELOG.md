@@ -4,6 +4,14 @@
 
 ### Added
 
+- __`code-blocks-LAD-STL` export format__: a LAD or FBD block that contains STL networks cannot be exported as SIMATIC SD
+  (TIA Portal: "Blocks with the programming language STL cannot be exported ... to SIMATIC SD"); it failed in `Failed`
+  and the `code-blocks-STL` entry was never consulted, because the block language is LAD or FBD. `ExportPlcProgram`,
+  `ExportBlock(s)` and `TiaPull*` now try the LAD/FBD format first and, when TIA Portal refuses it for that reason, use
+  the new `tia.json` key `code-blocks-LAD-STL` (default `.xml`, also when the key is missing; `tia init` adds it). The
+  block is named in `Notes`; another value of the key makes it fail with a row that names the key. Other SIMATIC SD
+  errors still land in `Failed`.
+
 - __`code-blocks-GRAPH` export format__: GRAPH blocks follow a new setting `"code-blocks-GRAPH"` of `tia.json`
   (default `.xml`), written by `tia init` and by the automatic creation of a missing file; `tia init` adds it to an
   existing file. A `tia.json` without the key exports GRAPH blocks as `.xml`, so existing files keep working. Before,

@@ -61,6 +61,12 @@ namespace TiaMcpServer.Siemens
         public const string FbdBlocksKey = "code-blocks-FBD";
         public const string SclBlocksKey = "code-blocks-SCL";
         public const string StlBlocksKey = "code-blocks-STL";
+
+        /// <summary>
+        /// The format of a LAD or FBD block that contains STL networks. TIA Portal refuses SIMATIC SD for
+        /// such a block, so only ".xml" works; a file without this entry behaves like ".xml".
+        /// </summary>
+        public const string LadStlBlocksKey = "code-blocks-LAD-STL";
         public const string GraphBlocksKey = "code-blocks-GRAPH";
         public const string DataBlocksKey = "data-blocks";
         public const string PlcTypesKey = "PLC-data-types";
@@ -92,6 +98,7 @@ namespace TiaMcpServer.Siemens
             new KeyValuePair<string, string>(FbdBlocksKey, SimaticSdText),
             new KeyValuePair<string, string>(SclBlocksKey, SimaticSdText),
             new KeyValuePair<string, string>(StlBlocksKey, ".awl"),
+            new KeyValuePair<string, string>(LadStlBlocksKey, ".xml"),
             new KeyValuePair<string, string>(GraphBlocksKey, ".xml"),
             new KeyValuePair<string, string>(DataBlocksKey, SimaticSdText),
             new KeyValuePair<string, string>("safety-data-blocks-F-DBs", SimaticSdText),

@@ -173,6 +173,7 @@ and it does not exist, the server creates it with the defaults TIA Portal offers
     "code-blocks-FBD": "SIMATIC SD(.s7dcl, .s7res)",
     "code-blocks-SCL": "SIMATIC SD(.s7dcl, .s7res)",
     "code-blocks-STL": ".awl",
+    "code-blocks-LAD-STL": ".xml",
     "code-blocks-GRAPH": ".xml",
     "data-blocks": "SIMATIC SD(.s7dcl, .s7res)",
     "safety-data-blocks-F-DBs": "SIMATIC SD(.s7dcl, .s7res)",
@@ -214,6 +215,7 @@ Available file formats per object type; the first one listed is the default of a
 | `code-blocks-FBD`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
 | `code-blocks-SCL`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.scl`, `.xml` |
 | `code-blocks-STL`                  | `.awl`, `.xml`                               |
+| `code-blocks-LAD-STL`              | `.xml`                                       |
 | `code-blocks-GRAPH`                | `.xml`                                       |
 | `data-blocks`                      | `SIMATIC SD(.s7dcl, .s7res)`, `.db`, `.xml`  |
 | `safety-data-blocks-F-DBs`         | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
@@ -248,6 +250,11 @@ Rules:
   copy does not break anything.
 - If the file has no entry for an object type that occurs in the PLC, holds a value that is not one of the formats
   above, or is not valid JSON, `ExportPlcProgram` fails **before it writes anything** and names the file and the key.
+- A LAD or FBD block that contains STL networks cannot be written as SIMATIC SD: TIA Portal refuses it with "Blocks with
+  the programming language STL cannot be exported ... to SIMATIC SD". The server tries the format of `code-blocks-LAD` /
+  `code-blocks-FBD` first and, when TIA Portal refuses it for that reason, uses `code-blocks-LAD-STL` (`.xml`; a file
+  without the key behaves the same) and names the block in `Notes`. Any other value of that key makes such a block fail
+  with a row that names the key. Other SIMATIC SD errors stay in `Failed`.
 - GRAPH blocks use `code-blocks-GRAPH`; a file written before that key existed exports them as `.xml`, and `tia init`
   adds the key. A block of any other language without an entry is skipped and listed in `Skipped`. A source format for
   a block that has no source form (LAD as `.awl`) is skipped with a reason.
