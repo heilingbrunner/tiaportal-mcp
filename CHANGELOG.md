@@ -1,36 +1,6 @@
 # Change Log
 
-## [Unreleased]
-
-### Fixed
-
-- __`tia connect` did not use `--project-path`__: the prompts `TiaConnect`, `OpenTiaProject` and `OpenProject` named
-  their argument `projectPath`, but the preset and the tool parameter are `path`, and presets are matched by argument
-  name. The prompt therefore went out with an empty `path:`, and the agent only attached to TIA Portal with `Connect`
-  without opening the project. The prompt argument is now `path` (a client that still sends `projectPath` by name is
-  mapped to `path`). When a project is configured, the server instructions also tell the model to call `TiaConnect`
-  (attach and open in one step) for "tia connect" instead of `Connect` and `OpenProject` separately.
-
 ## [0.4.0] - 2026-11-06
-
-### Changed
-
-- __Every preset of the command line is binding__ (breaking): `--project-path`, `--software-path`, `--export-path`
-  (and `--keep-structure`, `--with-dependencies`) are no longer only defaults a tool call may override. The arguments
-  are removed from `tools/list` and from the prompt arguments, and a call that still sends one gets the preset. Before,
-  a model could pass its own `exportPath` and create folders nobody configured (e.g. a `...PullStaging` folder with a
-  `tia.json` next to the export folder). `importPath` (`OverwritePlcProgram`, `ImportHardware`, `PreviewImport`,
-  `ImportWatchTable`) now follows `--export-path`. An argument without a preset is unchanged. A single
-  `--software-path` pins every call to that PLC, so leave it out for projects with several PLCs. `--force-presets`,
-  which did this for `path`, `softwarePath` and `exportPath` only, is deprecated and has no effect; it is still accepted
-  and `--doctor` lists it as `--force-presets (deprecated, presets are always binding) = used|not used`.
-
-- __`--preserve-path` is now `--keep-structure`__: every other `...-path` option takes a string, this one is a flag, so
-  the name was misleading. The old name `--preserve-path` is still accepted (deprecated) and `--doctor` / the `Doctor`
-  tool list it as `--preserve-path (deprecated, use --keep-structure)` with `used` or `not used`. The same rename applies
-  to the `tia.json` `args` key (`tia init` renames an existing `"preserve-path"` in place and keeps its value; when both
-  keys exist both are left as they are), the `TiaInit` parameter (`keepStructure`; `preservePath` stays as a deprecated
-  alias) and the preset key `keepStructure`.
 
 ### Added
 
@@ -40,28 +10,6 @@
   `ImportHardware` and `TiaPushHardware` change the project, so they are only available with `--allow-write`; a real
   import asks the user to tick "Yes, import" in a dialog of the client. `importOption` is `RetainTiaDevice` (default),
   `OverwriteTiaDevice` or `MoveToParkingLot`.
-
-### Removed
-
-- __The per-format export and import tools__ (breaking): `ExportXmlBlock`, `ExportXmlBlocks`, `ExportXmlType`,
-  `ExportXmlTypes`, `ExportXmlTagTable`, `ExportSourceBlock`, `ExportSourceBlocks`, `ExportSourceType`,
-  `ExportSourceTypes`, `ExportSources`, `ExportAsDocuments`, `ExportBlocksAsDocuments`, `ExportTypeAsDocuments`,
-  `ExportTypesAsDocuments`, `ExportPlcAsDocuments`, `ImportXmlBlock`, `ImportXmlType`, `ImportXmlTagTable`,
-  `ImportSourceBlock`, `ImportSourceBlocks`, `ImportSourceType`, `ImportSourceTypes`, `ImportSources`,
-  `ImportExternalSource`, `ImportFromDocuments`, `ImportBlocksFromDocuments`, `ImportTypeFromDocuments` and
-  `ImportTypesFromDocuments`, with their prompts, response types and Portal methods that nothing else used. Use
-  `ExportBlock`, `ExportType`, `ExportTagTable` (one object), `ExportBlocks`, `ExportTypes`, `ExportTagTables` (by regular
-  expression) or `ExportPlcProgram` to export, and `OverwritePlcProgram` or `ImportPlcProgramChanges` to import. There
-  is no tool left that imports a single tag table, a single block or a single type. `ExportOpcUaXml`,
-  `ImportWatchTable` stays. `ExportXmlWatchTable` and `ExportXmlForceTable` are renamed `ExportWatchTable` and `ExportForceTable`, as these tables only have an XML format.
-
-### Changed
-
-- __`tia.json` keys use hyphens instead of spaces__ (breaking): `version-control-interface`, `code-blocks-LAD`,
-  `data-blocks`, `PLC-data-types`, ... An existing file with the old keys is not read any more; rename them. The file
-  may also hold an `args` section (`project`, `software-path`, `export-path`) for other programs; the server ignores it.
-
-### Added
 
 - __`TiaInit`__ (`tia init`): sets up `<exportPath>/tia.json`. A dialog asks for the `args` (`project`, `software-path`,
   `export-path`, `preserve-path`, `with-user-interface`), starting with the call arguments or the `--project-path`,
@@ -180,7 +128,42 @@
   `--software-path` presets. The git access lives in the new namespace `TiaMcpServer.Git` (class `GitRepo`, folder
   `src/TiaMcpServer/Git/`) and only runs `rev-parse` and `status`.
 
+- __Source file imports that mirror the exports__: `ImportSourceBlock`, `ImportSourceType`,
+  `ImportSourceBlocks` and `ImportSourceTypes` (tools, prompts and `Portal` methods) complete the set next to
+  the existing `ImportSources`, one to one with `ExportSourceBlock`, `ExportSourceType`,
+  `ExportSourceBlocks`, `ExportSourceTypes` and `ExportSources`. The single-file tools take a target group and the
+  file path, like `ImportXmlBlock` and `ImportXmlType`; the folder tools take a group, a folder, an optional
+  `regexName` and `preservePath`, which reads the subfolders into the matching subgroups. All of them take
+  `keepOnError`, return the same result as `ImportSources` and are `[WriteTool]`s. `ImportSources` now shares
+  its walk with them; its behaviour is unchanged. New tests: `Test_495` to `Test_499` in `Test4Software`.
+- __`ExportXmlTagTable` prompt__: a prompt template for exporting a PLC tag table to XML through the
+  `ExportXmlTagTable` tool, next to the existing block and type export prompts. Likewise prompts for the source
+  file tools: `ExportSourceBlock`, `ExportSourceType`, `ImportSources` and `ImportExternalSource`, plus the
+  convenience prompts `ImportAllSources` and `ImportAllSourcesKeepOnError`. Every other tool now has a prompt
+  of the same name as well (80 prompts, generated from the tool descriptions and parameter descriptions), so
+  all 99 tools are reachable as prompts.
+
 ### Changed
+
+- __Every preset of the command line is binding__ (breaking): `--project-path`, `--software-path`, `--export-path`
+  (and `--keep-structure`, `--with-dependencies`) are no longer only defaults a tool call may override. The arguments
+  are removed from `tools/list` and from the prompt arguments, and a call that still sends one gets the preset. Before,
+  a model could pass its own `exportPath` and create folders nobody configured (e.g. a `...PullStaging` folder with a
+  `tia.json` next to the export folder). `importPath` (`OverwritePlcProgram`, `ImportHardware`, `PreviewImport`,
+  `ImportWatchTable`) now follows `--export-path`. An argument without a preset is unchanged. A single
+  `--software-path` pins every call to that PLC, so leave it out for projects with several PLCs. `--force-presets`,
+  which did this for `path`, `softwarePath` and `exportPath` only, is deprecated and has no effect; it is still accepted
+  and `--doctor` lists it as `--force-presets (deprecated, presets are always binding) = used|not used`.
+- __`--preserve-path` is now `--keep-structure`__: every other `...-path` option takes a string, this one is a flag, so
+  the name was misleading. The old name `--preserve-path` is still accepted (deprecated) and `--doctor` / the `Doctor`
+  tool list it as `--preserve-path (deprecated, use --keep-structure)` with `used` or `not used`. The same rename applies
+  to the `tia.json` `args` key (`tia init` renames an existing `"preserve-path"` in place and keeps its value; when both
+  keys exist both are left as they are), the `TiaInit` parameter (`keepStructure`; `preservePath` stays as a deprecated
+  alias) and the preset key `keepStructure`.
+
+- __`tia.json` keys use hyphens instead of spaces__ (breaking): `version-control-interface`, `code-blocks-LAD`,
+  `data-blocks`, `PLC-data-types`, ... An existing file with the old keys is not read any more; rename them. The file
+  may also hold an `args` section (`project`, `software-path`, `export-path`) for other programs; the server ignores it.
 
 - __`OverwritePlcProgram` and `ImportPlcProgramChanges` import SIMATIC SD documents__: a `.s7dcl` file (with its
   `.s7res`) below `Program blocks` is imported as a block (TIA Portal V20 or newer), below `PLC data types` as a
@@ -222,68 +205,6 @@
   `GetXmlBlock`; same for types. STL and mixed-language blocks, and types before V21, are now rejected by
   the Documents readers with a hint to the XML reader instead of returning XML. `FindInCode` keeps its own
   XML fallback for them. The prompts were renamed the same way.
-
-### Fixed
-
-- __Watch table exports follow the folder layout of the project tree__: `ExportXmlWatchTable` wrote the file
-  directly below `<exportPath>/<softwarePath>/` (or, with `preservePath`, into the group folders beside
-  `Program blocks` and `PLC tags`), unlike blocks, PLC data types and tag tables. Watch tables now land in
-  `<exportPath>/<softwarePath>/<system folder>/<table>.xml`, and with `preservePath` in
-  `<system folder>/<groups>/<table>.xml`, using the name of the watch and force tables folder as TIA Portal
-  reports it in the current interface language (`Watch and force tables` in English). `ExportPlcAsDocuments`
-  gets the same layout. `ImportWatchTable` accepts a leading system folder segment in `groupPath`, so the exported
-  layout can be fed straight back. Watch table files exported before this change lie one level higher and have to
-  be moved.
-- __Block and type names with characters that are invalid in a file name__: TIA Portal allows names such as
-  `T_Data->HMI` or `GTS_EQ_I/FLower`, but the exports used the name as the file name. On .NET Framework a `>`,
-  `<`, `|` or `"` made `Path.Combine` throw, and in `ExportXmlBlocks` / `ExportXmlTypes` that happened before the
-  per-object error handling, so one such object aborted the whole batch. A `/` silently wrote the file into an
-  extra subfolder. The XML, document and generated-source exports, including the scratch exports behind the
-  `GetXml*` and source readers, now replace invalid characters with `_` (`T_Data-_HMI.xml`). Valid names keep
-  their file name. Two objects that would share one file name are no longer written over each other: the
-  second is reported as a failure of the export. Reported on GitHub, with a fix in p-7347/tiaportal-mcp@240aaa4.
-- __`ImportXmlBlock` / `ImportXmlType` hid TIA Portal's reason__: both caught every exception and returned
-  `false`, so the tool only said "Failed importing". The error now carries the messages of the whole inner
-  exception chain, for example "The elements must be sorted according to the current flow" with the UId of
-  the part, and for that message a hint to put each new `<Part>` directly after the part that feeds it. A
-  missing file, group or open project is reported as such instead of as a failed import. Reported on GitHub
-  as #37, with fixes in p-7347/tiaportal-mcp@51d2ed9 and @178e631.
-- __Four import tools ignored read-only mode__: `ImportXmlBlock`, `ImportXmlType`, `ImportFromDocuments` and
-  `ImportBlocksFromDocuments` change the project (the XML imports replace an existing object) but were neither
-  marked `[WriteTool]` nor checked `WritePolicy.EnsureEnabled`, so they were listed and ran without
-  `--allow-write`. They now behave like the other import tools: hidden from `tools/list` and refused when
-  called directly. Reported on GitHub with a fix in p-7347/tiaportal-mcp@51e759a.
-- __Devices in "Ungrouped devices" were invisible__: `GetDevices` only walked the top-level devices and the
-  user groups, never the project's `UngroupedDevicesGroup` (a system group), so GSD based IO devices,
-  SCALANCE switches, ET200SP/eco stations and the like were missing from every device list. The group is
-  now included, and `regexName` is applied to all devices, also the top-level ones.
-- __Device names containing `/`__: `GetDeviceInfo` and the other device lookups split the path on `/`
-  immediately, so a station such as `S7-1500/ET200MP station_1`, copied from `GetProjectTree`, was reported
-  as "Device not found". The whole input is now tried as a device name first (top level and ungrouped), and
-  inside a group the remaining segments are tried as one name.
-- __`GetTypeSource` with `format: xml`__: the type XML export was called with `typePath` and the scratch
-  directory swapped, so the XML fallback for types without a source document could not work.
-- __`ExportSourceBlocks` / `ExportSourceTypes` filter by name__: both tools now take an optional `regexName`
-  (also on the prompts) and apply it while collecting the objects. Before, only `ExportSources` could filter,
-  and it always exports blocks and types together, so a request like "export all blocks matching `.+HMI_.+`"
-  ended in exporting everything to a temporary folder and copying the matching files.
-- __`OpenProject` / `OpenTiaProject` reuse an already open project__: the tool used to close the current
-  project before looking for the requested one, so an open project was always closed and reopened. The
-  lookup now runs first and matches by file path (not by name), so a project already open in the TIA Portal
-  instance, also one opened in the UI, is used as it is; the response says so. The same applies to local
-  sessions (`.alsXX`). Another project is still closed only when a different one has to be opened.
-
-### Removed
-
-- __Breaking: the `ExportAll*Flattened` / `ExportAll*Structured` prompts__: `ExportAllBlocksFlattened`,
-  `ExportAllBlocksStructured`, `ExportAllTypesFlattened`, `ExportAllTypesStructured`,
-  `ExportAllBlocksAsDocumentsFlattened`, `ExportAllBlocksAsDocumentsStructured` and
-  `ExportAllTypesAsDocumentsStructured`. They only called `ExportXmlBlocks`, `ExportXmlTypes`,
-  `ExportBlocksAsDocuments` or `ExportTypesAsDocuments` with an empty `regexName` and a fixed
-  `preservePath`, so nothing is lost: use those prompts (or tools) and set `preservePath` yourself.
-  No tools were affected.
-
-### Changed
 
 - __BREAKING: exports and imports use `<exportPath>/<softwarePath>/...`__: every export and every
   folder-based import now works below a folder named after the PLC software, so several PLCs of one
@@ -342,22 +263,83 @@
   `ExportWatchTable` is now `ExportXmlWatchTable` (tool, response type, `Portal` method and
   prompt).
 
-### Added
+### Removed
 
-- __Source file imports that mirror the exports__: `ImportSourceBlock`, `ImportSourceType`,
-  `ImportSourceBlocks` and `ImportSourceTypes` (tools, prompts and `Portal` methods) complete the set next to
-  the existing `ImportSources`, one to one with `ExportSourceBlock`, `ExportSourceType`,
-  `ExportSourceBlocks`, `ExportSourceTypes` and `ExportSources`. The single-file tools take a target group and the
-  file path, like `ImportXmlBlock` and `ImportXmlType`; the folder tools take a group, a folder, an optional
-  `regexName` and `preservePath`, which reads the subfolders into the matching subgroups. All of them take
-  `keepOnError`, return the same result as `ImportSources` and are `[WriteTool]`s. `ImportSources` now shares
-  its walk with them; its behaviour is unchanged. New tests: `Test_495` to `Test_499` in `Test4Software`.
-- __`ExportXmlTagTable` prompt__: a prompt template for exporting a PLC tag table to XML through the
-  `ExportXmlTagTable` tool, next to the existing block and type export prompts. Likewise prompts for the source
-  file tools: `ExportSourceBlock`, `ExportSourceType`, `ImportSources` and `ImportExternalSource`, plus the
-  convenience prompts `ImportAllSources` and `ImportAllSourcesKeepOnError`. Every other tool now has a prompt
-  of the same name as well (80 prompts, generated from the tool descriptions and parameter descriptions), so
-  all 99 tools are reachable as prompts.
+- __The per-format export and import tools__ (breaking): `ExportXmlBlock`, `ExportXmlBlocks`, `ExportXmlType`,
+  `ExportXmlTypes`, `ExportXmlTagTable`, `ExportSourceBlock`, `ExportSourceBlocks`, `ExportSourceType`,
+  `ExportSourceTypes`, `ExportSources`, `ExportAsDocuments`, `ExportBlocksAsDocuments`, `ExportTypeAsDocuments`,
+  `ExportTypesAsDocuments`, `ExportPlcAsDocuments`, `ImportXmlBlock`, `ImportXmlType`, `ImportXmlTagTable`,
+  `ImportSourceBlock`, `ImportSourceBlocks`, `ImportSourceType`, `ImportSourceTypes`, `ImportSources`,
+  `ImportExternalSource`, `ImportFromDocuments`, `ImportBlocksFromDocuments`, `ImportTypeFromDocuments` and
+  `ImportTypesFromDocuments`, with their prompts, response types and Portal methods that nothing else used. Use
+  `ExportBlock`, `ExportType`, `ExportTagTable` (one object), `ExportBlocks`, `ExportTypes`, `ExportTagTables` (by regular
+  expression) or `ExportPlcProgram` to export, and `OverwritePlcProgram` or `ImportPlcProgramChanges` to import. There
+  is no tool left that imports a single tag table, a single block or a single type. `ExportOpcUaXml`,
+  `ImportWatchTable` stays. `ExportXmlWatchTable` and `ExportXmlForceTable` are renamed `ExportWatchTable` and `ExportForceTable`, as these tables only have an XML format.
+
+- __Breaking: the `ExportAll*Flattened` / `ExportAll*Structured` prompts__: `ExportAllBlocksFlattened`,
+  `ExportAllBlocksStructured`, `ExportAllTypesFlattened`, `ExportAllTypesStructured`,
+  `ExportAllBlocksAsDocumentsFlattened`, `ExportAllBlocksAsDocumentsStructured` and
+  `ExportAllTypesAsDocumentsStructured`. They only called `ExportXmlBlocks`, `ExportXmlTypes`,
+  `ExportBlocksAsDocuments` or `ExportTypesAsDocuments` with an empty `regexName` and a fixed
+  `preservePath`, so nothing is lost: use those prompts (or tools) and set `preservePath` yourself.
+  No tools were affected.
+
+### Fixed
+
+- __`tia connect` did not use `--project-path`__: the prompts `TiaConnect`, `OpenTiaProject` and `OpenProject` named
+  their argument `projectPath`, but the preset and the tool parameter are `path`, and presets are matched by argument
+  name. The prompt therefore went out with an empty `path:`, and the agent only attached to TIA Portal with `Connect`
+  without opening the project. The prompt argument is now `path` (a client that still sends `projectPath` by name is
+  mapped to `path`). When a project is configured, the server instructions also tell the model to call `TiaConnect`
+  (attach and open in one step) for "tia connect" instead of `Connect` and `OpenProject` separately.
+- __Watch table exports follow the folder layout of the project tree__: `ExportXmlWatchTable` wrote the file
+  directly below `<exportPath>/<softwarePath>/` (or, with `preservePath`, into the group folders beside
+  `Program blocks` and `PLC tags`), unlike blocks, PLC data types and tag tables. Watch tables now land in
+  `<exportPath>/<softwarePath>/<system folder>/<table>.xml`, and with `preservePath` in
+  `<system folder>/<groups>/<table>.xml`, using the name of the watch and force tables folder as TIA Portal
+  reports it in the current interface language (`Watch and force tables` in English). `ExportPlcAsDocuments`
+  gets the same layout. `ImportWatchTable` accepts a leading system folder segment in `groupPath`, so the exported
+  layout can be fed straight back. Watch table files exported before this change lie one level higher and have to
+  be moved.
+- __Block and type names with characters that are invalid in a file name__: TIA Portal allows names such as
+  `T_Data->HMI` or `GTS_EQ_I/FLower`, but the exports used the name as the file name. On .NET Framework a `>`,
+  `<`, `|` or `"` made `Path.Combine` throw, and in `ExportXmlBlocks` / `ExportXmlTypes` that happened before the
+  per-object error handling, so one such object aborted the whole batch. A `/` silently wrote the file into an
+  extra subfolder. The XML, document and generated-source exports, including the scratch exports behind the
+  `GetXml*` and source readers, now replace invalid characters with `_` (`T_Data-_HMI.xml`). Valid names keep
+  their file name. Two objects that would share one file name are no longer written over each other: the
+  second is reported as a failure of the export. Reported on GitHub, with a fix in p-7347/tiaportal-mcp@240aaa4.
+- __`ImportXmlBlock` / `ImportXmlType` hid TIA Portal's reason__: both caught every exception and returned
+  `false`, so the tool only said "Failed importing". The error now carries the messages of the whole inner
+  exception chain, for example "The elements must be sorted according to the current flow" with the UId of
+  the part, and for that message a hint to put each new `<Part>` directly after the part that feeds it. A
+  missing file, group or open project is reported as such instead of as a failed import. Reported on GitHub
+  as #37, with fixes in p-7347/tiaportal-mcp@51d2ed9 and @178e631.
+- __Four import tools ignored read-only mode__: `ImportXmlBlock`, `ImportXmlType`, `ImportFromDocuments` and
+  `ImportBlocksFromDocuments` change the project (the XML imports replace an existing object) but were neither
+  marked `[WriteTool]` nor checked `WritePolicy.EnsureEnabled`, so they were listed and ran without
+  `--allow-write`. They now behave like the other import tools: hidden from `tools/list` and refused when
+  called directly. Reported on GitHub with a fix in p-7347/tiaportal-mcp@51e759a.
+- __Devices in "Ungrouped devices" were invisible__: `GetDevices` only walked the top-level devices and the
+  user groups, never the project's `UngroupedDevicesGroup` (a system group), so GSD based IO devices,
+  SCALANCE switches, ET200SP/eco stations and the like were missing from every device list. The group is
+  now included, and `regexName` is applied to all devices, also the top-level ones.
+- __Device names containing `/`__: `GetDeviceInfo` and the other device lookups split the path on `/`
+  immediately, so a station such as `S7-1500/ET200MP station_1`, copied from `GetProjectTree`, was reported
+  as "Device not found". The whole input is now tried as a device name first (top level and ungrouped), and
+  inside a group the remaining segments are tried as one name.
+- __`GetTypeSource` with `format: xml`__: the type XML export was called with `typePath` and the scratch
+  directory swapped, so the XML fallback for types without a source document could not work.
+- __`ExportSourceBlocks` / `ExportSourceTypes` filter by name__: both tools now take an optional `regexName`
+  (also on the prompts) and apply it while collecting the objects. Before, only `ExportSources` could filter,
+  and it always exports blocks and types together, so a request like "export all blocks matching `.+HMI_.+`"
+  ended in exporting everything to a temporary folder and copying the matching files.
+- __`OpenProject` / `OpenTiaProject` reuse an already open project__: the tool used to close the current
+  project before looking for the requested one, so an open project was always closed and reopened. The
+  lookup now runs first and matches by file path (not by name), so a project already open in the TIA Portal
+  instance, also one opened in the UI, is used as it is; the response says so. The same applies to local
+  sessions (`.alsXX`). Another project is still closed only when a different one has to be opened.
 
 ## [0.3.0] - 2026-09-11
 
@@ -384,26 +366,6 @@ PLC data types. The read tool surface grows from 56 to 59.
   every object the subject uses - called blocks, instance DBs, UDTs - into the same file, so it
   compiles on its own. Off by default, which keeps one object per file and therefore a tree that
   diffs cleanly.
-
-### Notes
-
-- Openness generates sources only from data blocks and STL or SCL blocks. LAD, FBD, GRAPH and the
-  rest have no textual form: the single-object tools reject them with the reason and a pointer to
-  `ExportBlock` or `ExportAsDocuments`, and `GenerateSources` reports them in `Skipped` rather
-  than failing the whole run. Inconsistent and know-how protected objects are handled the same
-  way.
-- Openness treats an existing file at the target path as an error, not an overwrite. Every other
-  exporter in this server overwrites, so the target file is deleted first and a second run
-  succeeds instead of failing.
-- Filesystem only: generating a source does not modify the project, so these tools are not gated
-  behind `--allow-write`. They are marked destructive, like the `Export*` tools, because they
-  overwrite files.
-- New files: `Siemens/Portal.GenerateSource.cs` and
-  `ModelContextProtocol/McpServer.GenerateSource.cs`, kept apart from the `*.Source.cs` pair,
-  which deals in source documents and SimaticML rather than in compilable sources.
-
-### Added (write side)
-
 - __`ImportSources`__: the bulk-import counterpart to `GenerateSources`. Walks a folder tree of
   `.db`/`.awl`/`.scl`/`.udt` files and compiles each back into a block or PLC data type, placed
   into the group its folder path implies - the same layout `GenerateSources` writes. Requires
@@ -425,6 +387,23 @@ PLC data types. The read tool surface grows from 56 to 59.
   `GetPlcBlockGroupByPath`/`GetPlcTypeGroupByPath` and the private `StripSystemRootSegment`
   helper (`Portal.Documents.cs`) rather than re-deriving the same "does this folder name match
   the localized system root" logic a third time.
+
+### Notes
+
+- Openness generates sources only from data blocks and STL or SCL blocks. LAD, FBD, GRAPH and the
+  rest have no textual form: the single-object tools reject them with the reason and a pointer to
+  `ExportBlock` or `ExportAsDocuments`, and `GenerateSources` reports them in `Skipped` rather
+  than failing the whole run. Inconsistent and know-how protected objects are handled the same
+  way.
+- Openness treats an existing file at the target path as an error, not an overwrite. Every other
+  exporter in this server overwrites, so the target file is deleted first and a second run
+  succeeds instead of failing.
+- Filesystem only: generating a source does not modify the project, so these tools are not gated
+  behind `--allow-write`. They are marked destructive, like the `Export*` tools, because they
+  overwrite files.
+- New files: `Siemens/Portal.GenerateSource.cs` and
+  `ModelContextProtocol/McpServer.GenerateSource.cs`, kept apart from the `*.Source.cs` pair,
+  which deals in source documents and SimaticML rather than in compilable sources.
 
 ## [0.2.0] - 2026-09-10
 
@@ -587,6 +566,11 @@ Upgrade to the current MCP .NET SDK and adopt the newer protocol surface.
 - `Engineering.GetTiaPortalInstallPath(int)` resolves the install path of any TIA major version and
   no longer depends on the `TIAP{version}\TIA_Opns` registry sub key alone - installations that do
   not write that key are now found via their other product sub keys, which carry the same path.
+- All 30 tools carry a `title` and behaviour annotations: 13 read-only `Get*` tools are
+  `readOnlyHint: true`; project mutations (`SaveProject`, `SaveAsProject`, `CloseProject`),
+  all export tools (they overwrite files already present at the target path) and all import tools
+  are `destructiveHint: true`. Everything is `openWorldHint: false`.
+- The 13 read-only tools publish an `outputSchema` and return `structuredContent`.
 
 ### Changed
 
@@ -610,14 +594,6 @@ Upgrade to the current MCP .NET SDK and adopt the newer protocol surface.
   `Error` field previously sent on failure notifications is gone.
 - Tools and prompts are registered explicitly (`WithTools`/`WithPrompts`) instead of by
   assembly scanning, giving a stable `tools/list` order.
-
-### Added
-
-- All 30 tools carry a `title` and behaviour annotations: 13 read-only `Get*` tools are
-  `readOnlyHint: true`; project mutations (`SaveProject`, `SaveAsProject`, `CloseProject`),
-  all export tools (they overwrite files already present at the target path) and all import tools
-  are `destructiveHint: true`. Everything is `openWorldHint: false`.
-- The 13 read-only tools publish an `outputSchema` and return `structuredContent`.
 
 ### Removed
 

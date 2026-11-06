@@ -121,12 +121,12 @@ namespace TiaMcpServer
                 new("--project-path", ProjectPath ?? notSet),
                 new("--software-path", SoftwarePath ?? notSet),
                 new("--export-path", ExportPath ?? notSet),
+                new("--keep-structure", KeepStructure ? "true" : "false"),
+                new("--with-dependencies", WithDependencies ? "true" : "false"),
                 new("--logging", Logging?.ToString() ?? notSet),
                 new("--doctor", Doctor ? "true" : "false"),
                 new("--allow-write", AllowWrite ? "true" : "false"),
-                new("--keep-structure", KeepStructure ? "true" : "false"),
                 new("--preserve-path (deprecated, use --keep-structure)", UsedDeprecatedPreservePath ? "used" : "not used"),
-                new("--with-dependencies", WithDependencies ? "true" : "false"),
                 new("--force-presets (deprecated, presets are always binding)", UsedDeprecatedForcePresets ? "used" : "not used")
             };
         }
