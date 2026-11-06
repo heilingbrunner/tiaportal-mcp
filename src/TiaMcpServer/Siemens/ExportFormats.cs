@@ -43,49 +43,42 @@ namespace TiaMcpServer.Siemens
     {
         public const string SettingsFileName = "tia.json";
 
-        public const string GroupName = "version-control-interface";
-
-        /// <summary>The section for other programs that work with the same project; the server never reads it.</summary>
         public const string ArgsGroupName = "args";
 
-        public const string ArgsProjectKey = "project";
+        public const string ArgsProjectPathKey = "project-path";
         public const string ArgsSoftwarePathKey = "software-path";
         public const string ArgsExportPathKey = "export-path";
         public const string ArgsKeepStructureKey = "keep-structure";
+        public const string ArgsWithUserInterfaceKey = "with-ui";
 
-        /// <summary>The old name of <see cref="ArgsKeepStructureKey"/>; 'tia init' renames it in place.</summary>
-        public const string ArgsPreservePathKeyDeprecated = "preserve-path";
-        public const string ArgsWithUserInterfaceKey = "with-user-interface";
+
+        public const string GroupName = "version-control-interface";
 
         public const string LadBlocksKey = "code-blocks-LAD";
         public const string FbdBlocksKey = "code-blocks-FBD";
         public const string SclBlocksKey = "code-blocks-SCL";
         public const string StlBlocksKey = "code-blocks-STL";
-
-        /// <summary>
-        /// The format of a LAD or FBD block that contains STL networks. TIA Portal refuses SIMATIC SD for
-        /// such a block, so only ".xml" works; a file without this entry behaves like ".xml".
-        /// </summary>
         public const string LadStlBlocksKey = "code-blocks-LAD-STL";
         public const string GraphBlocksKey = "code-blocks-GRAPH";
         public const string DataBlocksKey = "data-blocks";
-        public const string PlcTypesKey = "PLC-data-types";
-
-        /// <summary>
-        /// PLC tag tables are only exported as XML, so the export tools do not read this entry: a file
-        /// without it behaves the same as one that says ".xml". It is listed so 'tia init' and
-        /// 'GetExportFormats' show every object type.
-        /// </summary>
-        public const string PlcTagTablesKey = "PLC-tag-tables";
-
-        /// <summary>
-        /// No tool exports technology objects yet, so nothing reads this entry: a file without it behaves
-        /// the same as one that says ".xml". It is listed so 'tia init' and 'GetExportFormats' show every
-        /// object type.
-        /// </summary>
+        public const string SafetyDataBlocksKey = "safety-data-blocks-F-DBs";
+        public const string PlcTypesKey = "plc-data-types";
+        public const string FCompliantPlcTypesKey = "f-compliant-plc-data-types-UDT";
+        public const string PlcTagTablesKey = "plc-tables"; // "plc-tag-tables" is the name TIA Portal shows, but the export tool uses "plc-tables"
         public const string TechnologyObjectsKey = "technology-objects";
 
-        private const string SimaticSdText = "SIMATIC SD(.s7dcl, .s7res)";
+
+        public const string SimaticSdText = "SIMATIC SD(.s7dcl, .s7res)";
+        public const string XmlText = ".xml";
+        public const string AwlText = ".awl";
+        public const string SclText = ".scl";
+        public const string DbText = ".db";
+        public const string UdtText = ".udt";
+
+        public const string ArgsProjectPathKeyDeprecated = "project";
+        public const string ArgsWithUserInterfaceKeyDeprecated = "with-user-interface";
+        public const string ArgsPreservePathKeyDeprecated = "preserve-path";
+
 
         /// <summary>
         /// The defaults TIA Portal offers for a new workspace (Options > Settings > Version control
@@ -97,15 +90,15 @@ namespace TiaMcpServer.Siemens
             new KeyValuePair<string, string>(LadBlocksKey, SimaticSdText),
             new KeyValuePair<string, string>(FbdBlocksKey, SimaticSdText),
             new KeyValuePair<string, string>(SclBlocksKey, SimaticSdText),
-            new KeyValuePair<string, string>(StlBlocksKey, ".awl"),
-            new KeyValuePair<string, string>(LadStlBlocksKey, ".xml"),
-            new KeyValuePair<string, string>(GraphBlocksKey, ".xml"),
+            new KeyValuePair<string, string>(StlBlocksKey, AwlText),
+            new KeyValuePair<string, string>(LadStlBlocksKey, XmlText),
+            new KeyValuePair<string, string>(GraphBlocksKey, XmlText),
             new KeyValuePair<string, string>(DataBlocksKey, SimaticSdText),
-            new KeyValuePair<string, string>("safety-data-blocks-F-DBs", SimaticSdText),
+            new KeyValuePair<string, string>(SafetyDataBlocksKey, SimaticSdText),
             new KeyValuePair<string, string>(PlcTypesKey, SimaticSdText),
-            new KeyValuePair<string, string>("F-compliant-PLC-data-types-UDT", SimaticSdText),
-            new KeyValuePair<string, string>(PlcTagTablesKey, ".xml"),
-            new KeyValuePair<string, string>(TechnologyObjectsKey, ".xml")
+            new KeyValuePair<string, string>(FCompliantPlcTypesKey, SimaticSdText),
+            new KeyValuePair<string, string>(PlcTagTablesKey, XmlText),
+            new KeyValuePair<string, string>(TechnologyObjectsKey, XmlText)
         };
 
         public const string Example =
@@ -131,13 +124,13 @@ namespace TiaMcpServer.Siemens
 
             switch (text.ToLowerInvariant())
             {
-                case ".xml":
+                case XmlText:
                     return ExportFormatKind.Xml;
 
-                case ".awl":
-                case ".scl":
-                case ".db":
-                case ".udt":
+                case AwlText:
+                case SclText:
+                case DbText:
+                case UdtText:
                     return ExportFormatKind.Source;
 
                 default:
@@ -188,7 +181,7 @@ namespace TiaMcpServer.Siemens
             }
 
             if (key.StartsWith(PlcTypesKey, StringComparison.OrdinalIgnoreCase) ||
-                key.StartsWith("F-compliant-PLC-data-types", StringComparison.OrdinalIgnoreCase))
+                key.StartsWith("f-compliant-plc-data-types", StringComparison.OrdinalIgnoreCase))
             {
                 return "ExportType";
             }
@@ -305,7 +298,9 @@ namespace TiaMcpServer.Siemens
 
             if (!created && root.FirstOrDefault(p => string.Equals(p.Key, ExportFormats.ArgsGroupName, StringComparison.OrdinalIgnoreCase)).Value is JsonObject existingArgs)
             {
-                RenameDeprecatedArg(existingArgs, result);
+                RenameDeprecatedArg(existingArgs, ExportFormats.ArgsProjectPathKeyDeprecated, ExportFormats.ArgsProjectPathKey, result);
+                RenameDeprecatedArg(existingArgs, ExportFormats.ArgsPreservePathKeyDeprecated, ExportFormats.ArgsKeepStructureKey, result);
+                RenameDeprecatedArg(existingArgs, ExportFormats.ArgsWithUserInterfaceKeyDeprecated, ExportFormats.ArgsWithUserInterfaceKey, result);
             }
 
             if (given.Count > 0)
@@ -330,19 +325,19 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
-        /// Renames the deprecated 'preserve-path' key to 'keep-structure', keeping its value. When the
+        /// Renames a deprecated 'args' key (e.g. 'preserve-path' to 'keep-structure'), keeping its value. When the
         /// file has both keys nothing is changed and the old one is reported as kept, so no value is lost.
         /// </summary>
-        private static void RenameDeprecatedArg(JsonObject group, TiaJsonInitResult result)
+        private static void RenameDeprecatedArg(JsonObject group, string oldKey, string newKey, TiaJsonInitResult result)
         {
-            var old = group.FirstOrDefault(p => string.Equals(p.Key, ExportFormats.ArgsPreservePathKeyDeprecated, StringComparison.OrdinalIgnoreCase));
+            var old = group.FirstOrDefault(p => string.Equals(p.Key, oldKey, StringComparison.OrdinalIgnoreCase));
 
             if (old.Key == null)
             {
                 return;
             }
 
-            if (group.Any(p => string.Equals(p.Key, ExportFormats.ArgsKeepStructureKey, StringComparison.OrdinalIgnoreCase)))
+            if (group.Any(p => string.Equals(p.Key, newKey, StringComparison.OrdinalIgnoreCase)))
             {
                 result.KeptArgs.Add(old.Key);
 
@@ -352,8 +347,8 @@ namespace TiaMcpServer.Siemens
             var value = old.Value?.DeepClone();
 
             group.Remove(old.Key);
-            group[ExportFormats.ArgsKeepStructureKey] = value;
-            result.RenamedArgs.Add($"{old.Key} -> {ExportFormats.ArgsKeepStructureKey}");
+            group[newKey] = value;
+            result.RenamedArgs.Add($"{old.Key} -> {newKey}");
         }
 
         private static JsonObject ReadRoot(string file)

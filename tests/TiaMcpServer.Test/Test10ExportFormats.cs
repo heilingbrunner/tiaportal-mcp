@@ -104,9 +104,9 @@ namespace TiaMcpServer.Test
             Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code-blocks-FBD", ExportFormatKind.Xml));
             Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("code-blocks-STL", ExportFormatKind.Source));
             Assert.AreEqual("ExportBlock", ExportFormats.RecommendedTool("data-blocks", ExportFormatKind.Source));
-            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC-data-types", ExportFormatKind.SimaticSd));
-            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC-data-types", ExportFormatKind.Xml));
-            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("PLC-data-types", ExportFormatKind.Source));
+            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("plc-data-types", ExportFormatKind.SimaticSd));
+            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("plc-data-types", ExportFormatKind.Xml));
+            Assert.AreEqual("ExportType", ExportFormats.RecommendedTool("plc-data-types", ExportFormatKind.Source));
             Assert.IsNull(ExportFormats.RecommendedTool("PLC tag tables", ExportFormatKind.Xml), "an object type without an export tool for it");
             Assert.IsNull(ExportFormats.RecommendedTool("code-blocks-LAD", ExportFormatKind.Unknown));
         }
@@ -130,7 +130,7 @@ namespace TiaMcpServer.Test
         public void Test_1032_Parse_IgnoresTheArgsSectionForOtherPrograms()
         {
             // Arrange
-            var json = "{ \"args\": { \"project\": \"P.ap21\", \"software-path\": \"PLC_1\", \"export-path\": \"export\" }, " +
+            var json = "{ \"args\": { \"project-path\": \"P.ap21\", \"software-path\": \"PLC_1\", \"export-path\": \"export\" }, " +
                        "\"version-control-interface\": { \"code-blocks-STL\": \".awl\" } }";
 
             // Act
@@ -138,7 +138,7 @@ namespace TiaMcpServer.Test
 
             // Assert
             Assert.AreEqual(".awl", settings.Get("code-blocks-STL"));
-            Assert.IsNull(settings.Get("project"));
+            Assert.IsNull(settings.Get("project-path"));
             Assert.AreEqual(1, settings.Values.Count);
         }
 
@@ -157,7 +157,7 @@ namespace TiaMcpServer.Test
         private static Dictionary<string, string> InitArgs(string project = "", string software = "", string export = "") =>
             new Dictionary<string, string>
             {
-                [ExportFormats.ArgsProjectKey] = project,
+                [ExportFormats.ArgsProjectPathKey] = project,
                 [ExportFormats.ArgsSoftwarePathKey] = software,
                 [ExportFormats.ArgsExportPathKey] = export
             };
@@ -175,7 +175,7 @@ namespace TiaMcpServer.Test
 
             Assert.IsTrue(result.Created);
             Assert.IsTrue(result.Changed);
-            CollectionAssert.AreEqual(new[] { "project", "software-path", "export-path" }, result.AddedArgs);
+            CollectionAssert.AreEqual(new[] { "project-path", "software-path", "export-path" }, result.AddedArgs);
             Assert.AreEqual(ExportFormats.Defaults.Count, result.AddedFormats.Count);
             Assert.IsTrue(text.IndexOf("\"args\"", StringComparison.Ordinal) < text.IndexOf("\"version-control-interface\"", StringComparison.Ordinal),
                 "args come first in a new file");
@@ -195,10 +195,10 @@ namespace TiaMcpServer.Test
             var text = File.ReadAllText(TiaJson);
 
             // Assert
-            CollectionAssert.AreEqual(new[] { "export-path", "keep-structure", "with-user-interface" }, result.AddedArgs);
+            CollectionAssert.AreEqual(new[] { "export-path", "keep-structure", "with-ui" }, result.AddedArgs);
             StringAssert.Contains(text, "\"keep-structure\": \"true\"");
             Assert.IsFalse(text.Contains("preserve-path"), "a new file never gets the deprecated key");
-            StringAssert.Contains(text, "\"with-user-interface\": \"true\"");
+            StringAssert.Contains(text, "\"with-ui\": \"true\"");
         }
 
         [TestMethod]
@@ -220,6 +220,38 @@ namespace TiaMcpServer.Test
             Assert.IsFalse(text.Contains("preserve-path"), "the old key is gone");
             StringAssert.Contains(text, "\"project\": \"Mine.ap20\"");
             StringAssert.Contains(text, "\"other\"");
+        }
+
+        [TestMethod]
+        public void Test_1087a_Init_RenamesTheDeprecatedProjectKeyInPlaceAndKeepsItsValue()
+        {
+            // Arrange
+            File.WriteAllText(TiaJson, "{ \"args\": { \"project\": \"Mine.ap20\" } }");
+
+            // Act
+            var result = ExportFormatSettings.Init(_directory, InitArgs());
+            var text = File.ReadAllText(TiaJson);
+
+            // Assert
+            CollectionAssert.AreEqual(new[] { "project -> project-path" }, result.RenamedArgs);
+            StringAssert.Contains(text, "\"project-path\": \"Mine.ap20\"");
+            Assert.IsFalse(text.Contains("\"project\""), "the old key is gone");
+        }
+
+        [TestMethod]
+        public void Test_1087b_Init_RenamesTheDeprecatedWithUserInterfaceKeyInPlaceAndKeepsItsValue()
+        {
+            // Arrange
+            File.WriteAllText(TiaJson, "{ \"args\": { \"with-user-interface\": \"true\" } }");
+
+            // Act
+            var result = ExportFormatSettings.Init(_directory, InitArgs());
+            var text = File.ReadAllText(TiaJson);
+
+            // Assert
+            CollectionAssert.AreEqual(new[] { "with-user-interface -> with-ui" }, result.RenamedArgs);
+            StringAssert.Contains(text, "\"with-ui\": \"true\"");
+            Assert.IsFalse(text.Contains("with-user-interface"), "the old key is gone");
         }
 
         [TestMethod]
@@ -274,7 +306,7 @@ namespace TiaMcpServer.Test
             // Arrange
             File.WriteAllText(
                 TiaJson,
-                "{ \"args\": { \"project\": \"Mine.ap20\" }, " +
+                "{ \"args\": { \"project-path\": \"Mine.ap20\" }, " +
                 "\"version-control-interface\": { \"code-blocks-STL\": \".xml\" }, \"other\": { \"a\": 1 } }");
 
             // Act
@@ -286,7 +318,7 @@ namespace TiaMcpServer.Test
             Assert.IsFalse(result.Created);
             Assert.IsTrue(result.Changed);
             CollectionAssert.AreEqual(new[] { "software-path" }, result.AddedArgs);
-            CollectionAssert.AreEqual(new[] { "project" }, result.KeptArgs);
+            CollectionAssert.AreEqual(new[] { "project-path" }, result.KeptArgs);
             Assert.AreEqual(ExportFormats.Defaults.Count - 1, result.AddedFormats.Count);
             Assert.AreEqual(".xml", ExportFormatSettings.Load(_directory).Get("code-blocks-STL"));
             Assert.AreEqual(".xml", ExportFormatSettings.Load(_directory).Get("code-blocks-GRAPH"), "init adds the GRAPH setting to a file that lacks it");
@@ -374,7 +406,7 @@ namespace TiaMcpServer.Test
             StringAssert.Contains(settings.Hint, file);
             StringAssert.Contains(settings.Hint, "check");
             Assert.AreEqual(".awl", settings.Get("code-blocks-STL"));
-            Assert.AreEqual(SimaticSd, settings.Get("PLC-data-types"));
+            Assert.AreEqual(SimaticSd, settings.Get("plc-data-types"));
             Assert.AreEqual(ExportFormats.Defaults.Count, settings.Values.Count);
         }
 
@@ -435,7 +467,7 @@ namespace TiaMcpServer.Test
             foreach (var key in new[]
             {
                 "code-blocks-LAD", "code-blocks-FBD", "code-blocks-SCL", "code-blocks-STL", "code-blocks-LAD-STL", "code-blocks-GRAPH",
-                "data-blocks", "safety-data-blocks-F-DBs", "PLC-data-types", "F-compliant-PLC-data-types-UDT", "PLC-tag-tables", "technology-objects"
+                "data-blocks", "safety-data-blocks-F-DBs", "plc-data-types", "f-compliant-plc-data-types-UDT", "plc-tables", "technology-objects"
             })
             {
                 CollectionAssert.Contains(keys, key);
@@ -445,8 +477,8 @@ namespace TiaMcpServer.Test
             Assert.IsTrue(ExportFormats.Defaults.All(d => ExportFormats.ParseKind(d.Value) != ExportFormatKind.Unknown));
             Assert.AreEqual(".awl", ExportFormats.Defaults.Single(d => d.Key == "code-blocks-STL").Value);
             Assert.AreEqual(".xml", ExportFormats.Defaults.Single(d => d.Key == "code-blocks-GRAPH").Value);
-            Assert.AreEqual(".xml", ExportFormats.Defaults.Single(d => d.Key == "PLC-tag-tables").Value);
-            Assert.AreEqual("ExportTagTable", ExportFormats.RecommendedTool("PLC-tag-tables", ExportFormatKind.Xml));
+            Assert.AreEqual(".xml", ExportFormats.Defaults.Single(d => d.Key == "plc-tables").Value);
+            Assert.AreEqual("ExportTagTable", ExportFormats.RecommendedTool("plc-tables", ExportFormatKind.Xml));
             Assert.AreEqual(".xml", ExportFormats.Defaults.Single(d => d.Key == "technology-objects").Value);
             Assert.IsNull(ExportFormats.RecommendedTool("technology-objects", ExportFormatKind.Xml), "no tool exports technology objects");
             Assert.AreEqual(".xml", ExportFormats.Defaults.Single(d => d.Key == "code-blocks-LAD-STL").Value);
@@ -633,13 +665,13 @@ namespace TiaMcpServer.Test
         [TestMethod]
         public void Test_1060_PlanType_ReadsThePlcDataTypeEntryAndFailsWithoutIt()
         {
-            Assert.AreEqual(ExportFormatKind.SimaticSd, PlcProgram.PlanType(SettingsOf(("PLC-data-types", SimaticSd))));
-            Assert.AreEqual(ExportFormatKind.Source, PlcProgram.PlanType(SettingsOf(("PLC-data-types", ".udt"))));
+            Assert.AreEqual(ExportFormatKind.SimaticSd, PlcProgram.PlanType(SettingsOf(("plc-data-types", SimaticSd))));
+            Assert.AreEqual(ExportFormatKind.Source, PlcProgram.PlanType(SettingsOf(("plc-data-types", ".udt"))));
 
             var ex = Throws(() => PlcProgram.PlanType(SettingsOf(("code-blocks-LAD", ".xml"))));
 
             Assert.AreEqual(PortalErrorCode.InvalidParams, ex.Code);
-            StringAssert.Contains(ex.Message, "PLC-data-types");
+            StringAssert.Contains(ex.Message, "plc-data-types");
         }
 
         [TestMethod]

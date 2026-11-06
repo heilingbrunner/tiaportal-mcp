@@ -15,11 +15,11 @@
   (default `.xml`), written by `tia init` and by the automatic creation of a missing file; `tia init` adds it to an
   existing file. A `tia.json` without the key exports GRAPH blocks as `.xml`, so existing files keep working. Before,
   GRAPH blocks were skipped. Failsafe LAD blocks (`F_LAD`) use the `code-blocks-LAD` setting instead of being skipped.
-  `tia.json` also gets `"PLC-tag-tables": ".xml"` (default of `tia init`); tag tables are always exported as XML and
+  `tia.json` also gets `"plc-tables": ".xml"` (default of `tia init`); tag tables are always exported as XML and
   the export tools do not read the entry, so a file without it changes nothing. `"technology-objects": ".xml"` is
   added the same way; no tool exports technology objects yet, so nothing reads it. The keys
-  `safety-data-blocks-(F-DBs)` and `F-compliant-PLC-data-types-(UDT)` are now `safety-data-blocks-F-DBs` and
-  `F-compliant-PLC-data-types-UDT`, without parentheses. Nothing reads them; an old key in an existing file stays as it
+  `safety-data-blocks-(F-DBs)` and `f-compliant-plc-data-types-(UDT)` are now `safety-data-blocks-F-DBs` and
+  `f-compliant-plc-data-types-UDT`, without parentheses. Nothing reads them; an old key in an existing file stays as it
   is, and `tia init` adds the new key beside it.
 - __`Report` in the result of every pull, push, hardware and compile tool__: the complete result as markdown tables,
   built by the server (counts, every skipped object, every failure, every note, every compiler or hardware message;
@@ -34,10 +34,12 @@
   import asks the user to tick "Yes, import" in a dialog of the client. `importOption` is `RetainTiaDevice` (default),
   `OverwriteTiaDevice` or `MoveToParkingLot`.
 
-- __`TiaInit`__ (`tia init`): sets up `<exportPath>/tia.json`. A dialog asks for the `args` (`project`, `software-path`,
-  `export-path`, `preserve-path`, `with-user-interface`), starting with the call arguments or the `--project-path`,
-  `--software-path`, `--export-path` and `--preserve-path` presets. `preserve-path` and `with-user-interface` are
-  checkboxes and are written only when checked. A missing file is created with the export formats TIA Portal offers for a new workspace; an existing file is
+- __`TiaInit`__ (`tia init`): sets up `<exportPath>/tia.json`. A dialog asks for the `args` (`project-path`, `software-path`,
+  `export-path`, `preserve-path`, `with-ui`), starting with the call arguments or the `--project-path`,
+  `--software-path`, `--export-path` and `--preserve-path` presets. `preserve-path` and `with-ui` are
+  checkboxes and are written only when checked. The `with-user-interface` key is now `with-ui`; `tia init` renames an
+  existing `"with-user-interface"` in place and keeps its value (like `preserve-path`). Likewise `project` is now
+  `project-path`, as the `--project-path` argument. A missing file is created with the export formats TIA Portal offers for a new workspace; an existing file is
   completed and never overwritten, so existing values are kept. Needs no `--allow-write`. A prompt of the same name is
   included.
 - __`ExportBlock`, `ExportType`, `ExportTagTable`, `ExportBlocks`, `ExportTypes`, `ExportTagTables`, `ExportWatchTable`, `ExportWatchTables`, `ExportForceTable`__: export exactly one object

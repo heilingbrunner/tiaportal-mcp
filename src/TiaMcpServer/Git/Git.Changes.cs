@@ -12,11 +12,7 @@ namespace TiaMcpServer.Git
         Added,
         Untracked,
         Renamed,
-
-        /// <summary>The file is gone from the working tree; there is nothing to read.</summary>
         Deleted,
-
-        /// <summary>A merge conflict is open; the file may hold conflict markers.</summary>
         Unmerged
     }
 

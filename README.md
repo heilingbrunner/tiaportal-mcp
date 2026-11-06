@@ -20,19 +20,19 @@ A MCP server which connects to Siemens TIA Portal.
 
 ## Command Line Arguments
 
-| Argument                  | Description                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------------- |
-| `--tia-major-version <n>` | TIA Portal major version to bind against. Default `21`.                                           |
-| `--project-path <file>`   | Preset for the `path` argument of `OpenProject` / `OpenTiaProject`. See below.                    |
-| `--software-path <path>`  | Preset for the `softwarePath` tool argument, e.g. `PLC_1`. See below.                             |
-| `--export-path <path>`    | Preset for the `exportPath` tool argument. See below.                                             |
-| `--logging <1\|2\|3>`     | `1` stderr, `2` debug output, `3` Windows event log. Omit for no logging.                         |
-| `--doctor`                | Print the environment report and exit without starting the MCP server.                            |
-| `--keep-structure`        | Flag: preset for the `keepStructure` argument of `TiaInit` (written to `tia.json`).               |
-| `--with-dependencies`     | Flag: preset for the `withDependencies` argument of `GetSourceBlock` and `GetSourceType`.         |
-| `--allow-write`           | Register the project-mutating tools. Omitted by default; see below.                               |
-| `--preserve-path`         | Deprecated name of `--keep-structure`, still accepted; `--doctor` shows when it is used.          |
-| `--force-presets`         | Deprecated, no effect: every preset is binding now. `--doctor` shows when it is used.             |
+| Argument                  | Description                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| `--tia-major-version <n>` | TIA Portal major version to bind against. Default `21`.                                   |
+| `--project-path <file>`   | Preset for the `path` argument of `OpenProject` / `OpenTiaProject`. See below.            |
+| `--software-path <path>`  | Preset for the `softwarePath` tool argument, e.g. `PLC_1`. See below.                     |
+| `--export-path <path>`    | Preset for the `exportPath` tool argument. See below.                                     |
+| `--logging <1\|2\|3>`     | `1` stderr, `2` debug output, `3` Windows event log. Omit for no logging.                 |
+| `--doctor`                | Print the environment report and exit without starting the MCP server.                    |
+| `--keep-structure`        | Flag: preset for the `keepStructure` argument of `TiaInit` (written to `tia.json`).       |
+| `--with-dependencies`     | Flag: preset for the `withDependencies` argument of `GetSourceBlock` and `GetSourceType`. |
+| `--allow-write`           | Register the project-mutating tools. Omitted by default; see below.                       |
+| `--preserve-path`         | Deprecated name of `--keep-structure`, still accepted; `--doctor` shows when it is used.  |
+| `--force-presets`         | Deprecated, no effect: every preset is binding now. `--doctor` shows when it is used.     |
 
 ## Presetting tool arguments
 
@@ -46,14 +46,14 @@ of the MCP server entry in your client's JSON configuration and the model no lon
 
 - Which option becomes which argument (tools and prompts alike; a test checks this for every tool and prompt):
 
-  | Option               | Argument          | Used by                                                                                  |
-  | -------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
-  | `--project-path`     | `path`            | `OpenProject`, `OpenTiaProject`, `TiaConnect`, `TiaInit`                                 |
-  | `--software-path`    | `softwarePath`    | every tool and prompt with a PLC software path                                           |
-  | `--export-path`      | `exportPath`      | every export / pull tool, `GetExportFormats`, `TiaPush*`, `TiaInit`                      |
-  | `--export-path`      | `importPath`      | `OverwritePlcProgram`, `ImportHardware`, `PreviewImport`, `ImportWatchTable`              |
-  | `--keep-structure`   | `keepStructure`   | `TiaInit`                                                                                |
-  | `--with-dependencies`| `withDependencies`| `GetSourceBlock`, `GetSourceType`                                                         |
+  | Option                | Argument           | Used by                                                                      |
+  | --------------------- | ------------------ | ---------------------------------------------------------------------------- |
+  | `--project-path`      | `path`             | `OpenProject`, `OpenTiaProject`, `TiaConnect`, `TiaInit`                     |
+  | `--software-path`     | `softwarePath`     | every tool and prompt with a PLC software path                               |
+  | `--export-path`       | `exportPath`       | every export / pull tool, `GetExportFormats`, `TiaPush*`, `TiaInit`          |
+  | `--export-path`       | `importPath`       | `OverwritePlcProgram`, `ImportHardware`, `PreviewImport`, `ImportWatchTable` |
+  | `--keep-structure`    | `keepStructure`    | `TiaInit`                                                                    |
+  | `--with-dependencies` | `withDependencies` | `GetSourceBlock`, `GetSourceType`                                            |
 
   `--tia-major-version`, `--logging`, `--doctor` and `--allow-write` configure the server itself and are not tool
   arguments; `--preserve-path` and `--force-presets` are deprecated.
@@ -103,23 +103,23 @@ To enable write mode, add the argument to your client configuration, for example
 
 Read-only tools (71) are always available.
 
-| Area                          | Tools                                                                                                                                                                                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Portal and state              | `GetPortals`, `Connect`, `Disconnect`, `GetState`, `Doctor`                                                                                                                                                                           |
-| Project and session           | `GetProject`, `OpenProject`, `SaveProject`, `SaveAsProject`, `CloseProject`                                                                                                                                                           |
-| Devices                       | `GetProjectTree`, `GetDevices`, `GetDeviceInfo`, `GetDeviceItemInfo`                                                                                                                                                                  |
-| PLC software                  | `GetSoftwareInfo`, `GetSoftwareTree`, `CompilePlcSoftware`, `CompileCodeBlock`, `ExportOpcUaXml`                                                                                                                                      |
-| Blocks                        | `GetBlocks`, `GetBlockInfo`, `GetBlocksWithHierarchy`, `ExportBlock` (one block), `ExportBlocks` (by regex); format from `tia.json`                                                                                                   |
-| Types                         | `GetTypes`, `GetTypeInfo`, `ExportType` (one type), `ExportTypes` (by regex); format from `tia.json`                                                                                                                                  |
-| Tags and constants            | `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants`, `ExportTagTable` (one table), `ExportTagTables` (by regex); always XML                                                                                    |
-| Watch and force tables        | `GetWatchTables`, `GetWatchTableInfo`, `GetForceTables`, `ExportWatchTable` (one table), `ExportWatchTables` (by regex), `ExportForceTable`; always XML                                                                               |
-| External sources              | `GetExternalSources`, `GetExternalSourceInfo`                                                                                                                                                                                         |
-| Read source inline            | `GetXmlBlock`, `GetXmlType`, `GetSourceBlock`, `GetSourceType`, `GetDocumentsBlock`, `GetDocumentsType`                                                                                                                               |
-| Cross references              | `GetCrossReferences`                                                                                                                                                                                                                  |
-| Libraries                     | `GetOpenLibraries`, `GetReferencedLibraries`                                                                                                                                                                                          |
-| Multiuser                     | `GetMarkedObjects`, `CheckIsUpToDate`                                                                                                                                                                                                 |
-| Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`                                                                                                               |
-| Whole PLC program             | `ExportPlcProgram` (format per object type from `tia.json`, see below), `GetExportFormats`                                                                                                                                            |
+| Area                          | Tools                                                                                                                                                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Portal and state              | `GetPortals`, `Connect`, `Disconnect`, `GetState`, `Doctor`                                                                                                                                                                                      |
+| Project and session           | `GetProject`, `OpenProject`, `SaveProject`, `SaveAsProject`, `CloseProject`                                                                                                                                                                      |
+| Devices                       | `GetProjectTree`, `GetDevices`, `GetDeviceInfo`, `GetDeviceItemInfo`                                                                                                                                                                             |
+| PLC software                  | `GetSoftwareInfo`, `GetSoftwareTree`, `CompilePlcSoftware`, `CompileCodeBlock`, `ExportOpcUaXml`                                                                                                                                                 |
+| Blocks                        | `GetBlocks`, `GetBlockInfo`, `GetBlocksWithHierarchy`, `ExportBlock` (one block), `ExportBlocks` (by regex); format from `tia.json`                                                                                                              |
+| Types                         | `GetTypes`, `GetTypeInfo`, `ExportType` (one type), `ExportTypes` (by regex); format from `tia.json`                                                                                                                                             |
+| Tags and constants            | `GetTagTables`, `GetTagTableInfo`, `GetTags`, `GetTagInfo`, `GetConstants`, `ExportTagTable` (one table), `ExportTagTables` (by regex); always XML                                                                                               |
+| Watch and force tables        | `GetWatchTables`, `GetWatchTableInfo`, `GetForceTables`, `ExportWatchTable` (one table), `ExportWatchTables` (by regex), `ExportForceTable`; always XML                                                                                          |
+| External sources              | `GetExternalSources`, `GetExternalSourceInfo`                                                                                                                                                                                                    |
+| Read source inline            | `GetXmlBlock`, `GetXmlType`, `GetSourceBlock`, `GetSourceType`, `GetDocumentsBlock`, `GetDocumentsType`                                                                                                                                          |
+| Cross references              | `GetCrossReferences`                                                                                                                                                                                                                             |
+| Libraries                     | `GetOpenLibraries`, `GetReferencedLibraries`                                                                                                                                                                                                     |
+| Multiuser                     | `GetMarkedObjects`, `CheckIsUpToDate`                                                                                                                                                                                                            |
+| Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`                                                                                                                          |
+| Whole PLC program             | `ExportPlcProgram` (format per object type from `tia.json`, see below), `GetExportFormats`                                                                                                                                                       |
 | Git-like connect and pull     | `TiaInit`, `TiaConnect`, `TiaPull`, `TiaPullBlocks`, `TiaPullTypes`, `TiaPullTagTables`, `TiaPullBlock`, `TiaPullType`, `TiaPullTagTable`, `TiaPullWatchTables`, `TiaPullWatchTable`, `TiaPullForceTable` (see "`tia` porcelain commands" below) |
 
 Write tools (40) require `--allow-write`.
@@ -177,9 +177,9 @@ and it does not exist, the server creates it with the defaults TIA Portal offers
     "code-blocks-GRAPH": ".xml",
     "data-blocks": "SIMATIC SD(.s7dcl, .s7res)",
     "safety-data-blocks-F-DBs": "SIMATIC SD(.s7dcl, .s7res)",
-    "PLC-data-types": "SIMATIC SD(.s7dcl, .s7res)",
-    "F-compliant-PLC-data-types-UDT": "SIMATIC SD(.s7dcl, .s7res)",
-    "PLC-tag-tables": ".xml",
+    "plc-data-types": "SIMATIC SD(.s7dcl, .s7res)",
+    "plc-tables": ".xml",
+    "f-compliant-plc-data-types-UDT": "SIMATIC SD(.s7dcl, .s7res)",
     "technology-objects": ".xml"
   }
 }
@@ -187,14 +187,14 @@ and it does not exist, the server creates it with the defaults TIA Portal offers
 
 The file can also carry an optional `args` section for other programs that work with the same TIA Portal project.
 Its keys follow the server arguments `--project-path`, `--software-path`, `--export-path` and `--keep-structure`
-(`"keep-structure": "true"` and `"with-user-interface": "true"` are written only when checked; `tia init` renames an
-old `"preserve-path"` key to `"keep-structure"` and keeps its value). **The server does not
+(`"keep-structure": "true"` and `"with-ui": "true"` are written only when checked; `tia init` renames an
+old `"preserve-path"` key to `"keep-structure"`, `"with-user-interface"` to `"with-ui"` and `"project"` to `"project-path"`, and keeps their values). **The server does not
 read it**; only `tia init` writes it (the automatic creation does not) and every tool keeps it as it is:
 
 ```json
 {
   "args": {
-    "project": "C:\\Projects\\Plant\\Plant.ap21",
+    "project-path": "C:\\Projects\\Plant\\Plant.ap21",
     "software-path": "PLC_1",
     "export-path": "C:\\Projects\\Plant\\export"
   },
@@ -209,20 +209,24 @@ All keys use hyphens instead of spaces. A file with the old spaced keys (`versio
 
 Available file formats per object type; the first one listed is the default of a new file:
 
-| Key                                | Available formats                            |
-| ---------------------------------- | -------------------------------------------- |
-| `code-blocks-LAD`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
-| `code-blocks-FBD`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
-| `code-blocks-SCL`                  | `SIMATIC SD(.s7dcl, .s7res)`, `.scl`, `.xml` |
-| `code-blocks-STL`                  | `.awl`, `.xml`                               |
-| `code-blocks-LAD-STL`              | `.xml`                                       |
-| `code-blocks-GRAPH`                | `.xml`                                       |
-| `data-blocks`                      | `SIMATIC SD(.s7dcl, .s7res)`, `.db`, `.xml`  |
-| `safety-data-blocks-F-DBs`         | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
-| `PLC-data-types`                   | `SIMATIC SD(.s7dcl, .s7res)`, `.udt`, `.xml` |
-| `F-compliant-PLC-data-types-UDT`   | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
-| `PLC-tag-tables`                   | `.xml`                                       |
-| `technology-objects`               | `.xml`                                       |
+| Key                              | Available formats                            |
+| -------------------------------- | -------------------------------------------- |
+| `code-blocks-LAD`                | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
+| `code-blocks-FBD`                | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
+| `code-blocks-SCL`                | `SIMATIC SD(.s7dcl, .s7res)`, `.scl`, `.xml` |
+| `code-blocks-STL`                | `.awl`, `.xml`                               |
+| `code-blocks-LAD-STL`            | `.xml`                                       |
+| `code-blocks-GRAPH`              | `.xml`                                       |
+| `data-blocks`                    | `SIMATIC SD(.s7dcl, .s7res)`, `.db`, `.xml`  |
+| `safety-data-blocks-F-DBs`       | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
+| `plc-data-types`                 | `SIMATIC SD(.s7dcl, .s7res)`, `.udt`, `.xml` |
+| `plc-tables`                     | `.xml`                                       |
+| `f-compliant-plc-data-types-UDT` | `SIMATIC SD(.s7dcl, .s7res)`, `.xml`         |
+| `technology-objects`             | `.xml`                                       |
+
+**Fixed format.** `code-blocks-GRAPH`, `plc-tables` and `technology-objects` offer only `.xml`, so their export file
+format is fixed. `code-blocks-GRAPH` is read (a missing key also exports `.xml`), while `plc-tables` and
+`technology-objects` are listed only so the file names every object type; no tool reads them.
 
 **Check a created file.** The server cannot see your TIA Portal settings, so the defaults may differ from yours. The
 response of `ExportPlcProgram` (`Notes` and the message) and of `GetExportFormats` (`Created`, `Hint`) says when the
@@ -238,12 +242,12 @@ Each key names an object type, the value is the text TIA Portal shows for it:
 | `.xml`                        | SimaticML, `.xml`                                          | every block and PLC data type                        |
 | `.awl`, `.scl`, `.db`, `.udt` | external source, the same extension                        | STL, SCL, data blocks, PLC data types (not LAD, FBD) |
 
-| Key                                                              | Controls                                                 |
-| ---------------------------------------------------------------- | -------------------------------------------------------- |
-| `code-blocks-LAD`, `-FBD`, `-SCL`, `-STL`                        | blocks of that language                                  |
-| `data-blocks`                                                    | data blocks                                              |
-| `PLC-data-types`                                                 | PLC data types                                           |
-| `safety-data-blocks-F-DBs`, `F-compliant-PLC-data-types-UDT` | listed as TIA Portal shows them; not read separately yet |
+| Key                                                          | Controls                                                 |
+| ------------------------------------------------------------ | -------------------------------------------------------- |
+| `code-blocks-LAD`, `-FBD`, `-SCL`, `-STL`                    | blocks of that language                                  |
+| `data-blocks`                                                | data blocks                                              |
+| `plc-data-types`                                             | PLC data types                                           |
+| `safety-data-blocks-F-DBs`, `f-compliant-plc-data-types-UDT` | listed as TIA Portal shows them; not read separately yet |
 
 Rules:
 - Keys and values are not case sensitive. Other keys are kept and shown but have no effect, so a longer file from a
@@ -262,7 +266,7 @@ Rules:
 Who reads it: `ExportPlcProgram` decides the format of every object from it. `GetExportFormats(exportPath)` shows what
 the file says and which export tool writes each object type. `ExportBlock`, `ExportBlocks`, `ExportType` and
 `ExportTypes` read it too, so one tool per object kind writes every format. `ExportTagTable`, `ExportTagTables`, `ExportWatchTable`, `ExportWatchTables` and `ExportForceTable` do not,
-because tag, watch and force tables are always XML. `tia.json` lists `PLC-tag-tables` and `technology-objects` (`.xml`) so the file names every object type, but no tool reads them: tag tables are always XML and there is no export tool for technology objects; a file without them behaves the same. The import tools do not read it.
+because tag, watch and force tables are always XML. `tia.json` lists `plc-tables` and `technology-objects` (`.xml`) so the file names every object type, but no tool reads them: tag tables are always XML and there is no export tool for technology objects; a file without them behaves the same. The import tools do not read it.
 
 ### Whole PLC program: `ExportPlcProgram`, `OverwritePlcProgram` and `ImportPlcProgramChanges`
 
@@ -325,27 +329,27 @@ Short tools for the chat that work like the git commands they are named after. T
 brings the changed files of that folder into TIA Portal.
 Type the command in the chat, e.g. `tia pull blocks ".+HMI"`, or pick the tool or the prompt of the same name.
 
-| You say                      | Tool                 | Same as                                                  |
-| ---------------------------- | -------------------- | -------------------------------------------------------- |
-| `tia init`                   | `TiaInit`            | sets up `<exportPath>/tia.json`                          |
-| `tia connect <project>`      | `TiaConnect`         | `OpenTiaProject`                                         |
-| `tia pull`                   | `TiaPull`            | `ExportPlcProgram`                                       |
-| `tia pull blocks [rx]`       | `TiaPullBlocks`      | `ExportBlocks`, optionally by regex                      |
-| `tia pull types [rx]`        | `TiaPullTypes`       | `ExportTypes`, optionally by regex                       |
-| `tia pull tagtables [rx]`    | `TiaPullTagTables`   | `ExportTagTables`, optionally by regex                   |
-| `tia pull block <path>`      | `TiaPullBlock`       | `ExportBlock`, exactly one block by its full path        |
-| `tia pull type <path>`       | `TiaPullType`        | `ExportType`, exactly one PLC data type by its full path |
-| `tia pull tagtable <path>`   | `TiaPullTagTable`    | `ExportTagTable`, exactly one tag table by its path      |
-| `tia pull watchtables [rx]`  | `TiaPullWatchTables` | `ExportWatchTables`, optionally by regex                 |
-| `tia pull watchtable <path>` | `TiaPullWatchTable`  | `ExportWatchTable`, exactly one watch table by its path  |
-| `tia pull forcetable <path>` | `TiaPullForceTable`  | `ExportForceTable`, the force table of the PLC           |
-| `tia push`                   | `TiaPush`            | `ImportPlcProgramChanges` with `dryRun=false`            |
-| `tia push preview`           | `TiaPushPreview`     | `ImportPlcProgramChanges` with `dryRun=true`             |
-| `tia pull hardware`          | `TiaPullHardware`    | `ExportHardware` (device of the PLC as `Hardware/<device>.aml`) |
+| You say                      | Tool                 | Same as                                                                     |
+| ---------------------------- | -------------------- | --------------------------------------------------------------------------- |
+| `tia init`                   | `TiaInit`            | sets up `<exportPath>/tia.json`                                             |
+| `tia connect <project>`      | `TiaConnect`         | `OpenTiaProject`                                                            |
+| `tia pull`                   | `TiaPull`            | `ExportPlcProgram`                                                          |
+| `tia pull blocks [rx]`       | `TiaPullBlocks`      | `ExportBlocks`, optionally by regex                                         |
+| `tia pull types [rx]`        | `TiaPullTypes`       | `ExportTypes`, optionally by regex                                          |
+| `tia pull tagtables [rx]`    | `TiaPullTagTables`   | `ExportTagTables`, optionally by regex                                      |
+| `tia pull block <path>`      | `TiaPullBlock`       | `ExportBlock`, exactly one block by its full path                           |
+| `tia pull type <path>`       | `TiaPullType`        | `ExportType`, exactly one PLC data type by its full path                    |
+| `tia pull tagtable <path>`   | `TiaPullTagTable`    | `ExportTagTable`, exactly one tag table by its path                         |
+| `tia pull watchtables [rx]`  | `TiaPullWatchTables` | `ExportWatchTables`, optionally by regex                                    |
+| `tia pull watchtable <path>` | `TiaPullWatchTable`  | `ExportWatchTable`, exactly one watch table by its path                     |
+| `tia pull forcetable <path>` | `TiaPullForceTable`  | `ExportForceTable`, the force table of the PLC                              |
+| `tia push`                   | `TiaPush`            | `ImportPlcProgramChanges` with `dryRun=false`                               |
+| `tia push preview`           | `TiaPushPreview`     | `ImportPlcProgramChanges` with `dryRun=true`                                |
+| `tia pull hardware`          | `TiaPullHardware`    | `ExportHardware` (device of the PLC as `Hardware/<device>.aml`)             |
 | `tia push hardware`          | `TiaPushHardware`    | `ImportHardware` with `dryRun=false` (`--allow-write`, confirmation dialog) |
 
 - `TiaInit` sets up [`tia.json`](#tiajson-the-export-formats-of-tia-portal): it opens a dialog in which you check or
-  enter the `args` (`project`, `software-path`, `export-path`, `keep-structure`, `with-user-interface`), starting with the values of the call or
+  enter the `args` (`project-path`, `software-path`, `export-path`, `keep-structure`, `with-ui`), starting with the values of the call or
   of the `--project-path`, `--software-path`, `--export-path` and `--keep-structure` presets (the old parameter name `preservePath` still works), and writes the file into the export path. A missing
   file is created with the export formats TIA Portal offers for a new workspace; an existing file is only completed
   (missing keys are added) and never overwritten, so a value you wrote is kept. Cancel the dialog and nothing is

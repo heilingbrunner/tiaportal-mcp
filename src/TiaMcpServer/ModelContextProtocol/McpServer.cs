@@ -287,12 +287,12 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [McpServerTool(Name = "OpenProject", Title = "Open project/session", Destructive = true, Idempotent = true, OpenWorld = false), Description("Open a local project (.apXX) or local session (.alsXX) in the connected TIA Portal and make it the current project. Closes the project or session that is open first. Needs a prior Connect; OpenTiaProject connects and opens in one call")]
         public static ResponseOpenProject OpenProject(
-            [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path)
+            [Description("projectpath: full path of the .apXX project or .alsXX session file on the machine running this server")] string projectpath)
         {
             try
             {
                 // get project extension
-                string extension = Path.GetExtension(path).ToLowerInvariant();
+                string extension = Path.GetExtension(projectpath).ToLowerInvariant();
 
                 // use regex to check if extension is .ap\d+ or .als\d+
                 if (!Regex.IsMatch(extension, @"^\.ap\d+$") &&
@@ -308,12 +308,12 @@ namespace TiaMcpServer.ModelContextProtocol
                 // closed when another has to be opened (Portal.OpenProject/OpenSession decide).
                 if (extension.StartsWith(".ap"))
                 {
-                    success = Portal.OpenProject(path, out wasAlreadyOpen);
+                    success = Portal.OpenProject(projectpath, out wasAlreadyOpen);
                 }
                 if (extension.StartsWith(".als"))
                 {
                     Portal.CloseProject();
-                    success = Portal.OpenSession(path, out wasAlreadyOpen);
+                    success = Portal.OpenSession(projectpath, out wasAlreadyOpen);
                 }
 
                 if (success)
@@ -321,8 +321,8 @@ namespace TiaMcpServer.ModelContextProtocol
                     return new ResponseOpenProject
                     {
                         Message = wasAlreadyOpen
-                            ? $"Project '{path}' was already open and is used"
-                            : $"Project '{path}' opened",
+                            ? $"Project '{projectpath}' was already open and is used"
+                            : $"Project '{projectpath}' opened",
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
@@ -332,12 +332,12 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 else
                 {
-                    throw new McpException($"Failed to open project '{path}'");
+                    throw new McpException($"Failed to open project '{projectpath}'");
                 }
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error opening project '{path}': {ex.Message}", ex);
+                throw new McpException($"Unexpected error opening project '{projectpath}': {ex.Message}", ex);
             }
         }
 
@@ -525,7 +525,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "OpenTiaProject", Title = "Connect/open a project", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Connect to TIA Portal if not already connected, open the given project or session, and return the 'portalId' plus the device and PLC software paths the other tools need. Replaces the Connect then OpenProject then GetProjectTree sequence")]
         public static async Task<ResponseOpenTiaProject> OpenTiaProject(
-            [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path,
+            [Description("projectpath: full path of the .apXX project or .alsXX session file on the machine running this server")] string projectpath,
             [Description("portalId: process id of the TIA Portal instance to open it in (see 'GetPortals'). Leave empty when at most one instance is running")] int? portalId = null,
             CancellationToken cancellationToken = default)
         {
@@ -549,7 +549,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 // Everything after attaching runs scoped to that instance and under its lock.
                 return await Portal.RunScopedAsync(
                     attachedId,
-                    () => new ValueTask<ResponseOpenTiaProject>(OpenAndDescribe(path, attachedId, wasAttached)),
+                    () => new ValueTask<ResponseOpenTiaProject>(OpenAndDescribe(projectpath, attachedId, wasAttached)),
                     cancellationToken);
             }
             catch (PortalException pex)
@@ -558,7 +558,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error opening '{path}': {ex.Message}", ex);
+                throw new McpException($"Unexpected error opening '{projectpath}': {ex.Message}", ex);
             }
         }
 
