@@ -118,10 +118,10 @@ than a `PortalErrorCode`:
 
 ## Bulk Export Reporting
 
-- Responses for bulk operations include both exported items and a list of inconsistent (skipped) items:
-  - `ResponseExportXmlBlocks`: `Items` (exported), `Inconsistent` (skipped)
-  - `ResponseExportXmlTypes`: `Items` (exported), `Inconsistent` (skipped)
-- `Meta` contains counts for totals, exported, and inconsistent.
+- Responses for bulk operations (`ResponseGeneratedSources`, `ResponseImportedProgram`) include the written items and the lists of skipped objects and failures:
+  - `Items` (written), `Skipped` (left out on purpose, with the reason), `Failures` (with the error), `Notes`
+  - `Report`: the complete result as markdown tables (counts, every skipped object, every failure, notes). The server instructions tell the model to show it to the user unchanged; without it a model condenses the lists into a short summary.
+- `Meta` contains the counts for written, skipped and failed objects.
 
 ## Formatting
 

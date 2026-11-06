@@ -376,9 +376,12 @@ namespace TiaMcpServer.ModelContextProtocol
                 Deleted = result.Deleted,
                 Changed = result.Changed,
                 Rounds = result.Rounds,
+                Report = ReportFormatter.Compose(
+                    ReportFormatter.Imported(result.Items.Count, result.Planned.Count, result.Rounds, result.Failures, result.Ignored, result.Deleted),
+                    result.DryRun ? PlannedTable(result) : null),
                 Message = result.DryRun
-                    ? $"DRY RUN, nothing was imported: {result.Planned.Count} file(s) from '{path}' would be imported, {overwrites} of them overwrite existing objects, {result.Ignored.Count} ignored, {result.Deleted.Count} deleted. Show the 'Table' to the user as a table, unchanged. Call again with dryRun=false only after the user agrees; the server then asks the user to confirm by ticking the '{ImportConfirmation}' checkbox in a dialog of the client."
-                    : $"{result.Items.Count} object(s) imported from '{path}' in {result.Rounds} round(s), {result.Failures.Count} failed. The change is only in memory. Do not save on your own: ask the user, and call '{(Portal.IsLocalSession ? "SaveSession" : "SaveProject")}' only after the user explicitly says 'save project'.",
+                    ? $"DRY RUN, nothing was imported: {result.Planned.Count} file(s) from '{path}' would be imported, {overwrites} of them overwrite existing objects, {result.Ignored.Count} ignored, {result.Deleted.Count} deleted. Show the 'Report' to the user as tables, unchanged. Call again with dryRun=false only after the user agrees; the server then asks the user to confirm by ticking the '{ImportConfirmation}' checkbox in a dialog of the client."
+                    : $"{result.Items.Count} object(s) imported from '{path}' in {result.Rounds} round(s), {result.Failures.Count} failed. Show the 'Report' to the user as tables, unchanged. The change is only in memory. Do not save on your own: ask the user, and call '{(Portal.IsLocalSession ? "SaveSession" : "SaveProject")}' only after the user explicitly says 'save project'.",
                 Meta = new JsonObject
                 {
                     ["timestamp"] = DateTime.Now,

@@ -564,6 +564,7 @@ These are not gaps in this server - the underlying API offers no operation for t
 - 27 read tools and all 37 write tools publish an `outputSchema` and return `structuredContent`.
 - Long-running export/import tools report progress via `notifications/progress` when the client supplies a `progressToken`.
 - Tool failures are returned as tool results with `isError: true` (not JSON-RPC errors), so the model can read the message and retry.
+- Pull, push, hardware and compile tools return a `Report`: the complete result as markdown tables (counts, every skipped object, every failure, every message). The server instructions ask the client to show it to the user verbatim instead of summarizing it.
 
 ## Transports
 

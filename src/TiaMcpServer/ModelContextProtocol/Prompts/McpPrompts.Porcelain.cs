@@ -50,7 +50,7 @@ Use the TiaConnect tool with these parameters:
         {
             return $@"Pull the whole program of one PLC software out of TIA Portal into the export folder, like 'git pull' updates a working tree. This is ExportPlcProgram under a shorter name.
 
-What you get: every block and PLC data type, each in the format of <exportPath>/tia.json, below <exportPath>/<softwarePath>/Program blocks/... and <exportPath>/<softwarePath>/PLC data types/.... Existing files of the same name are overwritten. If the response has a note about a created tia.json, pass it on to the user. Suggest 'git status' and 'git diff' in the export folder to review the result.
+What you get: every block and PLC data type, each in the format of <exportPath>/tia.json, below <exportPath>/<softwarePath>/Program blocks/... and <exportPath>/<softwarePath>/PLC data types/.... Existing files of the same name are overwritten. First show the 'Report' of the response to the user as tables, unchanged: the counts, every skipped object and every failure, with no row left out. If the response has a note about a created tia.json, pass it on to the user. Suggest 'git status' and 'git diff' in the export folder to review the result.
 
 To pull only some objects use TiaPullBlocks, TiaPullTypes or TiaPullTagTables.
 
@@ -236,7 +236,7 @@ Use the TiaPush tool with these parameters:
         {
             return $@"Show what TiaPush would put into TIA Portal, without importing anything, like 'tia push preview'. This is ImportPlcProgramChanges with dryRun true under a shorter name (requires the server started with '--allow-write', git on PATH and an export folder inside a git repository).
 
-'Table' is a markdown table of the affected files with the columns Git, Type and File (files git reports as deleted have the status D and cannot be imported); 'Planned' has the details per file, 'Ignored' lists skipped files. Show the 'Table' to the user as a table, unchanged. Name the objects that would be overwritten, and call TiaPush only when the user asks for it.
+'Table' is a markdown table of the affected files with the columns Git, Type and File (files git reports as deleted have the status D and cannot be imported); 'Planned' has the details per file, 'Ignored' lists skipped files. Show the 'Report' to the user as tables, unchanged ('Table' is its list of planned files). Name the objects that would be overwritten, and call TiaPush only when the user asks for it.
 
 Common parameter values:
 - softwarePath: e.g. 'PLC_1' for hardware PLC

@@ -52,7 +52,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "CompilePlcSoftware", Title = "Compile PLC software", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile the whole PLC software and report every compiler message with the object it belongs to, so errors can be fixed without re-reading the whole PLC. Warnings are reported as a successful compile with detail; errors set meta.success to false and the call still returns every message. To compile a single block use 'CompileCodeBlock'")]
+         Description("Compile the whole PLC software and report every compiler message with the object it belongs to, so errors can be fixed without re-reading the whole PLC. Warnings are reported as a successful compile with detail; errors fail the call, and its text holds the complete report with every message. Show the 'Report' to the user as tables, unchanged. To compile a single block use 'CompileCodeBlock'")]
         public static ResponseCompile CompilePlcSoftware(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("password: the password to access adminsitration, default: no password")] string password = "")
@@ -77,7 +77,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "CompileCodeBlock", Title = "Compile code block", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile a single code block (OB, FC, FB or DB) and report its compiler messages with the object each belongs to. Warnings are reported as a successful compile with detail; errors set meta.success to false and the call still returns every message. To compile the whole PLC use 'CompilePlcSoftware'")]
+         Description("Compile a single code block (OB, FC, FB or DB) and report its compiler messages with the object each belongs to. Warnings are reported as a successful compile with detail; errors fail the call, and its text holds the complete report with every message. Show the 'Report' to the user as tables, unchanged. To compile the whole PLC use 'CompilePlcSoftware'")]
         public static ResponseCompile CompileCodeBlock(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("blockPath: defines the path in the project structure to the block, e.g. '0_OBs/Main_1'")] string blockPath,
@@ -110,26 +110,22 @@ namespace TiaMcpServer.ModelContextProtocol
 
             if (failed)
             {
-                // The message text is what a client surfaces, so name the first few offenders
-                // rather than making the caller re-query to find out what broke.
-                var offenders = messages
-                    .Where(m => string.Equals(m.State, nameof(CompilerResultState.Error), StringComparison.OrdinalIgnoreCase))
-                    .Take(5)
-                    .Select(m => $"{m.Path}: {m.Description}");
-
+                // The message text is what a client surfaces, so it carries the whole table:
+                // every message, not just the first few, so nobody has to re-query.
                 throw new McpException(
-                    $"Compiling '{target}' failed with {result.ErrorCount} error(s). " +
-                    string.Join(" | ", offenders));
+                    $"Compiling '{target}' failed with {result.ErrorCount} error(s). Show this report to the user as tables, unchanged.{Environment.NewLine}{Environment.NewLine}" +
+                    ReportFormatter.Compile(target, state, result.ErrorCount, result.WarningCount, messages));
             }
 
             return new ResponseCompile
             {
                 Message = $"Compiling '{target}' finished with state '{state}': " +
-                          $"{result.ErrorCount} error(s), {result.WarningCount} warning(s)",
+                          $"{result.ErrorCount} error(s), {result.WarningCount} warning(s). Show the 'Report' to the user as tables, unchanged.",
                 State = state,
                 ErrorCount = result.ErrorCount,
                 WarningCount = result.WarningCount,
                 Messages = messages,
+                Report = ReportFormatter.Compile(target, state, result.ErrorCount, result.WarningCount, messages),
                 Meta = new JsonObject
                 {
                     ["timestamp"] = DateTime.Now,

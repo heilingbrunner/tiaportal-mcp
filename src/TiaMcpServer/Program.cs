@@ -149,7 +149,9 @@ namespace TiaMcpServer
                             "discover the path strings that the other tools expect. Export and import tools operate on " +
                             "the local file system of the machine running this server. Every request is independent: " +
                             "when more than one TIA Portal instance is running, call 'GetPortals' and pass the chosen " +
-                            "'portalId' to 'Connect' and to every other tool." +
+                            "'portalId' to 'Connect' and to every other tool. When a response has a 'Report' field " +
+                            "(pull, push, hardware and compile tools), show it to the user verbatim as markdown tables, " +
+                            "in full, before any comment: never shorten it, merge rows or leave rows out." +
                             (ToolDefaults.Forced.Count > 0
                                 ? " The server configuration fixes " + string.Join(", ", ToolDefaults.Forced.OrderBy(k => k, StringComparer.Ordinal)) +
                                   ": they are not arguments of the tools, are never asked for and cannot be overridden, so do not invent other folders. 'GetState' shows the values."

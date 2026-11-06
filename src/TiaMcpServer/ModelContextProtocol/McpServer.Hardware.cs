@@ -121,7 +121,7 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 Message = result.DryRun
                     ? $"DRY RUN, nothing was imported: the hardware file '{result.FilePath}' of '{result.DeviceName}' exists and would be imported."
-                    : $"Hardware of '{result.DeviceName}' {verb} ('{result.FilePath}'){warnings}.",
+                    : $"Hardware of '{result.DeviceName}' {verb} ('{result.FilePath}'){warnings}. Show the 'Report' to the user as tables, unchanged.",
                 Name = result.DeviceName,
                 Path = result.FilePath,
                 DryRun = result.DryRun,
@@ -129,6 +129,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 ErrorCount = result.ErrorCount,
                 WarningCount = result.WarningCount,
                 Messages = result.Messages.ToList(),
+                Report = ReportFormatter.Hardware(result.DeviceName, result.State, result.ErrorCount, result.WarningCount, result.Messages),
                 Meta = Ok(new JsonObject { ["dryRun"] = result.DryRun })
             };
         }

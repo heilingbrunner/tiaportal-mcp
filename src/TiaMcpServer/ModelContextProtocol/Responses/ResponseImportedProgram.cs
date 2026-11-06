@@ -34,5 +34,8 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>How many passes over the pending files were made; more than 1 means some objects waited for others.</summary>
         public int? Rounds { get; set; }
+
+        /// <summary>The complete result as markdown tables (counts, every failed, ignored and deleted file); show it to the user unchanged.</summary>
+        public string? Report { get; set; }
     }
 }

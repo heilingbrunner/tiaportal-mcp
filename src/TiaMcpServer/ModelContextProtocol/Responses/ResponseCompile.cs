@@ -17,5 +17,8 @@ namespace TiaMcpServer.ModelContextProtocol
         /// whole PLC.
         /// </summary>
         public IEnumerable<CompileMessage>? Messages { get; set; }
+
+        /// <summary>The complete result as markdown tables (counts, every compiler message); show it to the user unchanged.</summary>
+        public string? Report { get; set; }
     }
 }

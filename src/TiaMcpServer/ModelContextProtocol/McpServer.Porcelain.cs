@@ -228,7 +228,7 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "TiaPull", Title = "Tia pull", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use this when the user says 'tia pull': get the whole PLC program (every block and PLC data type) out of TIA Portal into the export folder, the way 'git pull' updates the working tree. It is 'ExportPlcProgram' under a shorter name; see there for the formats ('tia.json'), 'Skipped' and 'Failures'. To pull only some objects use 'TiaPullBlocks', 'TiaPullTypes' or 'TiaPullTagTables'. Existing files of the same name are overwritten; tell the user to review the result with 'git status' and 'git diff' in the export folder")]
+         Description("Use this when the user says 'tia pull': get the whole PLC program (every block and PLC data type) out of TIA Portal into the export folder, the way 'git pull' updates the working tree. It is 'ExportPlcProgram' under a shorter name; see there for the formats ('tia.json'), 'Skipped' and 'Failures'. To pull only some objects use 'TiaPullBlocks', 'TiaPullTypes' or 'TiaPullTagTables'. Existing files of the same name are overwritten; first show the 'Report' to the user as tables, unchanged (the counts, every skipped object, every failure), then tell the user to review the result with 'git status' and 'git diff' in the export folder")]
         public static ResponseGeneratedSources TiaPull(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("exportPath: directory on this machine that receives the tree; existing files of the same name are overwritten; files are written below <exportPath>/<softwarePath>/")] string exportPath)
@@ -354,7 +354,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "TiaPushPreview", Title = "Tia push preview", Destructive = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use this when the user says 'tia push preview': show what 'TiaPush' would put into TIA Portal, without importing anything: 'Table' is a markdown table of the affected files with the columns Git, Type and File (files git reports as deleted have the status D and cannot be imported), 'Planned' has the details per file, 'Ignored' lists the files that are skipped. It is 'ImportPlcProgramChanges' with dryRun=true. Show the 'Table' to the user as a table, unchanged; call 'TiaPush' only when the user asks for it")]
+         Description("Use this when the user says 'tia push preview': show what 'TiaPush' would put into TIA Portal, without importing anything: 'Table' is a markdown table of the affected files with the columns Git, Type and File (files git reports as deleted have the status D and cannot be imported), 'Planned' has the details per file, 'Ignored' lists the files that are skipped. It is 'ImportPlcProgramChanges' with dryRun=true. Show the 'Report' to the user as tables, unchanged ('Table' is its list of planned files); call 'TiaPush' only when the user asks for it")]
         public static Task<ResponseImportedProgram> TiaPushPreview(
             SdkMcpServer server,
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,

@@ -166,7 +166,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 return new ResponseGeneratedSources
                 {
                     Message = $"{what} written to '{exportPath}': {result.Files.Count} file(s), " +
-                              $"{result.Skipped.Count} skipped, {result.Failures.Count} failed" +
+                              $"{result.Skipped.Count} skipped, {result.Failures.Count} failed. Show the 'Report' to the user as tables, unchanged." +
                               (result.Notes.Count > 0
                                   ? " " + result.Notes[0] + (result.Notes.Count > 1 ? $" ({result.Notes.Count - 1} more in Notes)" : string.Empty)
                                   : string.Empty),
@@ -176,6 +176,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     Skipped = result.Skipped,
                     Failures = result.Failures,
                     Notes = result.Notes.Count > 0 ? result.Notes : null,
+                    Report = ReportFormatter.GeneratedSources(result.Directory, result.Files.Count, result.Written, result.Skipped, result.Failures, result.Notes),
                     Meta = Ok(new JsonObject
                     {
                         ["totalWritten"] = result.Files.Count,

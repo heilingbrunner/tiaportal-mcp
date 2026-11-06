@@ -19,5 +19,8 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>Things to check or know after the run, e.g. a created settings file. Null when there are none.</summary>
         public IEnumerable<string>? Notes { get; set; }
+
+        /// <summary>The complete result as markdown tables (counts, every skipped object, every failure, notes); show it to the user unchanged.</summary>
+        public string? Report { get; set; }
     }
 }
