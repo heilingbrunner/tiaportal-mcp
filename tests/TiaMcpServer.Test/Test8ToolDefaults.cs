@@ -419,7 +419,7 @@ namespace TiaMcpServer.Test
 
         private static readonly string[] PresetKeys =
         {
-            ToolDefaults.Path, ToolDefaults.SoftwarePath, ToolDefaults.ExportPath, ToolDefaults.ImportPath,
+            ToolDefaults.ProjectPath, ToolDefaults.SoftwarePath, ToolDefaults.ExportPath, ToolDefaults.ImportPath,
             ToolDefaults.KeepStructure, ToolDefaults.WithDependencies
         };
 

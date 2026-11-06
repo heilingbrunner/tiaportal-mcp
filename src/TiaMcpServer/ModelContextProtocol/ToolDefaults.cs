@@ -26,7 +26,7 @@ namespace TiaMcpServer.ModelContextProtocol
     /// </summary>
     public static class ToolDefaults
     {
-        public const string Path = "path";
+        public const string ProjectPath = "projectPath";
         public const string SoftwarePath = "softwarePath";
         public const string ExportPath = "exportPath";
         public const string ImportPath = "importPath";
@@ -55,7 +55,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
             if (options.ProjectPath != null)
             {
-                presets[Path] = JsonSerializer.SerializeToElement(options.ProjectPath);
+                presets[ProjectPath] = JsonSerializer.SerializeToElement(options.ProjectPath);
             }
 
             if (options.SoftwarePath != null)
