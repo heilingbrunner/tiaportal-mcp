@@ -28,11 +28,11 @@ A MCP server which connects to Siemens TIA Portal.
 | `--export-path <path>`    | Preset for the `exportPath` tool argument. See below.                                             |
 | `--logging <1\|2\|3>`     | `1` stderr, `2` debug output, `3` Windows event log. Omit for no logging.                         |
 | `--doctor`                | Print the environment report and exit without starting the MCP server.                            |
-| `--keep-structure`        | Flag: no tool uses `keepStructure` any more; accepted so existing configurations keep working.    |
-| `--preserve-path`         | Deprecated name of `--keep-structure`, still accepted; `--doctor` shows when it is used.          |
-| `--with-dependencies`     | Flag: no tool uses `withDependencies` any more; accepted so existing configurations keep working. |
-| `--force-presets`         | Deprecated, no effect: every preset is binding now. `--doctor` shows when it is used.             |
+| `--keep-structure`        | Flag: preset for the `keepStructure` argument of `TiaInit` (written to `tia.json`).               |
+| `--with-dependencies`     | Flag: preset for the `withDependencies` argument of `GetSourceBlock` and `GetSourceType`.         |
 | `--allow-write`           | Register the project-mutating tools. Omitted by default; see below.                               |
+| `--preserve-path`         | Deprecated name of `--keep-structure`, still accepted; `--doctor` shows when it is used.          |
+| `--force-presets`         | Deprecated, no effect: every preset is binding now. `--doctor` shows when it is used.             |
 
 ## Presetting tool arguments
 
@@ -44,6 +44,19 @@ of the MCP server entry in your client's JSON configuration and the model no lon
 "args": ["--project-path", "D:\\Projects\\Plant\\Plant.ap21", "--software-path", "PLC_1", "--export-path", "D:\\Export"]
 ```
 
+- Which option becomes which argument (tools and prompts alike; a test checks this for every tool and prompt):
+
+  | Option               | Argument          | Used by                                                                                  |
+  | -------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
+  | `--project-path`     | `path`            | `OpenProject`, `OpenTiaProject`, `TiaConnect`, `TiaInit`                                 |
+  | `--software-path`    | `softwarePath`    | every tool and prompt with a PLC software path                                           |
+  | `--export-path`      | `exportPath`      | every export / pull tool, `GetExportFormats`, `TiaPush*`, `TiaInit`                      |
+  | `--export-path`      | `importPath`      | `OverwritePlcProgram`, `ImportHardware`, `PreviewImport`, `ImportWatchTable`              |
+  | `--keep-structure`   | `keepStructure`   | `TiaInit`                                                                                |
+  | `--with-dependencies`| `withDependencies`| `GetSourceBlock`, `GetSourceType`                                                         |
+
+  `--tia-major-version`, `--logging`, `--doctor` and `--allow-write` configure the server itself and are not tool
+  arguments; `--preserve-path` and `--force-presets` are deprecated.
 - **Every preset is binding.** A preset argument is removed from `tools/list` and from the prompt arguments, and a
   call that still sends it is overwritten with the preset. The model can neither forget nor change what your
   configuration sets, so it cannot write into another folder (for example an invented staging folder next to the
@@ -152,6 +165,9 @@ and it does not exist, the server creates it with the defaults TIA Portal offers
 
 ```json
 {
+  "args": {
+    ...
+  },
   "version-control-interface": {
     "code-blocks-LAD": "SIMATIC SD(.s7dcl, .s7res)",
     "code-blocks-FBD": "SIMATIC SD(.s7dcl, .s7res)",

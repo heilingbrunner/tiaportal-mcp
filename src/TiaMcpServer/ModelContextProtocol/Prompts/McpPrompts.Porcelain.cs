@@ -31,18 +31,18 @@ Use the TiaInit tool with these parameters:
         }
 
         [McpServerPrompt(Name = "TiaConnect"), Description("Connect to TIA Portal and open a project or session")]
-        public static string TiaConnect(string projectPath, string portalId = "")
+        public static string TiaConnect(string path, string portalId = "")
         {
             return $@"Connect to TIA Portal and open a project or local session in one step, like 'tia connect <project>'. This is OpenTiaProject under a shorter name and the first step before TiaPull or TiaPush.
 
 What you get: the portalId and the device and PLC software paths. Use a PLC software path as the softwarePath of TiaPull and TiaPush. The project or session that is open in that instance is closed first, unless it is the one asked for.
 
 Common parameter values:
-- projectPath: full path of the .apXX project or .alsXX session file on the machine running this server
+- path: full path of the .apXX project or .alsXX session file on the machine running this server
 - portalId: process id of the TIA Portal instance to open it in (see GetPortals); leave empty when at most one instance is running
 
 Use the TiaConnect tool with these parameters:
-- path: {projectPath}{OptionalParameter("portalId", portalId)}";
+- path: {path}{OptionalParameter("portalId", portalId)}";
         }
 
         [McpServerPrompt(Name = "TiaPull"), Description("Pull the whole PLC program from TIA Portal into the export folder")]

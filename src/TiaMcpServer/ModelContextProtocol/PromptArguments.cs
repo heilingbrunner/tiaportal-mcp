@@ -79,6 +79,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     var filled = parameters.Arguments ?? new Dictionary<string, JsonElement>();
 
+                    RenameLegacyArguments(filled, names);
                     FillPresets(filled, names, ToolDefaults.Presets, ToolDefaults.Forced);
                     parameters.Arguments = filled;
                 }
@@ -148,7 +149,26 @@ namespace TiaMcpServer.ModelContextProtocol
                 : declaredNames.Where(n => !ToolDefaults.Forced.Contains(n)).ToList();
         }
 
-        private const string PresetHint = "Optional: the server has a preset that is used when omitted or empty";
+        /// <summary>
+        /// The prompts OpenProject, OpenTiaProject and TiaConnect used to call their argument
+        /// 'projectPath'. It is 'path' now, like the tool parameter and the preset, so the preset fills
+        /// it. A client that still sends 'projectPath' by name keeps working: the value moves to 'path'.
+        /// </summary>
+        public static void RenameLegacyArguments(IDictionary<string, JsonElement> arguments, IEnumerable<string> declaredNames)
+        {
+            if (arguments.TryGetValue(LegacyProjectPath, out var legacy)
+                && declaredNames.Contains("path")
+                && !declaredNames.Contains(LegacyProjectPath)
+                && (!arguments.TryGetValue("path", out var current) || ToolDefaults.IsOmitted(current)))
+            {
+                arguments["path"] = legacy;
+                arguments.Remove(LegacyProjectPath);
+            }
+        }
+
+        private const string LegacyProjectPath = "projectPath";
+
+        private const string PresetHint ="Optional: the server has a preset that is used when omitted or empty";
 
         /// <summary>
         /// Adds the preset (as text, like every prompt argument) for each declared argument the

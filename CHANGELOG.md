@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- __`tia connect` did not use `--project-path`__: the prompts `TiaConnect`, `OpenTiaProject` and `OpenProject` named
+  their argument `projectPath`, but the preset and the tool parameter are `path`, and presets are matched by argument
+  name. The prompt therefore went out with an empty `path:`, and the agent only attached to TIA Portal with `Connect`
+  without opening the project. The prompt argument is now `path` (a client that still sends `projectPath` by name is
+  mapped to `path`). When a project is configured, the server instructions also tell the model to call `TiaConnect`
+  (attach and open in one step) for "tia connect" instead of `Connect` and `OpenProject` separately.
+
+## [0.4.0] - 2026-11-06
+
 ### Changed
 
 - __Every preset of the command line is binding__ (breaking): `--project-path`, `--software-path`, `--export-path`

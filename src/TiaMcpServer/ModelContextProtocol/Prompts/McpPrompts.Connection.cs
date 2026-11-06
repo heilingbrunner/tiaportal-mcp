@@ -58,15 +58,15 @@ Use the GetPortals tool to choose the portalId when more than one instance is ru
         }
 
         [McpServerPrompt(Name = "OpenProject"), Description("Open a local project (.apXX) or session (.alsXX) in TIA Portal")]
-        public static string OpenProject(string projectPath)
+        public static string OpenProject(string path)
         {
             return $@"Open the TIA Portal project.
 
 Common parameter values:
-- projectPath: the full path to the project file (.ap19, .ap20, .ap21, etc.) or local session file (.als19, .als20, .als21, etc.).
+- path: the full path to the project file (.ap19, .ap20, .ap21, etc.) or local session file (.als19, .als20, .als21, etc.).
 
 Use the OpenProject tool with this parameter:
-- path: {projectPath}";
+- path: {path}";
         }
 
         [McpServerPrompt(Name = "CloseProject"), Description("Close the current project or session")]
@@ -164,16 +164,16 @@ Use the SaveAsProject tool with these parameters:
         }
 
         [McpServerPrompt(Name = "OpenTiaProject"), Description("Connect and open a project in one step; returns the software paths")]
-        public static string OpenTiaProject(string projectPath, string portalId = "")
+        public static string OpenTiaProject(string path, string portalId = "")
         {
             return $@"Connect to TIA Portal if not already connected, open the given project or session, and return the device and PLC software paths the other tools need. Replaces the Connect then OpenProject then GetProjectTree sequence.
 
 Common parameter values:
-- projectPath: full path of the .apXX project or .alsXX session file on the machine running this server
+- path: full path of the .apXX project or .alsXX session file on the machine running this server
 - portalId: process id of the TIA Portal instance to open it in (see GetPortals); leave empty when at most one instance is running
 
 Use the OpenTiaProject tool with these parameters:
-- path: {projectPath}{OptionalParameter("portalId", portalId)}";
+- path: {path}{OptionalParameter("portalId", portalId)}";
         }
 
         [McpServerPrompt(Name = "PreviewImport"), Description("Preview what importing a folder would create or overwrite")]

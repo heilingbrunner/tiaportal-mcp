@@ -392,6 +392,129 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        public void Test_824_RenameLegacyArguments_MovesProjectPathToPathOnlyWhenPathIsDeclaredAndEmpty()
+        {
+            // Arrange
+            var declaredNew = new[] { "path", "portalId" };
+            var declaredOld = new[] { "projectPath" };
+            var legacy = new Dictionary<string, JsonElement> { ["projectPath"] = JsonSerializer.SerializeToElement(@"D:\Plant.ap21") };
+            var both = new Dictionary<string, JsonElement>
+            {
+                ["projectPath"] = JsonSerializer.SerializeToElement(@"D:\Old.ap21"),
+                ["path"] = JsonSerializer.SerializeToElement(@"D:\New.ap21")
+            };
+            var untouched = new Dictionary<string, JsonElement> { ["projectPath"] = JsonSerializer.SerializeToElement("x") };
+
+            // Act
+            PromptArguments.RenameLegacyArguments(legacy, declaredNew);
+            PromptArguments.RenameLegacyArguments(both, declaredNew);
+            PromptArguments.RenameLegacyArguments(untouched, declaredOld);
+
+            // Assert
+            Assert.AreEqual(@"D:\Plant.ap21", legacy["path"].GetString());
+            Assert.IsFalse(legacy.ContainsKey("projectPath"));
+            Assert.AreEqual(@"D:\New.ap21", both["path"].GetString(), "a given 'path' wins");
+            Assert.IsTrue(untouched.ContainsKey("projectPath"), "a prompt that still declares projectPath is left alone");
+        }
+
+        private static readonly string[] PresetKeys =
+        {
+            ToolDefaults.Path, ToolDefaults.SoftwarePath, ToolDefaults.ExportPath, ToolDefaults.ImportPath,
+            ToolDefaults.KeepStructure, ToolDefaults.WithDependencies
+        };
+
+        [TestMethod]
+        public void Test_825_EveryCliOption_ReachesEveryToolParameterOfTheSameName()
+        {
+            // Arrange: every option of the server configuration that maps to a tool argument
+            ToolDefaults.Configure(CliOptions.ParseArgs(new[]
+            {
+                "--project-path", @"D:\Plant\Plant.ap21", "--software-path", "PLC_1", "--export-path", @"D:\Export",
+                "--keep-structure", "--with-dependencies"
+            }));
+            var tools = Program.BuildTools(allowWrite: true).ToDictionary(t => t.ProtocolTool.Name);
+            var covered = new HashSet<string>();
+            var problems = new List<string>();
+
+            // Act
+            foreach (var method in typeof(McpServer).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+            {
+                var attribute = (global::ModelContextProtocol.Server.McpServerToolAttribute?)System.Attribute.GetCustomAttribute(
+                    method, typeof(global::ModelContextProtocol.Server.McpServerToolAttribute));
+
+                if (attribute == null || !tools.TryGetValue(attribute.Name ?? method.Name, out var tool))
+                {
+                    continue;
+                }
+
+                foreach (var parameter in method.GetParameters().Where(p => PresetKeys.Contains(p.Name!)))
+                {
+                    covered.Add(parameter.Name!);
+
+                    if (PropertiesOf(tool).Contains(parameter.Name!))
+                    {
+                        problems.Add($"{tool.ProtocolTool.Name}: '{parameter.Name}' is still offered although the configuration sets it");
+                    }
+                }
+            }
+
+            // Assert
+            Assert.AreEqual(0, problems.Count, string.Join(System.Environment.NewLine, problems));
+            CollectionAssert.AreEquivalent(PresetKeys, covered.ToList(), "every preset must reach at least one tool, and every tool parameter that carries one");
+        }
+
+        [TestMethod]
+        public void Test_826_EveryPrompt_PassesAConfiguredValueUnderADeclaredArgumentOfTheSameName()
+        {
+            // Arrange: presets are filled into a prompt by the name of its declared arguments
+            var problems = new List<string>();
+
+            foreach (var method in typeof(McpPrompts).GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+            {
+                if (System.Attribute.GetCustomAttribute(method, typeof(global::ModelContextProtocol.Server.McpServerPromptAttribute)) == null)
+                {
+                    continue;
+                }
+
+                var declared = method.GetParameters().Select(p => p.Name!).ToList();
+                var body = (string)method.Invoke(null, declared.Select(n => (object)("v_" + n)).ToArray())!;
+                var lines = body.Replace("\r", string.Empty).Split('\n');
+                var use = System.Array.FindLastIndex(lines, l => l.StartsWith("Use the ", System.StringComparison.Ordinal));
+
+                if (use < 0)
+                {
+                    continue;
+                }
+
+                // Act: the 'name: value' lines under 'Use the <tool> tool' are the arguments the model passes on
+                foreach (var line in lines.Skip(use + 1))
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(line, @"^- (\w+): (.*)$");
+
+                    if (!match.Success || !PresetKeys.Contains(match.Groups[1].Value))
+                    {
+                        continue;
+                    }
+
+                    var name = match.Groups[1].Value;
+                    var isFlag = name == ToolDefaults.KeepStructure || name == ToolDefaults.WithDependencies;
+
+                    // Assert
+                    if (!declared.Contains(name))
+                    {
+                        problems.Add($"{method.Name}: passes '{name}' but declares no argument of that name, so the preset cannot fill it");
+                    }
+                    else if (!isFlag && match.Groups[2].Value != "v_" + name)
+                    {
+                        problems.Add($"{method.Name}: '{name}' is filled from another argument ('{match.Groups[2].Value}')");
+                    }
+                }
+            }
+
+            Assert.AreEqual(0, problems.Count, string.Join(System.Environment.NewLine, problems));
+        }
+
+        [TestMethod]
         public void Test_812_Apply_WithPresets_HidesThemFromTheSchema()
         {
             // Arrange

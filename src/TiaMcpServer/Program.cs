@@ -154,6 +154,10 @@ namespace TiaMcpServer
                                 ? " The server configuration fixes " + string.Join(", ", ToolDefaults.Forced.OrderBy(k => k, StringComparer.Ordinal)) +
                                   ": they are not arguments of the tools, are never asked for and cannot be overridden, so do not invent other folders. 'GetState' shows the values."
                                 : string.Empty) +
+                            (ToolDefaults.Presets.ContainsKey(ToolDefaults.Path)
+                                ? " The project to work on is configured: to connect, for example when the user says 'tia connect', call 'TiaConnect'. " +
+                                  "It attaches to TIA Portal and opens that project in one step, so do not call 'Connect' and 'OpenProject' separately."
+                                : string.Empty) +
                             (WritePolicy.AllowWrite
                                 ? " Write mode is enabled: tools that create, rename or delete project objects are " +
                                   "available. Their changes stay in memory until 'SaveProject' (or 'SaveSession')."

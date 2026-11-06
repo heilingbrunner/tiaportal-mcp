@@ -268,6 +268,49 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        [DataRow("OpenProject")]
+        [DataRow("OpenTiaProject")]
+        [DataRow("TiaConnect")]
+        public void Test_1150_ProjectPrompts_DeclareTheArgumentAsPathSoThePresetFillsIt(string prompt)
+        {
+            // Arrange
+            var method = typeof(McpPrompts).GetMethod(prompt, BindingFlags.Public | BindingFlags.Static)
+                ?? throw new AssertFailedException($"'{prompt}' is not a prompt");
+
+            // Act
+            var names = method.GetParameters().Select(p => p.Name).ToList();
+
+            // Assert: presets match by argument name, and the tool parameter and the preset are 'path'
+            CollectionAssert.Contains(names, "path", prompt);
+            CollectionAssert.DoesNotContain(names, "projectPath", prompt);
+        }
+
+        [TestMethod]
+        public void Test_1151_TiaConnectPrompt_GetsTheProjectFromThePreset()
+        {
+            // Arrange
+            ToolDefaults.Configure(new CliOptions { ProjectPath = @"D:\Plant\Plant.als21" });
+
+            try
+            {
+                var declared = typeof(McpPrompts).GetMethod("TiaConnect")!.GetParameters().Select(p => p.Name!).ToList();
+                var arguments = new Dictionary<string, System.Text.Json.JsonElement>();
+
+                // Act: what the prompt filter does for 'tia connect' typed without an argument
+                PromptArguments.FillPresets(arguments, declared, ToolDefaults.Presets, ToolDefaults.Forced);
+                var body = McpPrompts.TiaConnect(arguments["path"].GetString()!);
+
+                // Assert
+                StringAssert.Contains(body, "Use the TiaConnect tool");
+                StringAssert.EndsWith(body, @"- path: D:\Plant\Plant.als21", "the configured project reaches the prompt");
+            }
+            finally
+            {
+                ToolDefaults.Configure(new CliOptions());
+            }
+        }
+
+        [TestMethod]
         public void Test_1130_TiaInit_IsRegisteredWithoutAllowWriteAndIsNotAWriteTool()
         {
             // Arrange / Act
