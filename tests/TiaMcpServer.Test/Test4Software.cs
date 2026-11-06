@@ -240,7 +240,7 @@ namespace TiaMcpServer.Test
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "0_OBs/Main_1", true)]
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "0_OBs/Main_1", false)]
         //[DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "Common/CarrierRegister/GLOBAL_POSITIONING", true)]
-        public void Test_415_ExportXmlBlock(string projectPath, string softwarePath, string exportPath, string blockPath, bool preservePath)
+        public void Test_415_ExportXmlBlock(string projectPath, string softwarePath, string exportPath, string blockPath, bool keepStructure)
         {
             if (_portal == null)
             {
@@ -249,7 +249,7 @@ namespace TiaMcpServer.Test
 
             bool success = Common.OpenProject(_portal, projectPath);
 
-            var result = _portal.ExportXmlBlock(softwarePath, blockPath, exportPath, preservePath);
+            var result = _portal.ExportXmlBlock(softwarePath, blockPath, exportPath, keepStructure);
 
             if (result != null)
             {
@@ -272,7 +272,7 @@ namespace TiaMcpServer.Test
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "Common/CarrierRegister/ML_CarrierRegisterShort", true)]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "Common/CarrierRegister/ML_CarrierRegisterShort", false)]
         //[DataRow(Settings.Session1ProjectPath, Settings.Session1PlcSoftwarePath, Settings.Session1ExportPath, "Common/CarrierRegister/ML_SubstratState")]
-        public void Test_416_ExportXmlType(string projectPath, string softwarePath, string exportPath, string typePath, bool preservePath)
+        public void Test_416_ExportXmlType(string projectPath, string softwarePath, string exportPath, string typePath, bool keepStructure)
         {
             if (_portal == null)
             {
@@ -281,7 +281,7 @@ namespace TiaMcpServer.Test
 
             bool success = Common.OpenProject(_portal, projectPath);
 
-            var result = _portal.ExportXmlType(softwarePath, typePath, exportPath, preservePath);
+            var result = _portal.ExportXmlType(softwarePath, typePath, exportPath, keepStructure);
 
             if (result != null)
             {
@@ -301,13 +301,13 @@ namespace TiaMcpServer.Test
 
         /// <summary>
         /// ExportTagTable writes one tag table as XML: '&lt;exportPath&gt;/&lt;table&gt;.xml', or with
-        /// preservePath below the system group and the table's groups. Exports the first tag table the
+        /// keepStructure below the system group and the table's groups. Exports the first tag table the
         /// PLC has and checks the file, so no table name has to be hard-coded.
         /// </summary>
         [TestMethod]
         //[DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, false)]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, true)]
-        public void Test_419_ExportTagTable(string projectPath, string softwarePath, string exportPath, bool preservePath)
+        public void Test_419_ExportTagTable(string projectPath, string softwarePath, string exportPath, bool keepStructure)
         {
             if (_portal == null)
             {
@@ -329,7 +329,7 @@ namespace TiaMcpServer.Test
                 }
 
                 var tagTablePath = _portal.GetTagTablePath(candidate!);
-                var result = _portal.ExportTagTable(softwarePath, tagTablePath, exportPath, preservePath);
+                var result = _portal.ExportTagTable(softwarePath, tagTablePath, exportPath, keepStructure);
 
                 Assert.IsNotNull(result, "No tag table was returned");
                 Assert.AreEqual(candidate!.Name, result!.Name, "Name mismatch");
@@ -344,17 +344,17 @@ namespace TiaMcpServer.Test
 
                 var relative = files[0].Substring(softwareRoot.Length).TrimStart('\\', '/');
 
-                if (preservePath)
+                if (keepStructure)
                 {
                     // The system group folder always leads, then the table's groups, then the file.
-                    Assert.IsTrue(relative.Contains("\\") || relative.Contains("/"), "preservePath must write below a group folder");
+                    Assert.IsTrue(relative.Contains("\\") || relative.Contains("/"), "keepStructure must write below a group folder");
                     StringAssert.EndsWith(relative.Replace('\\', '/'), tagTablePath + ".xml", "The folder tree must mirror the table's path");
                 }
                 else
                 {
                     var segments = relative.Split('\\', '/');
 
-                    Assert.AreEqual(2, segments.Length, "Without preservePath the file must sit directly in the system group folder");
+                    Assert.AreEqual(2, segments.Length, "Without keepStructure the file must sit directly in the system group folder");
                     Assert.AreEqual(candidate.Name + ".xml", segments[1], "The file is named after the table");
                 }
             }
@@ -502,7 +502,7 @@ namespace TiaMcpServer.Test
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "0_OBs/Main_1", false)]
         //[DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "1_Tests/DB_Block_1")] // no docs from DB
         //[DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "1_Tests/FC_Block_1")] // no docs from OB/FB/FC with mixed ProgrammingLanguage
-        public void Test_421_ExportBlockAsDocuments(string projectPath, string softwarePath, string exportPath, string blockPath, bool preservePath)
+        public void Test_421_ExportBlockAsDocuments(string projectPath, string softwarePath, string exportPath, string blockPath, bool keepStructure)
         {
             if (_portal == null)
             {
@@ -511,7 +511,7 @@ namespace TiaMcpServer.Test
 
             bool success = Common.OpenProject(_portal, projectPath);
 
-            var result = _portal.ExportAsDocuments(softwarePath, blockPath, exportPath, preservePath);
+            var result = _portal.ExportAsDocuments(softwarePath, blockPath, exportPath, keepStructure);
 
             success &= Common.CloseProject(_portal, projectPath);
 
@@ -526,7 +526,7 @@ namespace TiaMcpServer.Test
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, true)]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, false)]
-        public void Test_423_ExportTypeAsDocuments(string projectPath, string softwarePath, string exportPath, bool preservePath)
+        public void Test_423_ExportTypeAsDocuments(string projectPath, string softwarePath, string exportPath, bool keepStructure)
         {
             if (_portal == null)
             {
@@ -545,7 +545,7 @@ namespace TiaMcpServer.Test
                 }
 
                 var typePath = _portal.GetTypePath(candidate!);
-                var info = _portal.ExportTypeAsDocuments(softwarePath, typePath, exportPath, preservePath);
+                var info = _portal.ExportTypeAsDocuments(softwarePath, typePath, exportPath, keepStructure);
 
                 Console.WriteLine($"Exported '{typePath}' as documents, state '{info.State}':");
 
@@ -557,12 +557,12 @@ namespace TiaMcpServer.Test
 
                 Assert.AreNotEqual(0, info.Files.Count, "The export reported no document files");
 
-                if (preservePath)
+                if (keepStructure)
                 {
                     StringAssert.Contains(
                         info.Directory,
                         "PLC data types",
-                        "preservePath must place documents below the 'PLC data types' system folder");
+                        "keepStructure must place documents below the 'PLC data types' system folder");
                 }
             }
             finally
@@ -1159,13 +1159,13 @@ namespace TiaMcpServer.Test
 
         /// <summary>
         /// ExportSourceBlock writes one block as an external source file in the format the compiler
-        /// reads back; a data block comes out as '.db'. Without preservePath the file lands directly
+        /// reads back; a data block comes out as '.db'. Without keepStructure the file lands directly
         /// in the export folder, with it below the block's group.
         /// </summary>
         [TestMethod]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "1_Tests/DB_Block_1", false)]
         [DataRow(Settings.Project1ProjectPath, Settings.Project1PlcSoftwarePath0, Settings.Project1ExportPath0, "1_Tests/DB_Block_1", true)]
-        public void Test_491_ExportSourceBlock(string projectPath, string softwarePath, string exportPath, string blockPath, bool preservePath)
+        public void Test_491_ExportSourceBlock(string projectPath, string softwarePath, string exportPath, string blockPath, bool keepStructure)
         {
             if (_portal == null)
             {
@@ -1178,7 +1178,7 @@ namespace TiaMcpServer.Test
 
             try
             {
-                var result = _portal.ExportSourceBlock(softwarePath, blockPath, exportPath, preservePath: preservePath);
+                var result = _portal.ExportSourceBlock(softwarePath, blockPath, exportPath, keepStructure: keepStructure);
 
                 Console.WriteLine($"Exported '{result.Path}' as {result.Format} ({result.Language}): {result.File}");
 
@@ -1188,13 +1188,13 @@ namespace TiaMcpServer.Test
                 Assert.AreEqual(".db", Path.GetExtension(result.File), "The file extension must follow the format");
                 Assert.IsTrue(File.Exists(result.File), "The source file does not exist");
 
-                if (preservePath)
+                if (keepStructure)
                 {
-                    StringAssert.Contains(result.File, GroupOf(blockPath), "preservePath must keep the block's group in the folder tree");
+                    StringAssert.Contains(result.File, GroupOf(blockPath), "keepStructure must keep the block's group in the folder tree");
                 }
                 else
                 {
-                    Assert.IsFalse(result.File.Contains(GroupOf(blockPath)), "Without preservePath the file must not sit in a group folder");
+                    Assert.IsFalse(result.File.Contains(GroupOf(blockPath)), "Without keepStructure the file must not sit in a group folder");
                 }
             }
             finally

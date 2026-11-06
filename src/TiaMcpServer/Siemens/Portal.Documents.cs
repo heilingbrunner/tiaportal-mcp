@@ -35,7 +35,7 @@ namespace TiaMcpServer.Siemens
         // DocumentExtensions instead of assuming one literal extension.
         //
         // Path shape: type paths are root-relative ("Common/BtnTyp_X"), the same strings GetTypes
-        // returns. With preservePath the export mirrors the project tree below the 'PLC data types'
+        // returns. With keepStructure the export mirrors the project tree below the 'PLC data types'
         // system folder, exactly like the XML ExportXmlType, and the importers accept that folder name
         // back as an optional leading segment of groupPath.
         //
@@ -202,11 +202,11 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>
         /// Exports one PLC data type as a SIMATIC source document set into
-        /// '&lt;exportPath&gt;/&lt;softwarePath&gt;' or, with <paramref name="preservePath"/>, into
+        /// '&lt;exportPath&gt;/&lt;softwarePath&gt;' or, with <paramref name="keepStructure"/>, into
         /// '&lt;exportPath&gt;/&lt;softwarePath&gt;/PLC data types/&lt;groups&gt;'. Filesystem only - it does not modify
         /// the project, so it is not gated behind '--allow-write'.
         /// </summary>
-        public DocumentExportInfo ExportTypeAsDocuments(string softwarePath, string typePath, string exportPath, bool preservePath = false)
+        public DocumentExportInfo ExportTypeAsDocuments(string softwarePath, string typePath, string exportPath, bool keepStructure = false)
         {
             return Operation.Run(_logger, nameof(ExportTypeAsDocuments), PortalErrorCode.ExportFailed,
                 () =>
@@ -226,7 +226,7 @@ namespace TiaMcpServer.Siemens
                             $"PLC data type '{type.Name}' is inconsistent; compile the software before exporting it.");
                     }
 
-                    var directory = TypeDocumentDirectory(type, exportPath, preservePath);
+                    var directory = TypeDocumentDirectory(type, exportPath, keepStructure);
 
                     Directory.CreateDirectory(directory);
                     DeleteExistingDocuments(directory, type.Name);
@@ -270,9 +270,9 @@ namespace TiaMcpServer.Siemens
         /// system folder as TIA Portal names it in the current interface language - the layout
         /// the XML ExportXmlType already writes.
         /// </summary>
-        private string TypeDocumentDirectory(PlcType type, string exportPath, bool preservePath)
+        private string TypeDocumentDirectory(PlcType type, string exportPath, bool keepStructure)
         {
-            if (!preservePath || type.Parent is not PlcTypeGroup parentGroup)
+            if (!keepStructure || type.Parent is not PlcTypeGroup parentGroup)
             {
                 return exportPath;
             }
@@ -365,7 +365,7 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>
         /// Resolves the target group, accepting a leading 'PLC data types' segment so the folder
-        /// layout a preservePath export writes can be handed straight back to an import.
+        /// layout a keepStructure export writes can be handed straight back to an import.
         /// </summary>
         private PlcTypeGroup ResolveTypeGroupForImport(string softwarePath, string groupPath)
         {
@@ -413,7 +413,7 @@ namespace TiaMcpServer.Siemens
 
         #region block documents
 
-        public bool ExportAsDocuments(string softwarePath, string blockPath, string exportPath, bool preservePath = false)
+        public bool ExportAsDocuments(string softwarePath, string blockPath, string exportPath, bool keepStructure = false)
         {
             _logger?.LogInformation($"Exporting block as documents by path: {blockPath}");
             var success = false;
@@ -452,7 +452,7 @@ namespace TiaMcpServer.Siemens
                             Directory.CreateDirectory(exportPath);
                         }
 
-                        if (preservePath && !string.IsNullOrEmpty(groupPath))
+                        if (keepStructure && !string.IsNullOrEmpty(groupPath))
                         {
                             exportPath = Path.Combine(exportPath, groupPath);
 

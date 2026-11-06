@@ -283,7 +283,7 @@ namespace TiaMcpServer.Test
         public void Test_1131_TiaInit_TakesOnlyOptionalArgumentsThatTheServerPresetsFill()
         {
             // Arrange / Act / Assert
-            CollectionAssert.AreEqual(new[] { "exportPath", "path", "softwarePath", "preservePath", "withUserInterface" }, ArgumentNames("TiaInit"));
+            CollectionAssert.AreEqual(new[] { "exportPath", "path", "softwarePath", "keepStructure", "withUserInterface", "preservePath" }, ArgumentNames("TiaInit"));
             Assert.AreEqual(0, RequiredArguments("TiaInit").Count, "the dialog asks for what is missing");
         }
 

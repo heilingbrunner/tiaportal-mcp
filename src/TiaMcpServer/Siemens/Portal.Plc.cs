@@ -164,7 +164,7 @@ namespace TiaMcpServer.Siemens
                         ExportProgramTypes(result, group, selectedTypes, typeFormat, exportPath);
                     }
 
-                    GenerateBlocks(result, group, sourceBlocks, exportPath, withDependencies: false, preservePath: true);
+                    GenerateBlocks(result, group, sourceBlocks, exportPath, withDependencies: false, keepStructure: true);
 
                     foreach (var block in xmlBlocks)
                     {
@@ -209,7 +209,7 @@ namespace TiaMcpServer.Siemens
                 () => GetTagTables(softwarePath, regexName),
                 table => GetTagTablePath(table),
                 table => table.Name,
-                tablePath => ExportTagTable(softwarePath, tablePath, exportPath, preservePath: true),
+                tablePath => ExportTagTable(softwarePath, tablePath, exportPath, keepStructure: true),
                 table => GetTagTablePath(table, includeSystemRoot: true).Replace('/', '\\') + PlcProgram.XmlExtension);
         }
 
@@ -228,7 +228,7 @@ namespace TiaMcpServer.Siemens
                 },
                 table => GetTagTablePath(table),
                 table => table.Name,
-                path => ExportTagTable(softwarePath, path, exportPath, preservePath: true),
+                path => ExportTagTable(softwarePath, path, exportPath, keepStructure: true),
                 table => GetTagTablePath(table, includeSystemRoot: true).Replace('/', '\\') + PlcProgram.XmlExtension);
         }
 
@@ -245,7 +245,7 @@ namespace TiaMcpServer.Siemens
                 () => GetWatchTables(softwarePath, regexName),
                 GetWatchTablePath,
                 table => table.Name,
-                tablePath => ExportWatchTable(softwarePath, tablePath, exportPath, preservePath: true),
+                tablePath => ExportWatchTable(softwarePath, tablePath, exportPath, keepStructure: true),
                 table => Path.Combine(WatchTableSystemFolder(softwarePath), GetWatchTablePath(table).Replace('/', '\\') + PlcProgram.XmlExtension));
         }
 
@@ -264,7 +264,7 @@ namespace TiaMcpServer.Siemens
                 },
                 GetWatchTablePath,
                 table => table.Name,
-                path => ExportWatchTable(softwarePath, path, exportPath, preservePath: true),
+                path => ExportWatchTable(softwarePath, path, exportPath, keepStructure: true),
                 table => Path.Combine(WatchTableSystemFolder(softwarePath), GetWatchTablePath(table).Replace('/', '\\') + PlcProgram.XmlExtension));
         }
 
@@ -381,7 +381,7 @@ namespace TiaMcpServer.Siemens
         {
             if (format == ExportFormatKind.Source)
             {
-                GenerateTypes(result, group, types, exportPath, withDependencies: false, preservePath: true);
+                GenerateTypes(result, group, types, exportPath, withDependencies: false, keepStructure: true);
 
                 return;
             }
@@ -404,7 +404,7 @@ namespace TiaMcpServer.Siemens
         /// <summary>Writes one PLC data type as SimaticML into its group folder, replacing an existing file.</summary>
         private GeneratedSource ExportTypeXml(PlcType type, string typePath, string exportPath)
         {
-            var directory = TypeSourceDirectory(type, exportPath, preservePath: true);
+            var directory = TypeSourceDirectory(type, exportPath, keepStructure: true);
 
             Directory.CreateDirectory(directory);
 
@@ -436,7 +436,7 @@ namespace TiaMcpServer.Siemens
                 throw new PortalException(PortalErrorCode.NotSupported, "SIMATIC SD documents of blocks need TIA Portal V20 or newer");
             }
 
-            var directory = BlockSourceDirectory(block, exportPath, preservePath: true);
+            var directory = BlockSourceDirectory(block, exportPath, keepStructure: true);
 
             return WriteDocuments(directory, block.Name, blockPath, block.ProgrammingLanguage.ToString(),
                 name => block.ExportAsDocuments(new DirectoryInfo(directory), name), warn);
@@ -450,7 +450,7 @@ namespace TiaMcpServer.Siemens
                 throw new PortalException(PortalErrorCode.NotSupported, "SIMATIC SD documents of PLC data types need TIA Portal V21 or newer");
             }
 
-            var directory = TypeSourceDirectory(type, exportPath, preservePath: true);
+            var directory = TypeSourceDirectory(type, exportPath, keepStructure: true);
 
             return WriteDocuments(directory, type.Name, typePath, "UDT", name => ExportOneType(type, directory), warn);
         }
@@ -509,11 +509,11 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>
         /// Writes one block as SimaticML into its group folder below <paramref name="exportPath"/>,
-        /// the same place ExportXmlBlock puts it with preservePath. An existing file is replaced.
+        /// the same place ExportXmlBlock puts it with keepStructure. An existing file is replaced.
         /// </summary>
         private GeneratedSource ExportBlockXml(PlcBlock block, string blockPath, string exportPath)
         {
-            var directory = BlockSourceDirectory(block, exportPath, preservePath: true);
+            var directory = BlockSourceDirectory(block, exportPath, keepStructure: true);
 
             Directory.CreateDirectory(directory);
 

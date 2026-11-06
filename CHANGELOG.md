@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- __`--preserve-path` is now `--keep-structure`__: every other `...-path` option takes a string, this one is a flag, so
+  the name was misleading. The old name `--preserve-path` is still accepted (deprecated) and `--doctor` / the `Doctor`
+  tool list it as `--preserve-path (deprecated, use --keep-structure)` with `used` or `not used`. The same rename applies
+  to the `tia.json` `args` key (`tia init` renames an existing `"preserve-path"` in place and keeps its value; when both
+  keys exist both are left as they are), the `TiaInit` parameter (`keepStructure`; `preservePath` stays as a deprecated
+  alias) and the preset key `keepStructure`.
+
 ### Added
 
 - __`ExportHardware`, `ImportHardware`, `TiaPullHardware` (`tia pull hardware`) and `TiaPushHardware`

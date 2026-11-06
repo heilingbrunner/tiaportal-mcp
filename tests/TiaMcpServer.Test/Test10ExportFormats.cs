@@ -182,11 +182,11 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        public void Test_1086_Init_WritesPreservePathOnlyWhenItIsSet()
+        public void Test_1086_Init_WritesKeepStructureOnlyWhenItIsSet()
         {
             // Arrange
             var withFlag = InitArgs("", "", "export");
-            withFlag[ExportFormats.ArgsPreservePathKey] = "true";
+            withFlag[ExportFormats.ArgsKeepStructureKey] = "true";
             withFlag[ExportFormats.ArgsWithUserInterfaceKey] = "true";
 
             // Act
@@ -194,9 +194,65 @@ namespace TiaMcpServer.Test
             var text = File.ReadAllText(TiaJson);
 
             // Assert
-            CollectionAssert.AreEqual(new[] { "export-path", "preserve-path", "with-user-interface" }, result.AddedArgs);
-            StringAssert.Contains(text, "\"preserve-path\": \"true\"");
+            CollectionAssert.AreEqual(new[] { "export-path", "keep-structure", "with-user-interface" }, result.AddedArgs);
+            StringAssert.Contains(text, "\"keep-structure\": \"true\"");
+            Assert.IsFalse(text.Contains("preserve-path"), "a new file never gets the deprecated key");
             StringAssert.Contains(text, "\"with-user-interface\": \"true\"");
+        }
+
+        [TestMethod]
+        public void Test_1087_Init_RenamesTheDeprecatedPreservePathKeyInPlaceAndKeepsItsValue()
+        {
+            // Arrange
+            File.WriteAllText(
+                TiaJson,
+                "{ \"args\": { \"project\": \"Mine.ap20\", \"preserve-path\": \"true\" }, \"other\": { \"a\": 1 } }");
+
+            // Act
+            var result = ExportFormatSettings.Init(_directory, InitArgs());
+            var text = File.ReadAllText(TiaJson);
+
+            // Assert
+            Assert.IsTrue(result.Changed, "a rename is a change, so the file is written");
+            CollectionAssert.AreEqual(new[] { "preserve-path -> keep-structure" }, result.RenamedArgs);
+            StringAssert.Contains(text, "\"keep-structure\": \"true\"");
+            Assert.IsFalse(text.Contains("preserve-path"), "the old key is gone");
+            StringAssert.Contains(text, "\"project\": \"Mine.ap20\"");
+            StringAssert.Contains(text, "\"other\"");
+        }
+
+        [TestMethod]
+        public void Test_1088_Init_RenamedKeyIsNotAddedAgainWhenKeepStructureIsGiven()
+        {
+            // Arrange
+            File.WriteAllText(TiaJson, "{ \"args\": { \"preserve-path\": \"true\" } }");
+            var args = InitArgs();
+            args[ExportFormats.ArgsKeepStructureKey] = "true";
+
+            // Act
+            var result = ExportFormatSettings.Init(_directory, args);
+
+            // Assert
+            CollectionAssert.AreEqual(new[] { "preserve-path -> keep-structure" }, result.RenamedArgs);
+            Assert.AreEqual(0, result.AddedArgs.Count, "the renamed key already holds the value");
+            Assert.AreEqual(0, result.KeptArgs.Count);
+        }
+
+        [TestMethod]
+        public void Test_1089_Init_BothKeysPresent_LeavesBothAndReportsTheOldOneAsKept()
+        {
+            // Arrange
+            File.WriteAllText(TiaJson, "{ \"args\": { \"preserve-path\": \"true\", \"keep-structure\": \"true\" } }");
+
+            // Act
+            var result = ExportFormatSettings.Init(_directory, InitArgs());
+            var text = File.ReadAllText(TiaJson);
+
+            // Assert
+            Assert.AreEqual(0, result.RenamedArgs.Count);
+            CollectionAssert.AreEqual(new[] { "preserve-path" }, result.KeptArgs);
+            StringAssert.Contains(text, "\"preserve-path\": \"true\"");
+            StringAssert.Contains(text, "\"keep-structure\": \"true\"");
         }
 
         [TestMethod]

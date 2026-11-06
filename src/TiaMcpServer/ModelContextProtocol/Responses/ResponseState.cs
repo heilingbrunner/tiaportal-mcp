@@ -17,7 +17,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>
         /// The tool arguments preset on the command line ('--software-path', '--export-path',
-        /// '--preserve-path'); a call may omit them. Null when no preset is configured.
+        /// '--keep-structure'); a call may omit them. Null when no preset is configured.
         /// </summary>
         public System.Text.Json.Nodes.JsonObject? Presets { get; set; }
 

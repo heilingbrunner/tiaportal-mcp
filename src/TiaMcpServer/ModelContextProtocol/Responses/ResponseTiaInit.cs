@@ -19,6 +19,9 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>The 'args' keys that already had another value, which was kept.</summary>
         public List<string> KeptArgs { get; set; } = new List<string>();
 
+        /// <summary>The deprecated 'args' keys that were renamed in place (value kept), e.g. 'preserve-path' to 'keep-structure'.</summary>
+        public List<string> RenamedArgs { get; set; } = new List<string>();
+
         /// <summary>The export format keys that were added.</summary>
         public List<string> AddedFormats { get; set; } = new List<string>();
 

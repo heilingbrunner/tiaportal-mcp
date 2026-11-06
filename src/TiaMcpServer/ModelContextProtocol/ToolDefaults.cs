@@ -11,7 +11,7 @@ namespace TiaMcpServer.ModelContextProtocol
 {
     /// <summary>
     /// Lets the server's command line preset the tool arguments 'path' (the project file of
-    /// OpenProject), 'softwarePath', 'exportPath', 'preservePath' and 'withDependencies', so a client configures them once (the "args" of its MCP server entry)
+    /// OpenProject), 'softwarePath', 'exportPath', 'keepStructure' and 'withDependencies', so a client configures them once (the "args" of its MCP server entry)
     /// instead of the model passing them on every call.
     ///
     /// Callers: Program.cs (Configure at startup, Apply for each registered tool, Filter as the
@@ -28,7 +28,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public const string Path = "path";
         public const string SoftwarePath = "softwarePath";
         public const string ExportPath = "exportPath";
-        public const string PreservePath = "preservePath";
+        public const string KeepStructure = "keepStructure";
         public const string WithDependencies = "withDependencies";
 
         private static readonly IReadOnlyDictionary<string, JsonElement> _none =
@@ -67,9 +67,9 @@ namespace TiaMcpServer.ModelContextProtocol
             }
 
             // The tools default both flags to false, so only 'true' needs a preset.
-            if (options.PreservePath)
+            if (options.KeepStructure)
             {
-                presets[PreservePath] = JsonSerializer.SerializeToElement(true);
+                presets[KeepStructure] = JsonSerializer.SerializeToElement(true);
             }
 
             if (options.WithDependencies)

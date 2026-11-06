@@ -28,7 +28,8 @@ A MCP server which connects to Siemens TIA Portal.
 | `--export-path <path>`    | Preset for the `exportPath` tool argument. See below.                                             |
 | `--logging <1\|2\|3>`     | `1` stderr, `2` debug output, `3` Windows event log. Omit for no logging.                         |
 | `--doctor`                | Print the environment report and exit without starting the MCP server.                            |
-| `--preserve-path`         | Flag: no tool uses `preservePath` any more; accepted so existing configurations keep working.     |
+| `--keep-structure`        | Flag: no tool uses `keepStructure` any more; accepted so existing configurations keep working.    |
+| `--preserve-path`         | Deprecated name of `--keep-structure`, still accepted; `--doctor` shows when it is used.          |
 | `--with-dependencies`     | Flag: no tool uses `withDependencies` any more; accepted so existing configurations keep working. |
 | `--force-presets`         | Flag: the `path`, `softwarePath` and `exportPath` presets cannot be overridden. See below.        |
 | `--allow-write`           | Register the project-mutating tools. Omitted by default; see below.                               |
@@ -163,8 +164,9 @@ and it does not exist, the server creates it with the defaults TIA Portal offers
 ```
 
 The file can also carry an optional `args` section for other programs that work with the same TIA Portal project.
-Its keys follow the server arguments `--project-path`, `--software-path`, `--export-path` and `--preserve-path`
-(`"preserve-path": "true"` and `"with-user-interface": "true"` are written only when checked). **The server does not
+Its keys follow the server arguments `--project-path`, `--software-path`, `--export-path` and `--keep-structure`
+(`"keep-structure": "true"` and `"with-user-interface": "true"` are written only when checked; `tia init` renames an
+old `"preserve-path"` key to `"keep-structure"` and keeps its value). **The server does not
 read it**; only `tia init` writes it (the automatic creation does not) and every tool keeps it as it is:
 
 ```json
@@ -311,8 +313,8 @@ Type the command in the chat, e.g. `tia pull blocks ".+HMI"`, or pick the tool o
 | `tia push hardware`          | `TiaPushHardware`    | `ImportHardware` with `dryRun=false` (`--allow-write`, confirmation dialog) |
 
 - `TiaInit` sets up [`tia.json`](#tiajson-the-export-formats-of-tia-portal): it opens a dialog in which you check or
-  enter the `args` (`project`, `software-path`, `export-path`, `preserve-path`, `with-user-interface`), starting with the values of the call or
-  of the `--project-path`, `--software-path`, `--export-path` and `--preserve-path` presets, and writes the file into the export path. A missing
+  enter the `args` (`project`, `software-path`, `export-path`, `keep-structure`, `with-user-interface`), starting with the values of the call or
+  of the `--project-path`, `--software-path`, `--export-path` and `--keep-structure` presets (the old parameter name `preservePath` still works), and writes the file into the export path. A missing
   file is created with the export formats TIA Portal offers for a new workspace; an existing file is only completed
   (missing keys are added) and never overwritten, so a value you wrote is kept. Cancel the dialog and nothing is
   written. A client without dialogs uses the arguments and presets as they are. It does not touch the project and needs
@@ -437,6 +439,10 @@ Diagnose:
 ├─ User in 'Siemens TIA Openness' user group: True
 └─ Write mode (--allow-write): disabled, read-only tools only
 ```
+
+The report ends with the command line options and their values. The deprecated `--preserve-path` is listed as
+`--preserve-path (deprecated, use --keep-structure) = used` when a configuration still passes it (otherwise `not used`),
+so you know which configurations to update.
 
 The same report is available to MCP clients through the `Doctor` tool, which additionally returns
 the findings as structured content. Both are read-only: they never connect to TIA Portal, open a
@@ -620,7 +626,7 @@ arguments from [Command Line Arguments](#command-line-arguments) go into `args`;
   `.mcp.json`, `--scope local` is the default and private). Everything after `--` is the command:
 
   ```powershell
-  claude mcp add tia-mcp-server --scope project -- "<path-to>\TiaMcpServer.exe" --tia-major-version 21 --project-path "D:\Projects\Plant\Plant.ap21" --software-path PLC_1 --export-path "D:\Export" --preserve-path --with-dependencies
+  claude mcp add tia-mcp-server --scope project -- "<path-to>\TiaMcpServer.exe" --tia-major-version 21 --project-path "D:\Projects\Plant\Plant.ap21" --software-path PLC_1 --export-path "D:\Export" --keep-structure --with-dependencies
   ```
 
   Check it with `claude mcp list` or `/mcp` inside Claude Code.

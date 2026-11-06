@@ -161,7 +161,7 @@ namespace TiaMcpServer.Siemens
         /// </summary>
         /// <param name="includeSystemRoot">
         /// True keeps the system group name (e.g. "Program blocks") as the first segment, which
-        /// is what the preservePath export layout expects and what Test_415_ImportBlock asserts.
+        /// is what the keepStructure export layout expects and what Test_415_ImportBlock asserts.
         /// False yields a root-relative path that round-trips back into the ...ByPath resolvers.
         /// </param>
         private static string BuildGroupPath<T>(

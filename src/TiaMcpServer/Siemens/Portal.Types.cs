@@ -120,7 +120,7 @@ namespace TiaMcpServer.Siemens
             return list;
         }
 
-        public PlcType? ExportXmlType(string softwarePath, string typePath, string exportPath, bool preservePath = false)
+        public PlcType? ExportXmlType(string softwarePath, string typePath, string exportPath, bool keepStructure = false)
         {
             _logger?.LogInformation($"Exporting type by path: {typePath}");
 
@@ -146,7 +146,7 @@ namespace TiaMcpServer.Siemens
 
                 exportPath = ResolveSoftwareRoot(exportPath, softwarePath);
 
-                if (preservePath)
+                if (keepStructure)
                 {
                     var groupPath = "";
                     if (type.Parent is PlcTypeGroup parentGroup)

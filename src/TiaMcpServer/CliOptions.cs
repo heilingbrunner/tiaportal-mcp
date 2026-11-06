@@ -11,7 +11,8 @@ namespace TiaMcpServer
         public string? ProjectPath { get; set; } // preset for the 'path' tool argument (project file)
         public string? SoftwarePath { get; set; } // preset for the 'softwarePath' tool argument
         public string? ExportPath { get; set; } // preset for the 'exportPath' tool argument
-        public bool PreservePath { get; set; } // preset for the 'preservePath' tool argument (only when true)
+        public bool KeepStructure { get; set; } // preset for the 'keepStructure' tool argument (only when true)
+        public bool UsedDeprecatedPreservePath { get; set; } // '--preserve-path', the old name of '--keep-structure', was given
         public bool WithDependencies { get; set; } // preset for the 'withDependencies' tool argument (only when true)
         public bool ForcePresets { get; set; } // the 'path', 'softwarePath' and 'exportPath' presets cannot be overridden by a call
 
@@ -68,9 +69,16 @@ namespace TiaMcpServer
                         }
                         break;
 
+                    case "-keep-structure":
+                    case "--keep-structure":
+                        options.KeepStructure |= ReadFlag(args, ref i);
+                        break;
+
+                    // Deprecated name of '--keep-structure', still accepted so existing configurations keep working.
                     case "-preserve-path":
                     case "--preserve-path":
-                        options.PreservePath = ReadFlag(args, ref i);
+                        options.KeepStructure |= ReadFlag(args, ref i);
+                        options.UsedDeprecatedPreservePath = true;
                         break;
 
                     case "-with-dependencies":
@@ -113,14 +121,15 @@ namespace TiaMcpServer
                 new("--logging", Logging?.ToString() ?? notSet),
                 new("--doctor", Doctor ? "true" : "false"),
                 new("--allow-write", AllowWrite ? "true" : "false"),
-                new("--preserve-path", PreservePath ? "true" : "false"),
+                new("--keep-structure", KeepStructure ? "true" : "false"),
+                new("--preserve-path (deprecated, use --keep-structure)", UsedDeprecatedPreservePath ? "used" : "not used"),
                 new("--with-dependencies", WithDependencies ? "true" : "false"),
                 new("--force-presets", ForcePresets ? "true" : "false")
             };
         }
 
         // A flag like '--allow-write': its presence turns it on. A following 'true'/'false' is still
-        // honoured, so an older '--preserve-path false' is not read as "on".
+        // honoured, so an older '--preserve-path false' (or '--keep-structure false') is not read as "on".
         private static bool ReadFlag(string[] args, ref int i)
         {
             if (i + 1 < args.Length && bool.TryParse(args[i + 1], out bool value))

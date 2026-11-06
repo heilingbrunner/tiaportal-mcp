@@ -7,7 +7,7 @@ using TiaMcpServer.Siemens;
 namespace TiaMcpServer.Test
 {
     /// <summary>
-    /// Tests for the command line presets of 'softwarePath', 'exportPath' and 'preservePath'.
+    /// Tests for the command line presets of 'softwarePath', 'exportPath' and 'keepStructure'.
     /// These tests do not connect to TIA Portal and do not open a project.
     /// </summary>
     [TestClass]
@@ -33,7 +33,7 @@ namespace TiaMcpServer.Test
         public void Test_800_ParseArgs_ReadsThePresets()
         {
             // Arrange
-            var args = new[] { "--project-path", @"D:\Projects\My Plant\Plant.ap21", "--software-path", "PC-System_1/Software PLC_1", "-export-path", @"D:\My Export", "--preserve-path", "--with-dependencies" };
+            var args = new[] { "--project-path", @"D:\Projects\My Plant\Plant.ap21", "--software-path", "PC-System_1/Software PLC_1", "-export-path", @"D:\My Export", "--keep-structure", "--with-dependencies" };
 
             // Act
             var options = CliOptions.ParseArgs(args);
@@ -42,7 +42,7 @@ namespace TiaMcpServer.Test
             Assert.AreEqual(@"D:\Projects\My Plant\Plant.ap21", options.ProjectPath);
             Assert.AreEqual("PC-System_1/Software PLC_1", options.SoftwarePath);
             Assert.AreEqual(@"D:\My Export", options.ExportPath);
-            Assert.AreEqual(true, options.PreservePath);
+            Assert.AreEqual(true, options.KeepStructure);
             Assert.AreEqual(true, options.WithDependencies);
         }
 
@@ -51,13 +51,76 @@ namespace TiaMcpServer.Test
         {
             // Act
             var absent = CliOptions.ParseArgs(new[] { "--allow-write" });
-            var explicitFalse = CliOptions.ParseArgs(new[] { "--preserve-path", "false", "--with-dependencies" });
+            var explicitFalse = CliOptions.ParseArgs(new[] { "--keep-structure", "false", "--with-dependencies" });
 
             // Assert
-            Assert.IsFalse(absent.PreservePath, "an absent flag is false, the tool default");
+            Assert.IsFalse(absent.KeepStructure, "an absent flag is false, the tool default");
             Assert.IsFalse(absent.WithDependencies);
-            Assert.AreEqual(false, explicitFalse.PreservePath);
+            Assert.AreEqual(false, explicitFalse.KeepStructure);
             Assert.AreEqual(true, explicitFalse.WithDependencies);
+        }
+
+        [TestMethod]
+        [DataRow("--preserve-path")]
+        [DataRow("-preserve-path")]
+        public void Test_816_ParseArgs_TheDeprecatedPreservePathStillTurnsKeepStructureOn(string oldName)
+        {
+            // Act
+            var options = CliOptions.ParseArgs(new[] { oldName });
+
+            // Assert
+            Assert.IsTrue(options.KeepStructure);
+            Assert.IsTrue(options.UsedDeprecatedPreservePath);
+        }
+
+        [TestMethod]
+        public void Test_817_ParseArgs_TheDeprecatedPreservePathHonoursAnExplicitFalse()
+        {
+            // Act
+            var options = CliOptions.ParseArgs(new[] { "--preserve-path", "false" });
+
+            // Assert
+            Assert.IsFalse(options.KeepStructure, "an older '--preserve-path false' must not read as on");
+            Assert.IsTrue(options.UsedDeprecatedPreservePath, "the old name was still used, the doctor says so");
+        }
+
+        [TestMethod]
+        public void Test_818_ParseArgs_NewNameDoesNotMarkTheDeprecatedNameAsUsed()
+        {
+            // Act
+            var options = CliOptions.ParseArgs(new[] { "--keep-structure" });
+
+            // Assert
+            Assert.IsTrue(options.KeepStructure);
+            Assert.IsFalse(options.UsedDeprecatedPreservePath);
+        }
+
+        [TestMethod]
+        public void Test_819_ParseArgs_BothNamesTogether_EitherTrueTurnsItOn()
+        {
+            // Act
+            var oldFalseNewTrue = CliOptions.ParseArgs(new[] { "--preserve-path", "false", "--keep-structure" });
+            var newFalseOldTrue = CliOptions.ParseArgs(new[] { "--keep-structure", "false", "--preserve-path" });
+
+            // Assert
+            Assert.IsTrue(oldFalseNewTrue.KeepStructure);
+            Assert.IsTrue(newFalseOldTrue.KeepStructure);
+        }
+
+        [TestMethod]
+        public void Test_820_Describe_ListsKeepStructureAndTheDeprecatedNameForTheDoctor()
+        {
+            // Arrange
+            var fresh = CliOptions.ParseArgs(new[] { "--keep-structure" }).Describe().ToDictionary(p => p.Key, p => p.Value);
+            var old = CliOptions.ParseArgs(new[] { "--preserve-path" }).Describe().ToDictionary(p => p.Key, p => p.Value);
+            const string deprecated = "--preserve-path (deprecated, use --keep-structure)";
+
+            // Assert
+            Assert.AreEqual("true", fresh["--keep-structure"]);
+            Assert.AreEqual("not used", fresh[deprecated], "the deprecated name is always listed so users learn it");
+            Assert.AreEqual("true", old["--keep-structure"]);
+            Assert.AreEqual("used", old[deprecated]);
+            Assert.IsFalse(fresh.ContainsKey("--preserve-path"), "the plain old name is only shown as deprecated");
         }
 
         [TestMethod]
@@ -68,7 +131,7 @@ namespace TiaMcpServer.Test
             {
                 [ToolDefaults.SoftwarePath] = JsonSerializer.SerializeToElement("PLC_1"),
                 [ToolDefaults.ExportPath] = JsonSerializer.SerializeToElement(@"D:\Export"),
-                [ToolDefaults.PreservePath] = JsonSerializer.SerializeToElement(true)
+                [ToolDefaults.KeepStructure] = JsonSerializer.SerializeToElement(true)
             };
             var arguments = new Dictionary<string, JsonElement>
             {
@@ -82,7 +145,7 @@ namespace TiaMcpServer.Test
             // Assert
             Assert.AreEqual("PLC_2", arguments[ToolDefaults.SoftwarePath].GetString(), "A value from the call wins");
             Assert.AreEqual(@"D:\Export", arguments[ToolDefaults.ExportPath].GetString(), "null is treated as omitted");
-            Assert.IsTrue(arguments[ToolDefaults.PreservePath].GetBoolean());
+            Assert.IsTrue(arguments[ToolDefaults.KeepStructure].GetBoolean());
         }
 
         [TestMethod]
@@ -145,13 +208,13 @@ namespace TiaMcpServer.Test
             {
                 [ToolDefaults.SoftwarePath] = JsonSerializer.SerializeToElement("PLC_1"),
                 [ToolDefaults.ExportPath] = JsonSerializer.SerializeToElement(@"D:\Export"),
-                [ToolDefaults.PreservePath] = JsonSerializer.SerializeToElement(true)
+                [ToolDefaults.KeepStructure] = JsonSerializer.SerializeToElement(true)
             };
             var arguments = new Dictionary<string, JsonElement>
             {
                 [ToolDefaults.SoftwarePath] = JsonSerializer.SerializeToElement("  "),
                 [ToolDefaults.ExportPath] = JsonSerializer.SerializeToElement(string.Empty),
-                [ToolDefaults.PreservePath] = JsonSerializer.SerializeToElement(false)
+                [ToolDefaults.KeepStructure] = JsonSerializer.SerializeToElement(false)
             };
 
             // Act
@@ -160,7 +223,7 @@ namespace TiaMcpServer.Test
             // Assert
             Assert.AreEqual("PLC_1", arguments[ToolDefaults.SoftwarePath].GetString());
             Assert.AreEqual(@"D:\Export", arguments[ToolDefaults.ExportPath].GetString());
-            Assert.IsFalse(arguments[ToolDefaults.PreservePath].GetBoolean(), "an explicit false is a value, not an omission");
+            Assert.IsFalse(arguments[ToolDefaults.KeepStructure].GetBoolean(), "an explicit false is a value, not an omission");
         }
 
         [TestMethod]
@@ -204,9 +267,9 @@ namespace TiaMcpServer.Test
             {
                 [ToolDefaults.SoftwarePath] = JsonSerializer.SerializeToElement("PLC_1"),
                 [ToolDefaults.ExportPath] = JsonSerializer.SerializeToElement(@"D:\Export"),
-                [ToolDefaults.PreservePath] = JsonSerializer.SerializeToElement(true)
+                [ToolDefaults.KeepStructure] = JsonSerializer.SerializeToElement(true)
             };
-            var declared = new[] { "softwarePath", "exportPath", "regexName", "preservePath" };
+            var declared = new[] { "softwarePath", "exportPath", "regexName", "keepStructure" };
             var arguments = new Dictionary<string, JsonElement>
             {
                 ["softwarePath"] = JsonSerializer.SerializeToElement("PLC_2"),
@@ -219,7 +282,7 @@ namespace TiaMcpServer.Test
             // Assert
             Assert.AreEqual("PLC_2", arguments["softwarePath"].GetString(), "a given value wins");
             Assert.AreEqual(@"D:\Export", arguments["exportPath"].GetString(), "blank is treated as omitted");
-            Assert.AreEqual("true", arguments["preservePath"].GetString(), "flags reach a prompt as text");
+            Assert.AreEqual("true", arguments["keepStructure"].GetString(), "flags reach a prompt as text");
             Assert.IsFalse(arguments.ContainsKey("regexName"), "no preset, no entry");
         }
 
@@ -262,7 +325,7 @@ namespace TiaMcpServer.Test
         public void Test_811_Configure_ForcesOnlyThePathPresetsThatAreSet()
         {
             // Act
-            ToolDefaults.Configure(new CliOptions { SoftwarePath = "PLC_1", PreservePath = true, ForcePresets = true });
+            ToolDefaults.Configure(new CliOptions { SoftwarePath = "PLC_1", KeepStructure = true, ForcePresets = true });
             var forcedSet = ToolDefaults.Forced.ToList();
             ToolDefaults.Configure(new CliOptions { SoftwarePath = "PLC_1", ExportPath = @"D:\Export" });
             var withoutOption = ToolDefaults.Forced.ToList();
@@ -281,7 +344,7 @@ namespace TiaMcpServer.Test
                 ProjectPath = @"D:\Plant.ap21",
                 SoftwarePath = "PLC_1",
                 ExportPath = @"D:\Export",
-                PreservePath = true,
+                KeepStructure = true,
                 ForcePresets = true
             });
 

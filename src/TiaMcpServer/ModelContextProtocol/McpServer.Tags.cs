@@ -705,7 +705,7 @@ namespace TiaMcpServer.ModelContextProtocol
          Description("Import a PLC watch table from an XML file into a watch table group. An existing table of the same name is replaced unless overwrite is false")]
         public static ResponseImported ImportWatchTable(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("groupPath: root-relative watch table group that receives the table; empty uses the root. A leading watch and force tables system folder segment, as written by preservePath exports, is accepted and ignored")] string groupPath,
+            [Description("groupPath: root-relative watch table group that receives the table; empty uses the root. A leading watch and force tables system folder segment, as written by keepStructure exports, is accepted and ignored")] string groupPath,
             [Description("importPath: full path of the XML file to import")] string importPath,
             [Description("overwrite: replace an existing watch table of the same name (default true)")] bool overwrite = true)
         {

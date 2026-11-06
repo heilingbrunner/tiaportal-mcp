@@ -148,7 +148,7 @@ namespace TiaMcpServer.Siemens
             return null;
         }
 
-        public PlcBlock? ExportXmlBlock(string softwarePath, string blockPath, string exportPath, bool preservePath = false)
+        public PlcBlock? ExportXmlBlock(string softwarePath, string blockPath, string exportPath, bool keepStructure = false)
         {
             _logger?.LogInformation($"Exporting block by path: {blockPath}");
 
@@ -168,7 +168,7 @@ namespace TiaMcpServer.Siemens
 
                 exportPath = ResolveSoftwareRoot(exportPath, softwarePath);
 
-                if (preservePath)
+                if (keepStructure)
                 {
                     var groupPath = "";
                     if (block.Parent is PlcBlockGroup parentGroup)
@@ -277,7 +277,7 @@ namespace TiaMcpServer.Siemens
 
         /// <param name="includeSystemRoot">
         /// True (the default) prefixes the system group name, e.g. "Program blocks/1_Tests".
-        /// That is the layout the preservePath exports write and Test_415_ImportBlock reads back.
+        /// That is the layout the keepStructure exports write and Test_415_ImportBlock reads back.
         /// False yields "1_Tests", which round-trips into GetPlcBlockGroupByPath.
         /// </param>
         private string GetPlcBlockGroupPath(PlcBlockGroup group, bool includeSystemRoot = true)

@@ -59,14 +59,15 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "TiaInit", Title = "Tia init", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Use this when the user says 'tia init': set up '<exportPath>/tia.json', the file with the export formats of TIA Portal ('version-control-interface') and the 'args' (project, software-path, export-path, preserve-path, with-user-interface) that other programs read. The server opens a dialog of the client in which the user checks or enters the five args and submits; do not answer it for the user. A missing file is created with the formats TIA Portal offers for a new workspace. An existing file is completed and never overwritten: missing keys are added, every existing value is kept. A client without dialogs uses the arguments or presets as they are. Tell the user to check the formats against Options > Settings > Version control interface > Export formats. Never opens or changes the TIA Portal project")]
+         Description("Use this when the user says 'tia init': set up '<exportPath>/tia.json', the file with the export formats of TIA Portal ('version-control-interface') and the 'args' (project, software-path, export-path, keep-structure, with-user-interface) that other programs read. The server opens a dialog of the client in which the user checks or enters the five args and submits; do not answer it for the user. A missing file is created with the formats TIA Portal offers for a new workspace. An existing file is completed and never overwritten: missing keys are added, every existing value is kept. A client without dialogs uses the arguments or presets as they are. Tell the user to check the formats against Options > Settings > Version control interface > Export formats. Never opens or changes the TIA Portal project")]
         public static async Task<ResponseTiaInit> TiaInit(
             SdkMcpServer server,
             [Description("exportPath: directory on this machine that holds tia.json; the file is created there. The dialog starts with this value")] string exportPath = "",
             [Description("path: full path of the .apXX project or .alsXX session file; written to 'args' as 'project'. The dialog starts with this value; blank leaves it out")] string path = "",
             [Description("softwarePath: path of the PLC software in the project structure; written to 'args' as 'software-path'. The dialog starts with this value; blank leaves it out")] string softwarePath = "",
-            [Description("preservePath: written to 'args' as 'preserve-path' when true. The dialog starts with this value; false leaves it out")] bool preservePath = false,
+            [Description("keepStructure: written to 'args' as 'keep-structure' when true. The dialog starts with this value; false leaves it out")] bool keepStructure = false,
             [Description("withUserInterface: written to 'args' as 'with-user-interface' when true. The dialog starts with this value; false leaves it out")] bool withUserInterface = false,
+            [Description("preservePath: deprecated, the old name of keepStructure; either one set to true counts")] bool preservePath = false,
             CancellationToken cancellationToken = default)
         {
             try
@@ -76,7 +77,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     [ExportFormats.ArgsProjectKey] = path,
                     [ExportFormats.ArgsSoftwarePathKey] = softwarePath,
                     [ExportFormats.ArgsExportPathKey] = exportPath,
-                    [ExportFormats.ArgsPreservePathKey] = preservePath ? "true" : string.Empty,
+                    [ExportFormats.ArgsKeepStructureKey] = keepStructure || preservePath ? "true" : string.Empty,
                     [ExportFormats.ArgsWithUserInterfaceKey] = withUserInterface ? "true" : string.Empty
                 };
 
@@ -114,6 +115,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     Changed = result.Changed,
                     AddedArgs = result.AddedArgs,
                     KeptArgs = result.KeptArgs,
+                    RenamedArgs = result.RenamedArgs,
                     AddedFormats = result.AddedFormats,
                     Hint = result.AddedFormats.Count > 0
                         ? "Please check the export formats against Options > Settings > Version control interface > Export formats and correct the file if your settings differ."
@@ -146,8 +148,12 @@ namespace TiaMcpServer.ModelContextProtocol
                 ? $" Kept the existing value of: {string.Join(", ", result.KeptArgs)}."
                 : string.Empty;
 
+            var renamed = result.RenamedArgs.Count > 0
+                ? $" Renamed the deprecated key: {string.Join(", ", result.RenamedArgs)}."
+                : string.Empty;
+
             return (result.Created ? $"Created '{result.File}'." : $"Completed '{result.File}'.") +
-                   $" Added {result.AddedArgs.Count} arg(s) and {result.AddedFormats.Count} export format(s).{kept}";
+                   $" Added {result.AddedArgs.Count} arg(s) and {result.AddedFormats.Count} export format(s).{renamed}{kept}";
         }
 
         /// <summary>
@@ -175,11 +181,11 @@ namespace TiaMcpServer.ModelContextProtocol
                         [ExportFormats.ArgsProjectKey] = Field(ExportFormats.ArgsProjectKey, "Project", "Full path of the .apXX project or .alsXX session file (optional)"),
                         [ExportFormats.ArgsSoftwarePathKey] = Field(ExportFormats.ArgsSoftwarePathKey, "Software path", "Path of the PLC software, e.g. PLC_1 (optional)"),
                         [ExportFormats.ArgsExportPathKey] = Field(ExportFormats.ArgsExportPathKey, "Export path", "Folder that holds tia.json"),
-                        [ExportFormats.ArgsPreservePathKey] = new ElicitRequestParams.BooleanSchema
+                        [ExportFormats.ArgsKeepStructureKey] = new ElicitRequestParams.BooleanSchema
                         {
-                            Title = "Preserve path",
-                            Description = "Keep the project tree folders below the export path (optional; only 'true' is written)",
-                            Default = start[ExportFormats.ArgsPreservePathKey] == "true"
+                            Title = "Keep structure",
+                            Description = "Keep the project tree folders below the export path (optional; only 'true' is written; formerly 'preserve-path')",
+                            Default = start[ExportFormats.ArgsKeepStructureKey] == "true"
                         },
                         [ExportFormats.ArgsWithUserInterfaceKey] = new ElicitRequestParams.BooleanSchema
                         {
@@ -199,7 +205,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
             return start.Keys.ToDictionary(
                 key => key,
-                key => key == ExportFormats.ArgsPreservePathKey || key == ExportFormats.ArgsWithUserInterfaceKey
+                key => key == ExportFormats.ArgsKeepStructureKey || key == ExportFormats.ArgsWithUserInterfaceKey
                     ? (ElicitedFlag(result, key) ? "true" : string.Empty)
                     : ElicitedText(result, key));
         }

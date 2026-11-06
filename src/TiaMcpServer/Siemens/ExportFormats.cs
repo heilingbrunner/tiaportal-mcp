@@ -51,7 +51,10 @@ namespace TiaMcpServer.Siemens
         public const string ArgsProjectKey = "project";
         public const string ArgsSoftwarePathKey = "software-path";
         public const string ArgsExportPathKey = "export-path";
-        public const string ArgsPreservePathKey = "preserve-path";
+        public const string ArgsKeepStructureKey = "keep-structure";
+
+        /// <summary>The old name of <see cref="ArgsKeepStructureKey"/>; 'tia init' renames it in place.</summary>
+        public const string ArgsPreservePathKeyDeprecated = "preserve-path";
         public const string ArgsWithUserInterfaceKey = "with-user-interface";
 
         public const string LadBlocksKey = "code-blocks-LAD";
@@ -266,6 +269,11 @@ namespace TiaMcpServer.Siemens
             var result = new TiaJsonInitResult { File = file, Created = created };
             var given = args.Where(a => !string.IsNullOrWhiteSpace(a.Value)).ToList();
 
+            if (!created && root.FirstOrDefault(p => string.Equals(p.Key, ExportFormats.ArgsGroupName, StringComparison.OrdinalIgnoreCase)).Value is JsonObject existingArgs)
+            {
+                RenameDeprecatedArg(existingArgs, result);
+            }
+
             if (given.Count > 0)
             {
                 var argsGroup = GetOrAddObject(root, ExportFormats.ArgsGroupName, file);
@@ -277,7 +285,7 @@ namespace TiaMcpServer.Siemens
 
             AddMissing(formats, ExportFormats.Defaults, result.AddedFormats, null);
 
-            result.Changed = created || result.AddedArgs.Count > 0 || result.AddedFormats.Count > 0;
+            result.Changed = created || result.AddedArgs.Count > 0 || result.RenamedArgs.Count > 0 || result.AddedFormats.Count > 0;
 
             if (result.Changed)
             {
@@ -285,6 +293,33 @@ namespace TiaMcpServer.Siemens
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Renames the deprecated 'preserve-path' key to 'keep-structure', keeping its value. When the
+        /// file has both keys nothing is changed and the old one is reported as kept, so no value is lost.
+        /// </summary>
+        private static void RenameDeprecatedArg(JsonObject group, TiaJsonInitResult result)
+        {
+            var old = group.FirstOrDefault(p => string.Equals(p.Key, ExportFormats.ArgsPreservePathKeyDeprecated, StringComparison.OrdinalIgnoreCase));
+
+            if (old.Key == null)
+            {
+                return;
+            }
+
+            if (group.Any(p => string.Equals(p.Key, ExportFormats.ArgsKeepStructureKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                result.KeptArgs.Add(old.Key);
+
+                return;
+            }
+
+            var value = old.Value?.DeepClone();
+
+            group.Remove(old.Key);
+            group[ExportFormats.ArgsKeepStructureKey] = value;
+            result.RenamedArgs.Add($"{old.Key} -> {ExportFormats.ArgsKeepStructureKey}");
         }
 
         private static JsonObject ReadRoot(string file)
@@ -443,8 +478,11 @@ namespace TiaMcpServer.Siemens
         /// <summary>The 'args' keys that were added.</summary>
         public List<string> AddedArgs { get; } = new List<string>();
 
-        /// <summary>The 'args' keys whose different value in the file was kept.</summary>
+        /// <summary>The 'args' keys whose different value in the file was kept (or a deprecated key that was left because the new key exists).</summary>
         public List<string> KeptArgs { get; } = new List<string>();
+
+        /// <summary>The deprecated 'args' keys that were renamed in place, as 'old -> new'.</summary>
+        public List<string> RenamedArgs { get; } = new List<string>();
 
         /// <summary>The export format keys that were added.</summary>
         public List<string> AddedFormats { get; } = new List<string>();

@@ -22,7 +22,7 @@ namespace TiaMcpServer.Siemens
         // Path shape: tag table paths are root-relative, e.g. "TagGroup1/Table1"; tag paths append
         // the tag, e.g. "TagGroup1/Table1/Tag_1". The system root ("PLC tags", localised by TIA
         // Portal) is not part of a reported path, so every path here round-trips back into these
-        // resolvers. The preservePath export layout does prefix it - the same convention block and
+        // resolvers. The keepStructure export layout does prefix it - the same convention block and
         // type exports follow - and the resolvers accept it back as an optional leading segment.
 
         #region groups
@@ -52,7 +52,7 @@ namespace TiaMcpServer.Siemens
         /// <summary>Root-relative path of a tag table, e.g. "TagGroup1/Table1".</summary>
         /// <param name="includeSystemRoot">
         /// True prefixes the system group name as TIA Portal reports it in the current interface
-        /// language (e.g. "PLC tags/TagGroup1/Table1"), which is the layout the preservePath
+        /// language (e.g. "PLC tags/TagGroup1/Table1"), which is the layout the keepStructure
         /// exports write, matching the block and type exports. False (the default) yields a path
         /// that round-trips back into GetTagTable and GetTagTableGroupByPath.
         /// </param>
@@ -141,13 +141,13 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>
         /// Exports one tag table to '&lt;exportPath&gt;/&lt;softwarePath&gt;/PLC tags/&lt;table&gt;.xml', or, with
-        /// <paramref name="preservePath"/>, to
+        /// <paramref name="keepStructure"/>, to
         /// '&lt;exportPath&gt;/&lt;softwarePath&gt;/PLC tags/&lt;groups&gt;/&lt;table&gt;.xml' - the system group name
         /// as TIA Portal reports it in the current interface language, the same way block and
         /// type exports mirror "Program blocks" and "PLC data types".
         /// Filesystem only - it does not modify the project, so it is not gated behind '--allow-write'.
         /// </summary>
-        public PlcTagTable? ExportTagTable(string softwarePath, string tagTablePath, string exportPath, bool preservePath = false)
+        public PlcTagTable? ExportTagTable(string softwarePath, string tagTablePath, string exportPath, bool keepStructure = false)
         {
             return Operation.Run(_logger, nameof(ExportTagTable), PortalErrorCode.ExportFailed,
                 () =>
@@ -158,10 +158,10 @@ namespace TiaMcpServer.Siemens
 
                     exportPath = ResolveSoftwareRoot(exportPath, softwarePath);
 
-                    // Always below the system group folder ('PLC tags'); preservePath adds the table's groups.
+                    // Always below the system group folder ('PLC tags'); keepStructure adds the table's groups.
                     var pathWithRoot = GetTagTablePath(table, includeSystemRoot: true).Replace('/', '\\');
                     var rootName = pathWithRoot.Split('\\')[0];
-                    var target = preservePath
+                    var target = keepStructure
                         ? Path.Combine(exportPath, pathWithRoot + ".xml")
                         : Path.Combine(exportPath, rootName, $"{table.Name}.xml");
 
@@ -436,13 +436,13 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>
         /// Exports one watch table to '&lt;exportPath&gt;/&lt;softwarePath&gt;/&lt;system folder&gt;/&lt;table&gt;.xml', or,
-        /// with <paramref name="preservePath"/>, to
+        /// with <paramref name="keepStructure"/>, to
         /// '&lt;exportPath&gt;/&lt;softwarePath&gt;/&lt;system folder&gt;/&lt;groups&gt;/&lt;table&gt;.xml' - the system folder
         /// ("Watch and force tables") named as TIA Portal reports it in the current interface language,
         /// the same way block, type and tag table exports mirror "Program blocks", "PLC data types" and
         /// "PLC tags". Filesystem only, so it is not gated behind '--allow-write'.
         /// </summary>
-        public PlcWatchTable? ExportWatchTable(string softwarePath, string watchTablePath, string exportPath, bool preservePath = false)
+        public PlcWatchTable? ExportWatchTable(string softwarePath, string watchTablePath, string exportPath, bool keepStructure = false)
         {
             return Operation.Run(_logger, nameof(ExportWatchTable), PortalErrorCode.ExportFailed,
                 () =>
@@ -453,9 +453,9 @@ namespace TiaMcpServer.Siemens
 
                     exportPath = ResolveSoftwareRoot(exportPath, softwarePath);
 
-                    // Always below the system folder as the project tree has it; preservePath adds the table's groups.
+                    // Always below the system folder as the project tree has it; keepStructure adds the table's groups.
                     var systemFolder = GetPlcSoftwareOrThrow(softwarePath).WatchAndForceTableGroup?.Name ?? string.Empty;
-                    var target = preservePath
+                    var target = keepStructure
                         ? Path.Combine(exportPath, systemFolder, GetWatchTablePath(table).Replace('/', '\\') + ".xml")
                         : Path.Combine(exportPath, systemFolder, $"{table.Name}.xml");
 
@@ -481,7 +481,7 @@ namespace TiaMcpServer.Siemens
         /// Exports a force table to '&lt;exportPath&gt;/&lt;softwarePath&gt;/&lt;system folder&gt;/&lt;table&gt;.xml', the
         /// watch and force tables folder of the project tree in the current interface language, where the
         /// watch tables go as well. A force table is system owned and has no groups, so there is no
-        /// preservePath. Filesystem only, so it is not gated behind '--allow-write'.
+        /// keepStructure. Filesystem only, so it is not gated behind '--allow-write'.
         /// </summary>
         public PlcForceTable? ExportForceTable(string softwarePath, string forceTablePath, string exportPath)
         {

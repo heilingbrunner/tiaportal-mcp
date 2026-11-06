@@ -716,7 +716,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>
         /// True when the resolved object path lives in the group named by groupPath. A groupPath
-        /// copied from a preservePath export starts with the localised system folder
+        /// copied from a keepStructure export starts with the localised system folder
         /// ('PLC data types', 'Program blocks'), which the resolved paths do not carry; a plain
         /// groupPath does not. The folder name is localised, so both forms are tried instead of
         /// matching a fixed name.

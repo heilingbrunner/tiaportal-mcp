@@ -343,7 +343,7 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>
         /// Writes one program block as an external source file into '&lt;exportPath&gt;' or, with
-        /// <paramref name="preservePath"/>, into '&lt;exportPath&gt;/Program blocks/&lt;groups&gt;'
+        /// <paramref name="keepStructure"/>, into '&lt;exportPath&gt;/Program blocks/&lt;groups&gt;'
         /// - the same layout <see cref="ExportXmlBlock"/> writes. The extension follows the block:
         /// '.db', '.awl' or '.scl'.
         /// </summary>
@@ -351,7 +351,7 @@ namespace TiaMcpServer.Siemens
         /// Include every object the block uses - called blocks, instance DBs, UDTs - in the same
         /// file, so it compiles on its own. Off by default, which keeps one file per object.
         /// </param>
-        public GeneratedSource ExportSourceBlock(string softwarePath, string blockPath, string exportPath, bool withDependencies = false, bool preservePath = false)
+        public GeneratedSource ExportSourceBlock(string softwarePath, string blockPath, string exportPath, bool withDependencies = false, bool keepStructure = false)
         {
             return Operation.Run(_logger, nameof(ExportSourceBlock), PortalErrorCode.ExportFailed,
                 () =>
@@ -382,7 +382,7 @@ namespace TiaMcpServer.Siemens
                         blockPath,
                         extension,
                         block.ProgrammingLanguage.ToString(),
-                        BlockSourceDirectory(block, exportPath, preservePath),
+                        BlockSourceDirectory(block, exportPath, keepStructure),
                         withDependencies);
                 },
                 ("softwarePath", softwarePath), ("blockPath", blockPath), ("exportPath", exportPath));
@@ -390,10 +390,10 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>
         /// Writes one PLC data type as a '*.udt' external source file, into '&lt;exportPath&gt;'
-        /// or, with <paramref name="preservePath"/>, into
+        /// or, with <paramref name="keepStructure"/>, into
         /// '&lt;exportPath&gt;/PLC data types/&lt;groups&gt;'.
         /// </summary>
-        public GeneratedSource ExportSourceType(string softwarePath, string typePath, string exportPath, bool withDependencies = false, bool preservePath = false)
+        public GeneratedSource ExportSourceType(string softwarePath, string typePath, string exportPath, bool withDependencies = false, bool keepStructure = false)
         {
             return Operation.Run(_logger, nameof(ExportSourceType), PortalErrorCode.ExportFailed,
                 () =>
@@ -415,7 +415,7 @@ namespace TiaMcpServer.Siemens
                         typePath,
                         TypeSourceExtension,
                         "UDT",
-                        TypeSourceDirectory(type, exportPath, preservePath),
+                        TypeSourceDirectory(type, exportPath, keepStructure),
                         withDependencies);
                 },
                 ("softwarePath", softwarePath), ("typePath", typePath), ("exportPath", exportPath));
@@ -431,7 +431,7 @@ namespace TiaMcpServer.Siemens
             IEnumerable<PlcBlock> blocks,
             string exportPath,
             bool withDependencies,
-            bool preservePath)
+            bool keepStructure)
         {
             foreach (var block in blocks)
             {
@@ -460,7 +460,7 @@ namespace TiaMcpServer.Siemens
                         blockPath,
                         extension,
                         block.ProgrammingLanguage.ToString(),
-                        BlockSourceDirectory(block, exportPath, preservePath),
+                        BlockSourceDirectory(block, exportPath, keepStructure),
                         withDependencies));
             }
         }
@@ -471,7 +471,7 @@ namespace TiaMcpServer.Siemens
             IEnumerable<PlcType> types,
             string exportPath,
             bool withDependencies,
-            bool preservePath)
+            bool keepStructure)
         {
             foreach (var type in types)
             {
@@ -493,7 +493,7 @@ namespace TiaMcpServer.Siemens
                         typePath,
                         TypeSourceExtension,
                         "UDT",
-                        TypeSourceDirectory(type, exportPath, preservePath),
+                        TypeSourceDirectory(type, exportPath, keepStructure),
                         withDependencies));
             }
         }
@@ -610,9 +610,9 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>Flat, or the project tree below the 'Program blocks' system folder.</summary>
-        private string BlockSourceDirectory(PlcBlock block, string exportPath, bool preservePath)
+        private string BlockSourceDirectory(PlcBlock block, string exportPath, bool keepStructure)
         {
-            if (!preservePath || block.Parent is not PlcBlockGroup parentGroup)
+            if (!keepStructure || block.Parent is not PlcBlockGroup parentGroup)
             {
                 return exportPath;
             }
@@ -625,9 +625,9 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>Flat, or the project tree below the 'PLC data types' system folder.</summary>
-        private string TypeSourceDirectory(PlcType type, string exportPath, bool preservePath)
+        private string TypeSourceDirectory(PlcType type, string exportPath, bool keepStructure)
         {
-            if (!preservePath || type.Parent is not PlcTypeGroup parentGroup)
+            if (!keepStructure || type.Parent is not PlcTypeGroup parentGroup)
             {
                 return exportPath;
             }

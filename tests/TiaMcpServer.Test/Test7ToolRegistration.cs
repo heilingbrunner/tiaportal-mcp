@@ -290,7 +290,7 @@ namespace TiaMcpServer.Test
             Assert.AreEqual(0, problems.Count, string.Join(Environment.NewLine, problems));
         }
 
-        private static readonly string[] _exportNames = { "softwarePath", "exportPath", "regexName", "preservePath" };
+        private static readonly string[] _exportNames = { "softwarePath", "exportPath", "regexName", "keepStructure" };
 
         [TestMethod]
         public void Test_712_PromptArguments_JoinsAQuotedValueThatClaudeCodeCutAtTheSpace()
@@ -322,7 +322,7 @@ namespace TiaMcpServer.Test
                 ["softwarePath"] = "\"PC-System_1/Software",
                 ["exportPath"] = "PLC_1\"",
                 ["regexName"] = "\"D:\\My",
-                ["preservePath"] = "Export\""
+                ["keepStructure"] = "Export\""
             };
 
             // Act

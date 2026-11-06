@@ -13,7 +13,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerPrompt(Name = "TiaInit"), Description("Set up tia.json with the args and export formats in the export folder")]
         public static string TiaInit(string exportPath = "", string path = "", string softwarePath = "")
         {
-            return $@"Set up <exportPath>/tia.json, like 'tia init'. The file holds the export formats of TIA Portal ('version-control-interface'), which the pull tools read, and the 'args' (project, software-path, export-path, preserve-path, with-user-interface) that other programs read.
+            return $@"Set up <exportPath>/tia.json, like 'tia init'. The file holds the export formats of TIA Portal ('version-control-interface'), which the pull tools read, and the 'args' (project, software-path, export-path, keep-structure, with-user-interface) that other programs read.
 
 The server opens a dialog of the client in which the user checks or enters the five args and submits; do not answer it for the user. Nothing is written when the user cancels. A client without dialogs uses the parameters below as they are.
 
