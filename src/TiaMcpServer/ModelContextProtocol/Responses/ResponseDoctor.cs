@@ -7,7 +7,7 @@ namespace TiaMcpServer.ModelContextProtocol
     {
         public string? Report { get; set; }
 
-        /// <summary>Assembly version of TiaMcpServer.exe, e.g. "0.4.0.0".</summary>
+        /// <summary>Assembly version of TiaMcpServer.exe, e.g. "0.5.0.0".</summary>
         public string? ServerVersion { get; set; }
         public bool? IsConnected { get; set; }
         public int? ActiveTiaMajorVersion { get; set; }

@@ -1,5 +1,20 @@
 # Change Log
 
+## [0.5.0] - 2026-11-16
+
+### Changed
+
+- __`path` is now `projectPath`__: the project argument of `OpenProject`, `OpenTiaProject`, `TiaConnect` and `TiaInit`
+  (and of the `TiaInit` prompt), and the preset key that `--project-path` fills. `--project-path` keeps working.
+- __`tia.json` keys in lower case__: `PLC-data-types` is now `plc-data-types`, `F-compliant-PLC-data-types-UDT` is now
+  `f-compliant-plc-data-types-UDT`, and the tag table key is `plc-tables` (the name the export tool uses; TIA Portal
+  shows `plc-tag-tables`). The export formats are looked up by the new names.
+- __`tia init` renames deprecated `args` keys__: `project` becomes `project-path` and `with-user-interface` becomes
+  `with-ui`, in place and with the value kept, like `preserve-path` becomes `keep-structure`. When the file already has
+  the new key, nothing is changed and the old key is reported as kept.
+- __Cleanup__: the format names (`.xml`, `.awl`, `.scl`, `.db`, `.udt`, SIMATIC SD) are constants in `ExportFormats`;
+  the README tables are realigned.
+
 ## [0.4.0] - 2026-11-06
 
 ### Added
