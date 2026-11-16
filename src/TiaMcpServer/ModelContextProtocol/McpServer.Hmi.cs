@@ -22,7 +22,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "ExportHmiScreens", Title = "Export HMI screens", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Export the screens of a WinCC Basic/Comfort/Advanced HMI as XML into '<exportPath>/<hmiPath>/Screens/<folders>/'. An existing file is overwritten. Use the files as templates for 'ImportHmiScreen'")]
         public static ResponseHmiFiles ExportHmiScreens(
-            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>', e.g. 'HMI Woning/HMI_RT_3'")] string hmiPath,
+            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>', e.g. 'HMI_1/HMI_RT_1'")] string hmiPath,
             [Description("exportPath: directory on this machine that receives the files; files are written below <exportPath>/<hmiPath>/")] string exportPath,
             [Description("regexName: regular expression on the screen name, empty exports all screens")] string regexName = "")
         {
@@ -32,7 +32,7 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "ExportHmiTagTables", Title = "Export HMI tag tables", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Export the HMI tag tables of a WinCC Basic/Comfort/Advanced HMI as XML into '<exportPath>/<hmiPath>/HMI tags/<folders>/'. An existing file is overwritten. Use the files as templates for 'ImportHmiTagTable'")]
         public static ResponseHmiFiles ExportHmiTagTables(
-            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>', e.g. 'HMI Woning/HMI_RT_3'")] string hmiPath,
+            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>', e.g. 'HMI_1/HMI_RT_1'")] string hmiPath,
             [Description("exportPath: directory on this machine that receives the files; files are written below <exportPath>/<hmiPath>/")] string exportPath,
             [Description("regexName: regular expression on the tag table name, empty exports all tables")] string regexName = "")
         {
@@ -45,8 +45,8 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseHmiFiles ImportHmiScreen(
             [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
             [Description("exportPath: directory on this machine that 'file' is relative to")] string exportPath,
-            [Description("file: the XML file, relative to exportPath, e.g. 'HMI Woning/HMI_RT_3/Screens/Afwezigheid.xml'")] string file,
-            [Description("folderPath: screen folder below 'Screens' that receives the screen, e.g. 'Systeem'; empty for the root")] string folderPath = "",
+            [Description("file: the XML file, relative to exportPath, e.g. 'HMI_1/HMI_RT_1/Screens/Screen_1.xml'")] string file,
+            [Description("folderPath: screen folder below 'Screens' that receives the screen, e.g. 'Folder_1'; empty for the root")] string folderPath = "",
             [Description("overwrite: replace an existing screen of the same name (default false)")] bool overwrite = false)
         {
             return Guarded(nameof(ImportHmiScreen), () => Files($"Screen imported from '{file}'", Portal.ImportHmiScreen(hmiPath, folderPath, exportPath, file, overwrite), true));
@@ -58,7 +58,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseHmiFiles ImportHmiTagTable(
             [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
             [Description("exportPath: directory on this machine that 'file' is relative to")] string exportPath,
-            [Description("file: the XML file, relative to exportPath, e.g. 'HMI Woning/HMI_RT_3/HMI tags/Afwezigheid.xml'")] string file,
+            [Description("file: the XML file, relative to exportPath, e.g. 'HMI_1/HMI_RT_1/HMI tags/Tag table_1.xml'")] string file,
             [Description("folderPath: HMI tag folder below 'HMI tags' that receives the table; empty for the root")] string folderPath = "",
             [Description("overwrite: replace an existing tag table of the same name (default false)")] bool overwrite = false)
         {
@@ -90,7 +90,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseHmiFiles ImportHmiTextList(
             [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
             [Description("exportPath: directory on this machine that 'file' is relative to")] string exportPath,
-            [Description("file: the XML file, relative to exportPath, e.g. 'HMI Loods/HMI_RT_1/Text lists/TextList_ScreenNames.xml'")] string file,
+            [Description("file: the XML file, relative to exportPath, e.g. 'HMI_1/HMI_RT_1/Text lists/TextList_ScreenNames.xml'")] string file,
             [Description("overwrite: replace an existing text list of the same name (default false)")] bool overwrite = false)
         {
             return Guarded(nameof(ImportHmiTextList), () => Files($"Text list imported from '{file}'", Portal.ImportHmiTextList(hmiPath, exportPath, file, overwrite), true));
@@ -102,7 +102,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseHmiFiles ImportHmiGlobalScreen(
             [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
             [Description("exportPath: directory on this machine that 'file' is relative to")] string exportPath,
-            [Description("file: the XML file, relative to exportPath, e.g. 'HMI Loods/HMI_RT_1/Screens/Global screen.xml'")] string file)
+            [Description("file: the XML file, relative to exportPath, e.g. 'HMI_1/HMI_RT_1/Screens/Global screen.xml'")] string file)
         {
             return Guarded(nameof(ImportHmiGlobalScreen), () => Files($"Global screen imported from '{file}'", Portal.ImportHmiGlobalScreen(hmiPath, exportPath, file), true));
         }
@@ -112,8 +112,8 @@ namespace TiaMcpServer.ModelContextProtocol
          Description("Delete one screen of a WinCC Basic/Comfort/Advanced HMI by name. Screens that navigate to it keep a dangling reference and fail to compile")]
         public static ResponseHmiFiles DeleteHmiScreen(
             [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
-            [Description("screenName: name of the screen, e.g. 'Lettertest'")] string screenName,
-            [Description("folderPath: screen folder below 'Screens' that holds the screen, e.g. 'Systeem'; empty for the root")] string folderPath = "")
+            [Description("screenName: name of the screen, e.g. 'Screen_1'")] string screenName,
+            [Description("folderPath: screen folder below 'Screens' that holds the screen, e.g. 'Folder_1'; empty for the root")] string folderPath = "")
         {
             return Guarded(nameof(DeleteHmiScreen), () => Files($"Screen deleted from '{hmiPath}'", Portal.DeleteHmiScreen(hmiPath, folderPath, screenName), true));
         }
