@@ -198,10 +198,10 @@ namespace TiaMcpServer.Siemens
                     var folder = GetScreenFolderOrThrow(hmi, folderPath);
                     var full = ResolveFileBelow(exportPath, file);
 
-                    return folder.Screens
+                    return KeepImportReason(full, () => folder.Screens
                         .Import(new FileInfo(full), overwrite ? ImportOptions.Override : ImportOptions.None)
                         .Select(s => s.Name)
-                        .ToList();
+                        .ToList());
                 },
                 ("hmiPath", hmiPath), ("folderPath", folderPath), ("file", file));
         }
@@ -219,12 +219,26 @@ namespace TiaMcpServer.Siemens
                     var folder = GetTagFolderOrThrow(hmi, folderPath);
                     var full = ResolveFileBelow(exportPath, file);
 
-                    return folder.TagTables
+                    return KeepImportReason(full, () => folder.TagTables
                         .Import(new FileInfo(full), overwrite ? ImportOptions.Override : ImportOptions.None)
                         .Select(t => t.Name)
-                        .ToList();
+                        .ToList());
                 },
                 ("hmiPath", hmiPath), ("folderPath", folderPath), ("file", file));
+        }
+
+        // Keep TIA Portal's own reason: it usually names the exact element or attribute.
+        private static T KeepImportReason<T>(string file, Func<T> import)
+        {
+            try
+            {
+                return import();
+            }
+            catch (Exception ex) when (ex is not PortalException)
+            {
+                throw new PortalException(PortalErrorCode.ImportFailed,
+                    $"Import of '{file}' failed: {ImportErrors.Describe(ex)}", null, ex);
+            }
         }
 
         #endregion
