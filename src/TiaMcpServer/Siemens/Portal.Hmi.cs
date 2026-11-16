@@ -17,12 +17,15 @@ namespace TiaMcpServer.Siemens
         // Unified uses another object model and is not covered.
         //
         // Callers: the HMI tools in McpServer.Hmi.cs. Affected API: none existing - all members
-        // are new. File I/O: the exports write '<exportPath>/<hmiPath>/Screens/...' and
-        // '<exportPath>/<hmiPath>/HMI tags/...'; the imports read one caller-named file below
-        // exportPath. Project changes stay in memory until SaveProject / SaveSession.
+        // are new. File I/O: the exports write '<exportPath>/<hmiPath>/Screens/...',
+        // '<exportPath>/<hmiPath>/HMI tags/...' and '<exportPath>/<hmiPath>/Text lists/...'; the
+        // imports read one caller-named file below exportPath. Project changes (imports, deletes)
+        // stay in memory until SaveProject / SaveSession.
 
         public const string HmiScreensFolder = "Screens";
         public const string HmiTagsFolder = "HMI tags";
+        public const string HmiTextListsFolder = "Text lists";
+        public const string HmiGlobalScreenFile = "Global screen.xml";
 
         #region resolve
 
@@ -168,6 +171,45 @@ namespace TiaMcpServer.Siemens
                 ("hmiPath", hmiPath), ("exportPath", exportPath), ("regexName", regexName));
         }
 
+        /// <summary>
+        /// Exports every text list whose name matches the regular expression to
+        /// '&lt;exportPath&gt;/&lt;hmiPath&gt;/Text lists/&lt;list&gt;.xml'. Returns the written files.
+        /// </summary>
+        public List<string> ExportHmiTextLists(string hmiPath, string exportPath, string regexName)
+        {
+            return Operation.Run(_logger, nameof(ExportHmiTextLists), PortalErrorCode.ExportFailed,
+                () =>
+                {
+                    var hmi = GetHmiTargetOrThrow(hmiPath);
+                    var root = Path.Combine(ResolveSoftwareRoot(exportPath, hmiPath), HmiTextListsFolder);
+                    var filter = new Regex(string.IsNullOrEmpty(regexName) ? ".*" : regexName, RegexOptions.IgnoreCase);
+
+                    return hmi.TextLists
+                        .Where(t => filter.IsMatch(t.Name))
+                        .Select(t => ExportEngineeringObject(t, Path.Combine(root, FileNames.Safe(t.Name) + ".xml"), t.Export))
+                        .ToList();
+                },
+                ("hmiPath", hmiPath), ("exportPath", exportPath), ("regexName", regexName));
+        }
+
+        /// <summary>
+        /// Exports the global screen (alarm windows, alarm indicator) to
+        /// '&lt;exportPath&gt;/&lt;hmiPath&gt;/Screens/Global screen.xml'. Returns the written file.
+        /// </summary>
+        public List<string> ExportHmiGlobalScreen(string hmiPath, string exportPath)
+        {
+            return Operation.Run(_logger, nameof(ExportHmiGlobalScreen), PortalErrorCode.ExportFailed,
+                () =>
+                {
+                    var global = GetHmiTargetOrThrow(hmiPath).ScreenGlobalElements
+                        ?? throw new PortalException(PortalErrorCode.NotFound, $"The HMI at '{hmiPath}' has no global screen.");
+                    var target = Path.Combine(ResolveSoftwareRoot(exportPath, hmiPath), HmiScreensFolder, HmiGlobalScreenFile);
+
+                    return new List<string> { ExportEngineeringObject(global, target, global.Export) };
+                },
+                ("hmiPath", hmiPath), ("exportPath", exportPath));
+        }
+
         private static string ExportEngineeringObject(object item, string target, Action<FileInfo, ExportOptions> export)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -226,6 +268,72 @@ namespace TiaMcpServer.Siemens
                 },
                 ("hmiPath", hmiPath), ("folderPath", folderPath), ("file", file));
         }
+
+        /// <summary>
+        /// Imports one text list XML (a file below exportPath). Returns the names of the imported lists.
+        /// </summary>
+        public List<string> ImportHmiTextList(string hmiPath, string exportPath, string file, bool overwrite)
+        {
+            return Operation.Run(_logger, nameof(ImportHmiTextList), PortalErrorCode.ImportFailed,
+                () =>
+                {
+                    var hmi = GetHmiTargetOrThrow(hmiPath);
+                    var full = ResolveFileBelow(exportPath, file);
+
+                    return KeepImportReason(full, () => hmi.TextLists
+                        .Import(new FileInfo(full), overwrite ? ImportOptions.Override : ImportOptions.None)
+                        .Select(t => t.Name)
+                        .ToList());
+                },
+                ("hmiPath", hmiPath), ("file", file));
+        }
+
+        /// <summary>
+        /// Imports the global screen XML (a file below exportPath). The global screen always exists,
+        /// so the import always overrides it.
+        /// </summary>
+        public List<string> ImportHmiGlobalScreen(string hmiPath, string exportPath, string file)
+        {
+            return Operation.Run(_logger, nameof(ImportHmiGlobalScreen), PortalErrorCode.ImportFailed,
+                () =>
+                {
+                    var hmi = GetHmiTargetOrThrow(hmiPath);
+                    var full = ResolveFileBelow(exportPath, file);
+
+                    return KeepImportReason(full, () =>
+                    {
+                        hmi.ImportScreenGlobalElements(new FileInfo(full), ImportOptions.Override);
+                        return new List<string> { "Global screen" };
+                    });
+                },
+                ("hmiPath", hmiPath), ("file", file));
+        }
+
+        #endregion
+
+        #region delete
+
+        /// <summary>
+        /// Deletes one screen by name from a screen folder. Returns the name of the deleted screen.
+        /// </summary>
+        public List<string> DeleteHmiScreen(string hmiPath, string folderPath, string screenName)
+        {
+            return Operation.Run(_logger, nameof(DeleteHmiScreen), PortalErrorCode.InvalidState,
+                () =>
+                {
+                    var screen = GetScreenFolderOrThrow(GetHmiTargetOrThrow(hmiPath), folderPath).Screens.Find(screenName)
+                        ?? throw new PortalException(PortalErrorCode.NotFound,
+                            $"Screen '{screenName}' not found in '{(string.IsNullOrEmpty(folderPath) ? "Screens" : folderPath)}' of '{hmiPath}'.");
+
+                    screen.Delete();
+                    return new List<string> { screenName };
+                },
+                ("hmiPath", hmiPath), ("folderPath", folderPath), ("screenName", screenName));
+        }
+
+        #endregion
+
+        #region import helpers
 
         // Keep TIA Portal's own reason: it usually names the exact element or attribute.
         private static T KeepImportReason<T>(string file, Func<T> import)

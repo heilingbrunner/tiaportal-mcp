@@ -9,11 +9,11 @@ namespace TiaMcpServer.ModelContextProtocol
 {
     public static partial class McpServer
     {
-        // Tools for WinCC Basic/Comfort/Advanced HMIs: export and import of screens and HMI tag
-        // tables as XML, and compiling the HMI.
+        // Tools for WinCC Basic/Comfort/Advanced HMIs: export and import of screens, the global
+        // screen, HMI tag tables and text lists as XML, deleting a screen, and compiling the HMI.
         //
-        // Callers: registered by Program.BuildTools(); the imports are [WriteTool] and need
-        // '--allow-write'. Affected API: additive - a partial of McpServer. File I/O: the exports
+        // Callers: registered by Program.BuildTools(); the imports and the delete are [WriteTool]
+        // and need '--allow-write'. Affected API: additive - a partial of McpServer. File I/O: the exports
         // write below '<exportPath>/<hmiPath>/'; the imports read one file below exportPath.
         // The HMI path is named 'hmiPath', not 'softwarePath', so a PLC preset never applies to it.
 
@@ -63,6 +63,59 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("overwrite: replace an existing tag table of the same name (default false)")] bool overwrite = false)
         {
             return Guarded(nameof(ImportHmiTagTable), () => Files($"HMI tag table imported from '{file}'", Portal.ImportHmiTagTable(hmiPath, folderPath, exportPath, file, overwrite), true));
+        }
+
+        [McpServerTool(Name = "ExportHmiTextLists", Title = "Export HMI text lists", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Export the text lists of a WinCC Basic/Comfort/Advanced HMI as XML into '<exportPath>/<hmiPath>/Text lists/'. An existing file is overwritten. Use the files as templates for 'ImportHmiTextList'")]
+        public static ResponseHmiFiles ExportHmiTextLists(
+            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
+            [Description("exportPath: directory on this machine that receives the files; files are written below <exportPath>/<hmiPath>/")] string exportPath,
+            [Description("regexName: regular expression on the text list name, empty exports all lists")] string regexName = "")
+        {
+            return HmiCall(nameof(ExportHmiTextLists), () => Files($"Text lists of '{hmiPath}' exported", Portal.ExportHmiTextLists(hmiPath, exportPath, regexName), false));
+        }
+
+        [McpServerTool(Name = "ExportHmiGlobalScreen", Title = "Export HMI global screen", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Export the global screen (alarm windows, alarm indicator) of a WinCC Basic/Comfort/Advanced HMI as XML to '<exportPath>/<hmiPath>/Screens/Global screen.xml'. An existing file is overwritten. Use it as template for 'ImportHmiGlobalScreen'")]
+        public static ResponseHmiFiles ExportHmiGlobalScreen(
+            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
+            [Description("exportPath: directory on this machine that receives the file; it is written below <exportPath>/<hmiPath>/")] string exportPath)
+        {
+            return HmiCall(nameof(ExportHmiGlobalScreen), () => Files($"Global screen of '{hmiPath}' exported", Portal.ExportHmiGlobalScreen(hmiPath, exportPath), false));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "ImportHmiTextList", Title = "Import HMI text list", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Import one text list XML file into a WinCC Basic/Comfort/Advanced HMI. With overwrite false an existing text list of the same name makes the import fail")]
+        public static ResponseHmiFiles ImportHmiTextList(
+            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
+            [Description("exportPath: directory on this machine that 'file' is relative to")] string exportPath,
+            [Description("file: the XML file, relative to exportPath, e.g. 'HMI Loods/HMI_RT_1/Text lists/TextList_ScreenNames.xml'")] string file,
+            [Description("overwrite: replace an existing text list of the same name (default false)")] bool overwrite = false)
+        {
+            return Guarded(nameof(ImportHmiTextList), () => Files($"Text list imported from '{file}'", Portal.ImportHmiTextList(hmiPath, exportPath, file, overwrite), true));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "ImportHmiGlobalScreen", Title = "Import HMI global screen", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Import the global screen XML file into a WinCC Basic/Comfort/Advanced HMI. It always replaces the existing global screen")]
+        public static ResponseHmiFiles ImportHmiGlobalScreen(
+            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
+            [Description("exportPath: directory on this machine that 'file' is relative to")] string exportPath,
+            [Description("file: the XML file, relative to exportPath, e.g. 'HMI Loods/HMI_RT_1/Screens/Global screen.xml'")] string file)
+        {
+            return Guarded(nameof(ImportHmiGlobalScreen), () => Files($"Global screen imported from '{file}'", Portal.ImportHmiGlobalScreen(hmiPath, exportPath, file), true));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "DeleteHmiScreen", Title = "Delete HMI screen", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Delete one screen of a WinCC Basic/Comfort/Advanced HMI by name. Screens that navigate to it keep a dangling reference and fail to compile")]
+        public static ResponseHmiFiles DeleteHmiScreen(
+            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
+            [Description("screenName: name of the screen, e.g. 'Lettertest'")] string screenName,
+            [Description("folderPath: screen folder below 'Screens' that holds the screen, e.g. 'Systeem'; empty for the root")] string folderPath = "")
+        {
+            return Guarded(nameof(DeleteHmiScreen), () => Files($"Screen deleted from '{hmiPath}'", Portal.DeleteHmiScreen(hmiPath, folderPath, screenName), true));
         }
 
         [McpServerTool(Name = "CompileHmi", Title = "Compile HMI", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
