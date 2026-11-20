@@ -96,6 +96,52 @@ namespace TiaMcpServer.ModelContextProtocol
             return Guarded(nameof(ImportHmiTextList), () => Files($"Text list imported from '{file}'", Portal.ImportHmiTextList(hmiPath, exportPath, file, overwrite), true));
         }
 
+        [McpServerTool(Name = "ExportHmiScreenTemplates", Title = "Export HMI screen templates", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Export the screen templates of a WinCC Basic/Comfort/Advanced HMI as XML into '<exportPath>/<hmiPath>/Screen templates/<folders>/'. An existing file is overwritten. Use the files as templates for 'ImportHmiScreenTemplate'")]
+        public static ResponseHmiFiles ExportHmiScreenTemplates(
+            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
+            [Description("exportPath: directory on this machine that receives the files; files are written below <exportPath>/<hmiPath>/")] string exportPath,
+            [Description("regexName: regular expression on the screen template name, empty exports all templates")] string regexName = "")
+        {
+            return HmiCall(nameof(ExportHmiScreenTemplates), () => Files($"Screen templates of '{hmiPath}' exported", Portal.ExportHmiScreenTemplates(hmiPath, exportPath, regexName), false));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "ImportHmiScreenTemplate", Title = "Import HMI screen template", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Import one screen template XML file into a screen template folder of a WinCC Basic/Comfort/Advanced HMI. With overwrite false an existing template of the same name makes the import fail")]
+        public static ResponseHmiFiles ImportHmiScreenTemplate(
+            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
+            [Description("exportPath: directory on this machine that 'file' is relative to")] string exportPath,
+            [Description("file: the XML file, relative to exportPath, e.g. 'HMI_2/HMI_RT_3/Screen templates/Default.xml'")] string file,
+            [Description("folderPath: screen template folder below 'Screen templates' that receives the template; empty for the root")] string folderPath = "",
+            [Description("overwrite: replace an existing screen template of the same name (default false)")] bool overwrite = false)
+        {
+            return Guarded(nameof(ImportHmiScreenTemplate), () => Files($"Screen template imported from '{file}'", Portal.ImportHmiScreenTemplate(hmiPath, exportPath, file, folderPath, overwrite), true));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "ImportHmiGraphicList", Title = "Import HMI graphic list", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Import one graphic list XML file into a WinCC Basic/Comfort/Advanced HMI. The graphics it names must exist in the project ('ImportHmiGraphic'). With overwrite false an existing graphic list of the same name makes the import fail")]
+        public static ResponseHmiFiles ImportHmiGraphicList(
+            [Description("hmiPath: path of the HmiTarget as 'GetProjectTree' shows it, '<device>/<device item>'")] string hmiPath,
+            [Description("exportPath: directory on this machine that 'file' is relative to")] string exportPath,
+            [Description("file: the XML file, relative to exportPath, e.g. 'GraphicLists/Status.xml'")] string file,
+            [Description("overwrite: replace an existing graphic list of the same name (default false)")] bool overwrite = false)
+        {
+            return Guarded(nameof(ImportHmiGraphicList), () => Files($"Graphic list imported from '{file}'", Portal.ImportHmiGraphicList(hmiPath, exportPath, file, overwrite), true));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "ImportHmiGraphic", Title = "Import HMI graphic", Destructive = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Import one graphic XML file into the project graphics (shared by all HMIs). The image file (PNG) must sit next to the XML in '<name> files/'. With overwrite false an existing graphic of the same name makes the import fail")]
+        public static ResponseHmiFiles ImportHmiGraphic(
+            [Description("exportPath: directory on this machine that 'file' is relative to")] string exportPath,
+            [Description("file: the XML file, relative to exportPath, e.g. 'Graphics/Pomp.xml'")] string file,
+            [Description("overwrite: replace an existing graphic of the same name (default false)")] bool overwrite = false)
+        {
+            return Guarded(nameof(ImportHmiGraphic), () => Files($"Graphic imported from '{file}'", Portal.ImportHmiGraphic(exportPath, file, overwrite), true));
+        }
+
         [WriteTool]
         [McpServerTool(Name = "ImportHmiGlobalScreen", Title = "Import HMI global screen", Destructive = true, OpenWorld = false, UseStructuredContent = true),
          Description("Import the global screen XML file into a WinCC Basic/Comfort/Advanced HMI. It always replaces the existing global screen")]

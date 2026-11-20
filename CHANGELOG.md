@@ -1,5 +1,14 @@
 # Change Log
 
+## [Unreleased]
+
+### Added
+
+- __HMI screen templates, graphic lists and graphics__: `ExportHmiScreenTemplates` writes the templates of a WinCC
+  Basic/Comfort/Advanced HMI (including sub folders) to `Screen templates/`. With `--allow-write`:
+  `ImportHmiScreenTemplate` (optional template folder), `ImportHmiGraphicList` and `ImportHmiGraphic`. Graphics belong to
+  the project, so `ImportHmiGraphic` takes no `hmiPath`; the PNG sits next to the XML in `<name> files/`.
+
 ## [0.5.0] - 2026-11-16
 
 ### Changed

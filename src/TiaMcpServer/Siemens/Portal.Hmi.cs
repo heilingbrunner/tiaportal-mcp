@@ -25,6 +25,7 @@ namespace TiaMcpServer.Siemens
         public const string HmiScreensFolder = "Screens";
         public const string HmiTagsFolder = "HMI tags";
         public const string HmiTextListsFolder = "Text lists";
+        public const string HmiScreenTemplatesFolder = "Screen templates";
         public const string HmiGlobalScreenFile = "Global screen.xml";
 
         #region resolve
@@ -55,6 +56,20 @@ namespace TiaMcpServer.Siemens
                 folder = folder.Folders.Find(segment)
                     ?? throw new PortalException(PortalErrorCode.NotFound,
                         $"Screen folder '{segment}' of '{folderPath}' not found. Use 'ExportHmiScreens' to see the folder structure.");
+            }
+
+            return folder;
+        }
+
+        private ScreenTemplateFolder GetScreenTemplateFolderOrThrow(HmiTarget hmi, string folderPath)
+        {
+            ScreenTemplateFolder folder = hmi.ScreenTemplateFolder;
+
+            foreach (var segment in NormalizeGroupPath(folderPath).Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                folder = folder.Folders.Find(segment)
+                    ?? throw new PortalException(PortalErrorCode.NotFound,
+                        $"Screen template folder '{segment}' of '{folderPath}' not found. Use 'ExportHmiScreenTemplates' to see the folder structure.");
             }
 
             return folder;
@@ -193,6 +208,39 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
+        /// Exports every screen template whose name matches the regular expression to
+        /// '&lt;exportPath&gt;/&lt;hmiPath&gt;/Screen templates/&lt;folders&gt;/&lt;template&gt;.xml'. Returns the written files.
+        /// </summary>
+        public List<string> ExportHmiScreenTemplates(string hmiPath, string exportPath, string regexName)
+        {
+            return Operation.Run(_logger, nameof(ExportHmiScreenTemplates), PortalErrorCode.ExportFailed,
+                () =>
+                {
+                    var hmi = GetHmiTargetOrThrow(hmiPath);
+                    var root = Path.Combine(ResolveSoftwareRoot(exportPath, hmiPath), HmiScreenTemplatesFolder);
+                    var filter = new Regex(string.IsNullOrEmpty(regexName) ? ".*" : regexName, RegexOptions.IgnoreCase);
+                    var written = new List<string>();
+
+                    ExportScreenTemplateFolder(hmi.ScreenTemplateFolder, root, filter, written);
+                    return written;
+                },
+                ("hmiPath", hmiPath), ("exportPath", exportPath), ("regexName", regexName));
+        }
+
+        private static void ExportScreenTemplateFolder(ScreenTemplateFolder folder, string dir, Regex filter, List<string> written)
+        {
+            foreach (var template in folder.ScreenTemplates.Where(t => filter.IsMatch(t.Name)))
+            {
+                written.Add(ExportEngineeringObject(template, Path.Combine(dir, FileNames.Safe(template.Name) + ".xml"), template.Export));
+            }
+
+            foreach (var sub in folder.Folders)
+            {
+                ExportScreenTemplateFolder(sub, Path.Combine(dir, FileNames.Safe(sub.Name)), filter, written);
+            }
+        }
+
+        /// <summary>
         /// Exports the global screen (alarm windows, alarm indicator) to
         /// '&lt;exportPath&gt;/&lt;hmiPath&gt;/Screens/Global screen.xml'. Returns the written file.
         /// </summary>
@@ -286,6 +334,71 @@ namespace TiaMcpServer.Siemens
                         .ToList());
                 },
                 ("hmiPath", hmiPath), ("file", file));
+        }
+
+        /// <summary>
+        /// Imports one screen template XML (a file below exportPath) into a screen template folder.
+        /// Returns the names of the imported templates.
+        /// </summary>
+        public List<string> ImportHmiScreenTemplate(string hmiPath, string exportPath, string file, string folderPath, bool overwrite)
+        {
+            return Operation.Run(_logger, nameof(ImportHmiScreenTemplate), PortalErrorCode.ImportFailed,
+                () =>
+                {
+                    var hmi = GetHmiTargetOrThrow(hmiPath);
+                    var folder = GetScreenTemplateFolderOrThrow(hmi, folderPath);
+                    var full = ResolveFileBelow(exportPath, file);
+
+                    return KeepImportReason(full, () => folder.ScreenTemplates
+                        .Import(new FileInfo(full), overwrite ? ImportOptions.Override : ImportOptions.None)
+                        .Select(t => t.Name)
+                        .ToList());
+                },
+                ("hmiPath", hmiPath), ("folderPath", folderPath), ("file", file));
+        }
+
+        /// <summary>
+        /// Imports one graphic list XML (a file below exportPath). Returns the names of the imported lists.
+        /// </summary>
+        public List<string> ImportHmiGraphicList(string hmiPath, string exportPath, string file, bool overwrite)
+        {
+            return Operation.Run(_logger, nameof(ImportHmiGraphicList), PortalErrorCode.ImportFailed,
+                () =>
+                {
+                    var hmi = GetHmiTargetOrThrow(hmiPath);
+                    var full = ResolveFileBelow(exportPath, file);
+
+                    return KeepImportReason(full, () => hmi.GraphicLists
+                        .Import(new FileInfo(full), overwrite ? ImportOptions.Override : ImportOptions.None)
+                        .Select(g => g.Name)
+                        .ToList());
+                },
+                ("hmiPath", hmiPath), ("file", file));
+        }
+
+        /// <summary>
+        /// Imports one graphic XML (a file below exportPath; the image file sits next to it in
+        /// '&lt;name&gt; files/'). Graphics belong to the project, not to one HMI. Returns the names of the
+        /// imported graphics.
+        /// </summary>
+        public List<string> ImportHmiGraphic(string exportPath, string file, bool overwrite)
+        {
+            return Operation.Run(_logger, nameof(ImportHmiGraphic), PortalErrorCode.ImportFailed,
+                () =>
+                {
+                    if (IsProjectNull() || _project is not Project project)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidState, "No project is open in TIA Portal");
+                    }
+
+                    var full = ResolveFileBelow(exportPath, file);
+
+                    return KeepImportReason(full, () => project.Graphics
+                        .Import(new FileInfo(full), overwrite ? ImportOptions.Override : ImportOptions.None)
+                        .Select(g => g.Name)
+                        .ToList());
+                },
+                ("file", file));
         }
 
         /// <summary>

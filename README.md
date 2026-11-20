@@ -120,7 +120,7 @@ Read-only tools (71) are always available.
 | Multiuser                     | `GetMarkedObjects`, `CheckIsUpToDate`                                                                                                                                                                                                            |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`                                                                                                                          |
 | Whole PLC program             | `ExportPlcProgram` (format per object type from `tia.json`, see below), `GetExportFormats`                                                                                                                                                       |
-| HMI (WinCC Basic/Comfort/Advanced) | `ExportHmiScreens`, `ExportHmiTagTables`, `ExportHmiTextLists`, `ExportHmiGlobalScreen` (by regex, always XML), `CompileHmi` |
+| HMI (WinCC Basic/Comfort/Advanced) | `ExportHmiScreens`, `ExportHmiTagTables`, `ExportHmiTextLists`, `ExportHmiScreenTemplates`, `ExportHmiGlobalScreen` (by regex, always XML), `CompileHmi` |
 | Git-like connect and pull     | `TiaInit`, `TiaConnect`, `TiaPull`, `TiaPullBlocks`, `TiaPullTypes`, `TiaPullTagTables`, `TiaPullBlock`, `TiaPullType`, `TiaPullTagTable`, `TiaPullWatchTables`, `TiaPullWatchTable`, `TiaPullForceTable` (see "`tia` porcelain commands" below) |
 
 Write tools (40) require `--allow-write`.
@@ -137,7 +137,7 @@ Write tools (40) require `--allow-write`.
 | Whole PLC program     | `OverwritePlcProgram`, `ImportPlcProgramChanges` (sources, XML and SIMATIC SD documents, preview by default, see below)          |
 | Git-like push         | `TiaPush`, `TiaPushPreview` (see "`tia` porcelain commands" below)                                                               |
 | Hardware (AML)        | `ExportHardware`, `TiaPullHardware`; with `--allow-write` also `ImportHardware`, `TiaPushHardware`                               |
-| HMI                   | `ImportHmiScreen`, `ImportHmiTagTable`, `ImportHmiTextList`, `ImportHmiGlobalScreen`, `DeleteHmiScreen` |
+| HMI                   | `ImportHmiScreen`, `ImportHmiTagTable`, `ImportHmiTextList`, `ImportHmiScreenTemplate`, `ImportHmiGraphicList`, `ImportHmiGraphic` (project-wide), `ImportHmiGlobalScreen`, `DeleteHmiScreen` |
 | Multiuser             | `CommitChanges` (commits the local session to the server and closes the session)                                                 |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
